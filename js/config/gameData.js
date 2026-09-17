@@ -275,15 +275,24 @@ const BIOME_STOPS = [
   { dist: 8800, name: "LAUT DARAH (BLOOD SEA)",    waterA: [145, 10, 22], waterB: [65, 4, 15],   isBlood: true  }
 ];
 
-function lerpColor(c1, c2, t) {
-  return [
-    Math.round(c1[0] + (c2[0] - c1[0]) * t),
-    Math.round(c1[1] + (c2[1] - c1[1]) * t),
-    Math.round(c1[2] + (c2[2] - c1[2]) * t)
-  ];
+const _biomeColorA = [0, 0, 0];
+const _biomeColorB = [0, 0, 0];
+
+function lerpColorOut(out, c1, c2, t) {
+  out[0] = Math.round(c1[0] + (c2[0] - c1[0]) * t);
+  out[1] = Math.round(c1[1] + (c2[1] - c1[1]) * t);
+  out[2] = Math.round(c1[2] + (c2[2] - c1[2]) * t);
+  return out;
 }
 
+let _cachedBiomeInfo = null;
+let _cachedBiomeDist = -1;
+
 function getBiomeInfo(dist) {
+  const quantizedDist = Math.floor(dist / 50);
+  if (quantizedDist === _cachedBiomeDist && _cachedBiomeInfo) return _cachedBiomeInfo;
+  _cachedBiomeDist = quantizedDist;
+
   let idx = 0;
   for (let i = 0; i < BIOME_STOPS.length - 1; i++) {
     if (dist >= BIOME_STOPS[i].dist) {
@@ -299,8 +308,10 @@ function getBiomeInfo(dist) {
     t = Math.max(0, Math.min(1, (dist - curr.dist) / (next.dist - curr.dist)));
   }
 
-  const waterA = lerpColor(curr.waterA, next.waterA, t);
-  const waterB = lerpColor(curr.waterB, next.waterB, t);
+  // Pre-allocate to avoid new objects
+  lerpColorOut(_biomeColorA, curr.waterA, next.waterA, t);
+  lerpColorOut(_biomeColorB, curr.waterB, next.waterB, t);
+
   const isBloodSea = dist >= 6500;
   const bloodRatio = Math.max(0, Math.min(1, (dist - 6200) / 2400));
 
@@ -309,12 +320,29 @@ function getBiomeInfo(dist) {
     displayName = `Menuju ${next.name}`;
   }
 
-  return {
-    name: displayName,
-    waterA,
-    waterB,
-    bloodRatio,
-    isBloodSea,
-    dangerLevel: idx + 1
-  };
+  // To truly avoid creating objects on EVERY call, 
+  // if we return _cachedBiomeInfo, it must be the ONLY object we modify
+  if (!_cachedBiomeInfo) {
+    _cachedBiomeInfo = {
+      name: displayName,
+      waterA: [0, 0, 0],
+      waterB: [0, 0, 0],
+      bloodRatio,
+      isBloodSea,
+      dangerLevel: idx + 1
+    };
+  }
+
+  _cachedBiomeInfo.name = displayName;
+  _cachedBiomeInfo.waterA[0] = _biomeColorA[0];
+  _cachedBiomeInfo.waterA[1] = _biomeColorA[1];
+  _cachedBiomeInfo.waterA[2] = _biomeColorA[2];
+  _cachedBiomeInfo.waterB[0] = _biomeColorB[0];
+  _cachedBiomeInfo.waterB[1] = _biomeColorB[1];
+  _cachedBiomeInfo.waterB[2] = _biomeColorB[2];
+  _cachedBiomeInfo.bloodRatio = bloodRatio;
+  _cachedBiomeInfo.isBloodSea = isBloodSea;
+  _cachedBiomeInfo.dangerLevel = idx + 1;
+
+  return _cachedBiomeInfo;
 }

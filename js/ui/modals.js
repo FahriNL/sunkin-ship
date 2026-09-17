@@ -107,7 +107,7 @@ function openLoreModal() {
   closeUpgradeModal();
   closeHelpModal();
   renderClanCodexUI();
-  loreModal.classList.remove('modal-enter');
+  loreModal.classList.remove('modal-enter', 'hidden');
   loreModal.classList.add('modal-active');
   isGamePaused = true;
 }
@@ -115,7 +115,7 @@ function openLoreModal() {
 function closeLoreModal() {
   if (!loreModal) return;
   loreModal.classList.remove('modal-active');
-  loreModal.classList.add('modal-enter');
+  loreModal.classList.add('modal-enter', 'hidden');
   isGamePaused = false;
   lastTime = performance.now();
 }
@@ -142,7 +142,7 @@ function openHelpModal() {
   closeUpgradeModal();
   closeLoreModal();
   if (!helpModal) return;
-  helpModal.classList.remove('modal-enter');
+  helpModal.classList.remove('modal-enter', 'hidden');
   helpModal.classList.add('modal-active');
   isGamePaused = true;
 }
@@ -150,7 +150,7 @@ function openHelpModal() {
 function closeHelpModal() {
   if (!helpModal) return;
   helpModal.classList.remove('modal-active');
-  helpModal.classList.add('modal-enter');
+  helpModal.classList.add('modal-enter', 'hidden');
   isGamePaused = false;
   lastTime = performance.now();
 }
@@ -251,7 +251,7 @@ function openUpgradeModal() {
   closeLoreModal();
   closeHelpModal();
   renderUpgradeUI();
-  upgradeModal.classList.remove('modal-enter');
+  upgradeModal.classList.remove('modal-enter', 'hidden');
   upgradeModal.classList.add('modal-active');
   isGamePaused = true;
 }
@@ -259,7 +259,7 @@ function openUpgradeModal() {
 function closeUpgradeModal() {
   if (!upgradeModal) return;
   upgradeModal.classList.remove('modal-active');
-  upgradeModal.classList.add('modal-enter');
+  upgradeModal.classList.add('modal-enter', 'hidden');
   isGamePaused = false;
   lastTime = performance.now();
 }
@@ -340,7 +340,7 @@ function openSettingsModal(fromTarget = 'game') {
   sound.init();
   settingsReturnTarget = fromTarget;
   if (settingsModal) {
-    settingsModal.classList.remove('modal-enter');
+    settingsModal.classList.remove('modal-enter', 'hidden');
     settingsModal.classList.add('modal-active');
   }
   updateFullscreenUI();
@@ -352,11 +352,11 @@ function openSettingsModal(fromTarget = 'game') {
 function closeSettingsModal() {
   if (!settingsModal) return;
   settingsModal.classList.remove('modal-active');
-  settingsModal.classList.add('modal-enter');
+  settingsModal.classList.add('modal-enter', 'hidden');
 
   if (settingsReturnTarget === 'pause') {
     if (pauseModal) {
-      pauseModal.classList.remove('modal-enter');
+      pauseModal.classList.remove('modal-enter', 'hidden');
       pauseModal.classList.add('modal-active');
     }
   } else if (settingsReturnTarget === 'mainMenu') {
@@ -513,11 +513,11 @@ function openPauseModal() {
   closeHelpModal();
   if (settingsModal && settingsModal.classList.contains('modal-active')) {
     settingsModal.classList.remove('modal-active');
-    settingsModal.classList.add('modal-enter');
+    settingsModal.classList.add('modal-enter', 'hidden');
   }
 
   if (pauseModal) {
-    pauseModal.classList.remove('modal-enter');
+    pauseModal.classList.remove('modal-enter', 'hidden');
     pauseModal.classList.add('modal-active');
   }
   isGamePaused = true;
@@ -526,7 +526,7 @@ function openPauseModal() {
 function closePauseModal() {
   if (!pauseModal) return;
   pauseModal.classList.remove('modal-active');
-  pauseModal.classList.add('modal-enter');
+  pauseModal.classList.add('modal-enter', 'hidden');
   if (isGameStarted) {
     isGamePaused = false;
     lastTime = performance.now();
@@ -604,7 +604,7 @@ function triggerGameOver(reason) {
   closeAllModals();
   if (pauseModal) {
     pauseModal.classList.remove('modal-active');
-    pauseModal.classList.add('modal-enter');
+    pauseModal.classList.add('modal-enter', 'hidden');
   }
 
   const reasonEl = document.getElementById('gameOverReason');
@@ -623,7 +623,7 @@ function triggerGameOver(reason) {
   } catch (e) {}
 
   if (gameOverModal) {
-    gameOverModal.classList.remove('modal-enter');
+    gameOverModal.classList.remove('modal-enter', 'hidden');
     gameOverModal.classList.add('modal-active');
   }
 }
@@ -635,7 +635,7 @@ if (btnRespawn) {
 
     if (gameOverModal) {
       gameOverModal.classList.remove('modal-active');
-      gameOverModal.classList.add('modal-enter');
+      gameOverModal.classList.add('modal-enter', 'hidden');
     }
     isGamePaused = false;
     lastTime = performance.now();

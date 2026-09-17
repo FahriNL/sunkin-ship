@@ -14,6 +14,8 @@ class SoundFX {
     this.screenShakeEnabled = true;
     this.autoFullscreen = true;
     this.sfxMasterGain = null;
+    this._activeVoices = 0;
+    this._maxVoices = 12;
 
     this.cannonBuffers = [];
     this.hitBuffers = [];
@@ -159,6 +161,21 @@ class SoundFX {
     this.startAmbience();
   }
 
+  suspendAudio() {
+    if (this.ctx && this.ctx.state === 'running') {
+      this.ctx.suspend();
+    }
+    if (this.seaAmbienceAudio) this.seaAmbienceAudio.pause();
+    if (this.abyssalAmbienceAudio) this.abyssalAmbienceAudio.pause();
+    if (this.battleMusicAudio) this.battleMusicAudio.pause();
+  }
+
+  resumeAudio() {
+    if (this.ctx && this.ctx.state === 'suspended') {
+      this.ctx.resume();
+    }
+  }
+
   startAmbience() {
     if (!this.seaAmbienceAudio) {
       this.seaAmbienceAudio = new Audio('./sound effect/sea_ambience.mp3');
@@ -287,7 +304,11 @@ class SoundFX {
     }
 
     if (this.abyssalAmbienceAudio) {
-      this.abyssalAmbienceAudio.volume = this._muted ? 0 : Math.max(0, Math.min(1, this.abyssalAmbienceVolume * this.masterVolume * this.ambienceVolume));
+      const computedVolume = this._muted ? 0 : Math.max(0, Math.min(1, this.abyssalAmbienceVolume * this.masterVolume * this.ambienceVolume));
+      const newVol = Math.max(0, Math.min(1, computedVolume));
+      if (Math.abs(this.abyssalAmbienceAudio.volume - newVol) > 0.01) {
+        this.abyssalAmbienceAudio.volume = newVol;
+      }
       if (this.abyssalAmbienceVolume > 0.01 && this.abyssalAmbienceAudio.paused && !this._muted) {
         this.abyssalAmbienceAudio.play().catch(() => {});
       } else if (this.abyssalAmbienceVolume <= 0.005 && !this.abyssalAmbienceAudio.paused) {
@@ -308,7 +329,11 @@ class SoundFX {
     }
 
     if (this.battleMusicAudio) {
-      this.battleMusicAudio.volume = this._muted ? 0 : Math.max(0, Math.min(1, this.battleMusicVolume * this.masterVolume * this.battleVolume));
+      const computedVolume = this._muted ? 0 : Math.max(0, Math.min(1, this.battleMusicVolume * this.masterVolume * this.battleVolume));
+      const newVol = Math.max(0, Math.min(1, computedVolume));
+      if (Math.abs(this.battleMusicAudio.volume - newVol) > 0.01) {
+        this.battleMusicAudio.volume = newVol;
+      }
       if (this.battleMusicVolume > 0.01 && this.battleMusicAudio.paused && !this._muted) {
         this.battleMusicAudio.play().catch(() => {});
       } else if (this.battleMusicVolume <= 0.005 && !this.battleMusicAudio.paused) {
@@ -321,6 +346,8 @@ class SoundFX {
     if (this._muted) return;
     this.init();
     if (!this.ctx) return;
+    if (this._activeVoices >= this._maxVoices) return;
+    this._activeVoices++;
 
     const gain = this.getSpatialVolume(x, y, 700, 0.38);
     if (gain <= 0.02) return;
@@ -338,6 +365,7 @@ class SoundFX {
       gainNode.gain.setValueAtTime(gain, this.ctx.currentTime);
       src.connect(gainNode);
       gainNode.connect(this.destinationNode);
+      src.onended = () => { this._activeVoices--; src.disconnect(); gainNode.disconnect(); };
       src.start();
     }
   }
@@ -346,6 +374,8 @@ class SoundFX {
     if (this._muted) return;
     this.init();
     if (!this.ctx) return;
+    if (this._activeVoices >= this._maxVoices) return;
+    this._activeVoices++;
 
     if (this.seagullAwayBuffer) {
       const src = this.ctx.createBufferSource();
@@ -355,6 +385,7 @@ class SoundFX {
       gainNode.gain.setValueAtTime(0.24, this.ctx.currentTime);
       src.connect(gainNode);
       gainNode.connect(this.destinationNode);
+      src.onended = () => { this._activeVoices--; src.disconnect(); gainNode.disconnect(); };
       src.start();
     }
   }
@@ -363,6 +394,8 @@ class SoundFX {
     if (this._muted) return;
     this.init();
     if (!this.ctx) return;
+    if (this._activeVoices >= this._maxVoices) return;
+    this._activeVoices++;
 
     if (this.coinBuffer) {
       const src = this.ctx.createBufferSource();
@@ -372,6 +405,7 @@ class SoundFX {
       gainNode.gain.setValueAtTime(0.55, this.ctx.currentTime);
       src.connect(gainNode);
       gainNode.connect(this.destinationNode);
+      src.onended = () => { this._activeVoices--; src.disconnect(); gainNode.disconnect(); };
       src.start();
     } else {
       this.playLoot();
@@ -382,6 +416,8 @@ class SoundFX {
     if (this._muted) return;
     this.init();
     if (!this.ctx) return;
+    if (this._activeVoices >= this._maxVoices) return;
+    this._activeVoices++;
 
     const gain = this.getSpatialVolume(x, y, 1300, 0.85);
     if (gain <= 0.01) return;
@@ -395,6 +431,7 @@ class SoundFX {
       gainNode.gain.setValueAtTime(gain, this.ctx.currentTime);
       src.connect(gainNode);
       gainNode.connect(this.destinationNode);
+      src.onended = () => { this._activeVoices--; src.disconnect(); gainNode.disconnect(); };
       src.start();
     } else {
       this.playRamHit();
@@ -405,6 +442,8 @@ class SoundFX {
     if (this._muted) return;
     this.init();
     if (!this.ctx) return;
+    if (this._activeVoices >= this._maxVoices) return;
+    this._activeVoices++;
 
     const gain = this.getSpatialVolume(x, y, 1400, 0.7);
     if (gain <= 0.01) return;
@@ -417,6 +456,7 @@ class SoundFX {
       gainNode.gain.setValueAtTime(gain, this.ctx.currentTime);
       src.connect(gainNode);
       gainNode.connect(this.destinationNode);
+      src.onended = () => { this._activeVoices--; src.disconnect(); gainNode.disconnect(); };
       src.start();
     } else {
       this.playGhostWisp();
@@ -427,6 +467,8 @@ class SoundFX {
     if (this._muted) return;
     this.init();
     if (!this.ctx) return;
+    if (this._activeVoices >= this._maxVoices) return;
+    this._activeVoices++;
 
     const gain = this.getSpatialVolume(x, y, 1600, 1.0);
     if (gain <= 0.01) return;
@@ -444,6 +486,7 @@ class SoundFX {
       gainNode.gain.setValueAtTime(gain, this.ctx.currentTime);
       src.connect(gainNode);
       gainNode.connect(this.destinationNode);
+      src.onended = () => { this._activeVoices--; src.disconnect(); gainNode.disconnect(); };
       src.start();
     } else {
       this.playCannon(x, y);
@@ -454,6 +497,8 @@ class SoundFX {
     if (this._muted) return;
     this.init();
     if (!this.ctx) return;
+    if (this._activeVoices >= this._maxVoices) return;
+    this._activeVoices++;
 
     const gain = this.getSpatialVolume(x, y, 1800, 0.85);
     if (gain <= 0.02) return;
@@ -471,6 +516,7 @@ class SoundFX {
       gainNode.gain.setValueAtTime(gain, this.ctx.currentTime);
       src.connect(gainNode);
       gainNode.connect(this.destinationNode);
+      src.onended = () => { this._activeVoices--; src.disconnect(); gainNode.disconnect(); };
       src.start();
     } else {
       this.playEerieRoar();
@@ -481,6 +527,8 @@ class SoundFX {
     if (this._muted) return;
     this.init();
     if (!this.ctx) return;
+    if (this._activeVoices >= this._maxVoices) return;
+    this._activeVoices++;
 
     const gain = this.getSpatialVolume(x, y, 1400, 0.75);
     if (gain <= 0.02) return;
@@ -493,6 +541,7 @@ class SoundFX {
       gainNode.gain.setValueAtTime(gain, this.ctx.currentTime);
       src.connect(gainNode);
       gainNode.connect(this.destinationNode);
+      src.onended = () => { this._activeVoices--; src.disconnect(); gainNode.disconnect(); };
       src.start();
     } else {
       this.playSpikeLaunch();
@@ -503,6 +552,8 @@ class SoundFX {
     if (this._muted) return;
     this.init();
     if (!this.ctx) return;
+    if (this._activeVoices >= this._maxVoices) return;
+    this._activeVoices++;
 
     const gain = this.getSpatialVolume(x, y, 1600, 0.85);
     if (gain <= 0.02) return;
@@ -519,6 +570,7 @@ class SoundFX {
       gainNode.gain.setValueAtTime(gain, this.ctx.currentTime);
       src.connect(gainNode);
       gainNode.connect(this.destinationNode);
+      src.onended = () => { this._activeVoices--; src.disconnect(); gainNode.disconnect(); };
       src.start();
     } else {
       this.playIronChargeHorn();
@@ -529,6 +581,8 @@ class SoundFX {
     if (this._muted) return;
     this.init();
     if (!this.ctx) return;
+    if (this._activeVoices >= this._maxVoices) return;
+    this._activeVoices++;
 
     const gain = this.getSpatialVolume(x, y, 1300, 0.8);
     if (gain <= 0.01) return;
@@ -542,6 +596,7 @@ class SoundFX {
       gainNode.gain.setValueAtTime(gain, this.ctx.currentTime);
       src.connect(gainNode);
       gainNode.connect(this.destinationNode);
+      src.onended = () => { this._activeVoices--; src.disconnect(); gainNode.disconnect(); };
       src.start();
     } else {
       this.playHit(x, y);
@@ -552,6 +607,8 @@ class SoundFX {
     if (this._muted) return;
     this.init();
     if (!this.ctx) return;
+    if (this._activeVoices >= this._maxVoices) return;
+    this._activeVoices++;
 
     const gain = this.getSpatialVolume(x, y, 900, 0.55);
     if (gain <= 0.03) return;
@@ -569,6 +626,7 @@ class SoundFX {
       gainNode.gain.setValueAtTime(gain, this.ctx.currentTime);
       src.connect(gainNode);
       gainNode.connect(this.destinationNode);
+      src.onended = () => { this._activeVoices--; src.disconnect(); gainNode.disconnect(); };
       src.start();
     } else {
       this.playSplash();
@@ -616,6 +674,8 @@ class SoundFX {
       src.onended = () => {
         this.activeCannonCount = Math.max(0, this.activeCannonCount - 1);
       };
+      const origOnEndedCannon = src.onended;
+      src.onended = () => { origOnEndedCannon(); src.disconnect(); gainNode.disconnect(); };
       src.start();
     } else {
       // Procedural synthesizer fallback
@@ -631,6 +691,7 @@ class SoundFX {
       gainNode.connect(this.destinationNode);
       osc.start(now);
       osc.stop(now + 0.35);
+      osc.onended = () => { osc.disconnect(); gain.disconnect(); };
     }
   }
 
@@ -648,6 +709,7 @@ class SoundFX {
     gain.connect(this.destinationNode);
     osc.start(now);
     osc.stop(now + 0.25);
+      osc.onended = () => { osc.disconnect(); gain.disconnect(); };
   }
 
   playAlertHorn() {
@@ -664,6 +726,7 @@ class SoundFX {
     gain.connect(this.destinationNode);
     osc.start(now);
     osc.stop(now + 0.45);
+      osc.onended = () => { osc.disconnect(); gain.disconnect(); };
   }
 
   playRamHit() {
@@ -680,6 +743,7 @@ class SoundFX {
     gain.connect(this.destinationNode);
     osc.start(now);
     osc.stop(now + 0.45);
+      osc.onended = () => { osc.disconnect(); gain.disconnect(); };
   }
 
   playSteamHiss() {
@@ -696,6 +760,7 @@ class SoundFX {
     gain.connect(this.destinationNode);
     osc.start(now);
     osc.stop(now + 0.35);
+      osc.onended = () => { osc.disconnect(); gain.disconnect(); };
   }
 
   playIronChargeHorn() {
@@ -745,6 +810,7 @@ class SoundFX {
     gain.connect(this.destinationNode);
     osc.start(now);
     osc.stop(now + 0.5);
+      osc.onended = () => { osc.disconnect(); gain.disconnect(); };
   }
 
   playSpikeLaunch() {
@@ -761,6 +827,7 @@ class SoundFX {
     gain.connect(this.destinationNode);
     osc.start(now);
     osc.stop(now + 0.22);
+      osc.onended = () => { osc.disconnect(); gain.disconnect(); };
   }
 
   playHit(x, y) {
@@ -792,6 +859,8 @@ class SoundFX {
       src.onended = () => {
         this.activeHitCount = Math.max(0, this.activeHitCount - 1);
       };
+      const origOnEndedHit = src.onended;
+      src.onended = () => { origOnEndedHit(); src.disconnect(); gainNode.disconnect(); };
       src.start();
     } else {
       // Procedural synthesizer fallback
@@ -807,6 +876,7 @@ class SoundFX {
       gainNode.connect(this.destinationNode);
       osc.start(now);
       osc.stop(now + 0.2);
+      osc.onended = () => { osc.disconnect(); gain.disconnect(); };
     }
   }
 
@@ -824,6 +894,7 @@ class SoundFX {
     gain.connect(this.destinationNode);
     osc.start(now);
     osc.stop(now + 0.25);
+      osc.onended = () => { osc.disconnect(); gain.disconnect(); };
   }
 
   playLoot() {
@@ -841,6 +912,7 @@ class SoundFX {
       gain.connect(this.destinationNode);
       osc.start(now + i * 0.07);
       osc.stop(now + i * 0.07 + 0.2);
+      osc.onended = () => { osc.disconnect(); gain.disconnect(); };
     });
   }
 
@@ -858,6 +930,7 @@ class SoundFX {
     gain.connect(this.destinationNode);
     osc.start(now);
     osc.stop(now + 1.2);
+      osc.onended = () => { osc.disconnect(); gain.disconnect(); };
   }
 }
 

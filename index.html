@@ -3,10 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="theme-color" content="#030712">
   <title>Laut Darah - Blood Sea Odyssey</title>
   
   <!-- Tailwind CSS & Google Fonts -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@3/dist/tailwind.min.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Pirata+One&family=Cinzel:wght@600;800;900&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -37,7 +39,7 @@
             <span id="hpNumericText" class="text-[10px] font-mono font-bold text-emerald-400 shrink-0">100/100</span>
           </div>
           <div class="w-full bg-slate-950/90 h-2.5 rounded-full overflow-hidden border border-amber-500/30 mt-1 p-0.5 relative">
-            <div id="hpBar" class="bg-gradient-to-r from-emerald-600 via-emerald-400 to-green-300 h-full w-full rounded-full transition-all duration-200"></div>
+            <div id="hpBar" class="bg-gradient-to-r from-emerald-600 via-emerald-400 to-green-300 h-full w-full rounded-full transition-[width] duration-200"></div>
           </div>
         </div>
       </div>
@@ -49,7 +51,7 @@
           <span class="absolute right-0.5 text-[7px] text-slate-400">T</span>
           <span class="absolute bottom-0 text-[7px] text-slate-400">S</span>
           <span class="absolute left-0.5 text-[7px] text-slate-400">B</span>
-          <div id="compassNeedle" class="w-1 h-6 bg-gradient-to-t from-slate-500 to-red-500 rounded-full origin-center transition-transform duration-75"></div>
+          <div id="compassNeedle" class="w-1 h-6 bg-gradient-to-t from-slate-500 to-red-500 rounded-full origin-center"></div>
         </div>
         <div class="flex flex-col">
           <span id="zoneIndicator" class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-sky-950/90 text-sky-300 border border-sky-600/30 truncate max-w-[85px] text-center">Laut Tenang</span>
@@ -99,7 +101,7 @@
             <span id="stealthPercentLabel" class="font-mono text-emerald-300 ml-1">0%</span>
           </div>
           <div class="w-full bg-slate-950 h-1 sm:h-1.5 rounded-full overflow-hidden border border-slate-700 mt-0.5">
-            <div id="stealthBar" class="bg-emerald-500 h-full w-0 transition-all duration-150"></div>
+            <div id="stealthBar" class="bg-emerald-500 h-full w-0 transition-[width] duration-150"></div>
           </div>
         </div>
       </div>
@@ -199,7 +201,7 @@
         <line x1="16" y1="16" x2="84" y2="84" />
         <line x1="16" y1="84" x2="84" y2="16" />
       </svg>
-      <div id="joystickKnob" class="absolute w-16 h-16 rounded-full helm-knob transform translate-x-0 translate-y-0 transition-transform duration-75 flex items-center justify-center">
+      <div id="joystickKnob" class="absolute w-16 h-16 rounded-full helm-knob transform translate-x-0 translate-y-0 flex items-center justify-center">
         <svg class="w-8 h-8 text-amber-200 pointer-events-none drop-shadow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="5" r="3"></circle>
           <line x1="12" y1="8" x2="12" y2="22"></line>
@@ -210,7 +212,7 @@
   </div>
 
   <!-- Modal: Kodex 4 Klan Laut & Lore -->
-  <div id="loreModal" class="fixed inset-0 z-40 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 modal-enter">
+  <div id="loreModal" class="fixed inset-0 z-40 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 modal-enter hidden">
     <div class="pirate-panel w-full max-w-lg rounded-3xl p-5 border border-white/15 flex flex-col max-h-[88vh]">
       <div class="flex justify-between items-center pb-3 border-b border-white/10">
         <div>
@@ -227,7 +229,7 @@
   </div>
 
   <!-- Modal: Galangan Kapal / Ship Upgrades -->
-  <div id="upgradeModal" class="fixed inset-0 z-40 bg-black/75 backdrop-blur-md flex items-center justify-center p-4 modal-enter">
+  <div id="upgradeModal" class="fixed inset-0 z-40 bg-black/75 backdrop-blur-md flex items-center justify-center p-4 modal-enter hidden">
     <div class="pirate-panel w-full max-w-md rounded-3xl p-5 border border-white/15 flex flex-col max-h-[85vh]">
       <div class="flex justify-between items-center pb-3 border-b border-white/10">
         <div>
@@ -254,7 +256,7 @@
   </div>
 
   <!-- Modal: Panduan Kontrol Keyboard PC -->
-  <div id="helpModal" class="fixed inset-0 z-40 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 modal-enter">
+  <div id="helpModal" class="fixed inset-0 z-40 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 modal-enter hidden">
     <div class="pirate-panel w-full max-w-md rounded-3xl p-5 border border-white/15 flex flex-col max-h-[88vh]">
       <div class="flex justify-between items-center pb-3 border-b border-white/10">
         <div class="flex items-center gap-2">
@@ -411,7 +413,7 @@
   </div>
 
   <!-- Modal: Pause Menu -->
-  <div id="pauseModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 modal-enter">
+  <div id="pauseModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 modal-enter hidden">
     <div class="pirate-panel w-full max-w-sm rounded-3xl p-6 text-center border-amber-500/40 shadow-2xl">
       <div class="mb-4 flex justify-center">
         <div class="w-14 h-14 rounded-2xl nautical-badge flex items-center justify-center shadow-lg">
@@ -454,7 +456,7 @@
   </div>
 
   <!-- Modal: Settings Modal (Audio & Visual) -->
-  <div id="settingsModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 modal-enter">
+  <div id="settingsModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 modal-enter hidden">
     <div class="pirate-panel w-full max-w-md rounded-3xl p-5 border border-amber-500/40 flex flex-col max-h-[90vh]">
       <div class="flex justify-between items-center pb-3 border-b border-white/10">
         <div class="flex items-center gap-2">
@@ -559,7 +561,7 @@
   </div>
 
   <!-- Modal: Game Over / Karam (with Clean Jolly Roger SVG Vector & Roguelike Perma-Death) -->
-  <div id="gameOverModal" class="fixed inset-0 z-50 bg-black/90 backdrop-blur-lg flex items-center justify-center p-4 modal-enter">
+  <div id="gameOverModal" class="fixed inset-0 z-50 bg-black/90 backdrop-blur-lg flex items-center justify-center p-4 modal-enter hidden">
     <div class="pirate-panel w-full max-w-sm rounded-3xl p-6 text-center blood-glow border-red-500/40">
       <div class="mb-3 flex justify-center">
         <div class="w-16 h-16 rounded-full bg-red-950/60 border border-red-500/40 flex items-center justify-center shadow-inner">

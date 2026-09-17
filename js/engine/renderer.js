@@ -4,10 +4,20 @@
    ========================================================================== */
 
 const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
+const ctx = canvas.getContext('2d', { alpha: false });
 let width = 0;
 let height = 0;
 let dpr = 1;
+
+let _now = 0;
+let _perfNow = 0;
+const _renderedCenters = new Set();
+let viewLeft = 0, viewRight = 0, viewTop = 0, viewBottom = 0;
+
+function isVisible(x, y, margin) {
+  return x > viewLeft - margin && x < viewRight + margin 
+      && y > viewTop - margin && y < viewBottom + margin;
+}
 
 function resizeCanvas() {
   const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || window.innerWidth < 1024;
@@ -106,7 +116,7 @@ function drawWorldIsland(ctx, isl) {
   // 3. Island Interior Features (Foliage / Eldritch Flesh nodes)
   if (isl.isFlesh) {
     ctx.fillStyle = '#ef4444';
-    const time = Date.now() * 0.002;
+    const time = _now * 0.002;
     for (let i = 0; i < isl._cachedFoliage.length; i++) {
       const node = isl._cachedFoliage[i];
       ctx.beginPath();
@@ -185,8 +195,10 @@ function drawWorldIsland(ctx, isl) {
   ctx.font = 'bold 12px "Cinzel", serif';
   ctx.fillStyle = '#ffffff';
   ctx.textAlign = 'center';
-  ctx.shadowColor = 'black';
-  ctx.shadowBlur = 6;
+  const prevFill = ctx.fillStyle;
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillText(isl.name, 2, -8);
+  ctx.fillStyle = prevFill;
   ctx.fillText(isl.name, 0, -10);
 
   ctx.font = 'bold 9px sans-serif';
@@ -200,7 +212,7 @@ function drawVectorShip(ctx, ship, isPlayer = false, tier = 1) {
   ctx.save();
   ctx.translate(ship.x, ship.y);
 
-  const time = Date.now() * 0.003;
+  const time = _now * 0.003;
   const isMoving = isPlayer 
     ? (joystickState.active && joystickState.magnitude > 0.1) 
     : Boolean(ship.isMoving);
@@ -377,7 +389,7 @@ function drawVectorShip(ctx, ship, isPlayer = false, tier = 1) {
         ctx.fill();
 
         // Pulsing underwater acoustic sonar ring
-        const sonarPulse = (Date.now() * 0.002) % 1;
+        const sonarPulse = (_now * 0.002) % 1;
         ctx.strokeStyle = `rgba(244, 63, 94, ${0.45 - sonarPulse * 0.35})`;
         ctx.lineWidth = 1.4;
         ctx.setLineDash([8, 8]);
@@ -416,7 +428,7 @@ function drawVectorShip(ctx, ship, isPlayer = false, tier = 1) {
       ctx.setLineDash([]);
 
       // Rotating radar beam inside small circle
-      const sweepAng = Date.now() * 0.005;
+      const sweepAng = _now * 0.005;
       ctx.strokeStyle = 'rgba(251, 191, 36, 0.6)';
       ctx.lineWidth = 1.6;
       ctx.beginPath();
@@ -494,11 +506,9 @@ function drawVectorShip(ctx, ship, isPlayer = false, tier = 1) {
 
       if (isCharging) {
         ctx.save();
-        ctx.shadowColor = '#ea580c';
-        ctx.shadowBlur = 18;
         ctx.fillStyle = '#ff4500';
       } else if (isWindup) {
-        ctx.fillStyle = (Math.sin(Date.now() * 0.02) > 0) ? '#ea580c' : '#b45309';
+        ctx.fillStyle = (Math.sin(_now * 0.02) > 0) ? '#ea580c' : '#b45309';
       } else {
         ctx.fillStyle = '#ea580c';
       }
@@ -540,8 +550,6 @@ function drawVectorShip(ctx, ship, isPlayer = false, tier = 1) {
     } else if (clan === 'mist') {
       const len = 26 + t * 5;
       const wid = 13 + t * 3.5;
-      ctx.shadowColor = '#06b6d4';
-      ctx.shadowBlur = 6 + t * 3;
       ctx.fillStyle = '#1e1b4b';
       ctx.strokeStyle = '#22d3ee';
       ctx.lineWidth = 1.5;
@@ -553,7 +561,6 @@ function drawVectorShip(ctx, ship, isPlayer = false, tier = 1) {
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
-      ctx.shadowBlur = 0;
 
       ctx.fillStyle = 'rgba(6, 182, 212, 0.7)';
       ctx.beginPath();
@@ -594,8 +601,6 @@ function drawVectorShip(ctx, ship, isPlayer = false, tier = 1) {
         ctx.fill();
         ctx.stroke();
       } else {
-        ctx.shadowColor = '#dc2626';
-        ctx.shadowBlur = 18;
         ctx.fillStyle = '#450a0a';
         ctx.strokeStyle = '#f43f5e';
         ctx.lineWidth = 3;
@@ -605,7 +610,6 @@ function drawVectorShip(ctx, ship, isPlayer = false, tier = 1) {
         ctx.bezierCurveTo(-len * 0.3, wid * 0.6, len * 0.3, wid * 0.8, len / 2, 0);
         ctx.fill();
         ctx.stroke();
-        ctx.shadowBlur = 0;
       }
     }
 
@@ -619,9 +623,9 @@ function drawVectorShip(ctx, ship, isPlayer = false, tier = 1) {
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(mastX, 0);
-      ctx.lineTo(mastX - 16, -6 + Math.sin(Date.now() * 0.008) * 2.5);
+      ctx.lineTo(mastX - 16, -6 + Math.sin(_now * 0.008) * 2.5);
       ctx.lineTo(mastX - 11, 0);
-      ctx.lineTo(mastX - 16, 6 + Math.sin(Date.now() * 0.008) * 2.5);
+      ctx.lineTo(mastX - 16, 6 + Math.sin(_now * 0.008) * 2.5);
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
@@ -646,7 +650,7 @@ function drawVectorShip(ctx, ship, isPlayer = false, tier = 1) {
       ctx.stroke();
 
       // Rotating radar sweep
-      const sweepAng = Date.now() * 0.006;
+      const sweepAng = _now * 0.006;
       ctx.strokeStyle = '#fbbf24';
       ctx.beginPath();
       ctx.moveTo(0, -45);
@@ -718,7 +722,7 @@ function drawSunkenShip(ctx, wreck) {
   ctx.translate(wreck.x, wreck.y);
   ctx.rotate(wreck.angle);
 
-  const time = Date.now() * 0.003;
+  const time = _now * 0.003;
 
   // Murky underwater seabed silhouette
   ctx.fillStyle = wreck.isAbyssal ? 'rgba(153, 27, 27, 0.35)' : 'rgba(15, 23, 42, 0.5)';
@@ -862,7 +866,7 @@ function drawSpikedMine(ctx, sm) {
   // Flashing Danger Sensor Light (Red Warning Beacon)
   const isFlashing = sm.detonating 
     ? (Math.sin(sm.flashTimer) > 0) 
-    : (Math.sin(Date.now() * 0.005 + sm.bobPhase) > 0.4);
+    : (Math.sin(_now * 0.005 + sm.bobPhase) > 0.4);
 
   ctx.fillStyle = isFlashing ? '#ef4444' : '#450a0a';
   ctx.beginPath();
@@ -870,12 +874,9 @@ function drawSpikedMine(ctx, sm) {
   ctx.fill();
 
   if (isFlashing) {
-    ctx.shadowColor = '#ef4444';
-    ctx.shadowBlur = 8;
     ctx.strokeStyle = '#fca5a5';
     ctx.lineWidth = 1;
     ctx.stroke();
-    ctx.shadowBlur = 0;
   }
 
   ctx.restore();
@@ -912,8 +913,6 @@ function drawOccultTower(ctx, tw) {
   ctx.stroke();
 
   // Glowing Occult Runes (Rune toska misterius bersinar)
-  ctx.shadowColor = '#22d3ee';
-  ctx.shadowBlur = 10 * tw.glowPulse + 4;
   ctx.strokeStyle = '#22d3ee';
   ctx.lineWidth = 1.5;
   for (let r = 0; r < 4; r++) {
@@ -927,7 +926,6 @@ function drawOccultTower(ctx, tw) {
     ctx.lineTo(rx - 3, ry + 3);
     ctx.stroke();
   }
-  ctx.shadowBlur = 0;
 
   // Floating Rotating Crystal Orb / Spectral Eye
   const orbY = -6 + Math.sin(tw.orbAngle * 2) * 3;
@@ -936,13 +934,10 @@ function drawOccultTower(ctx, tw) {
   orbGrad.addColorStop(0.4, '#38bdf8');
   orbGrad.addColorStop(1, '#0369a1');
 
-  ctx.shadowColor = '#06b6d4';
-  ctx.shadowBlur = 16;
   ctx.fillStyle = orbGrad;
   ctx.beginPath();
   ctx.arc(0, orbY, 8, 0, Math.PI * 2);
   ctx.fill();
-  ctx.shadowBlur = 0;
 
   // Structure HP Bar & Name
   const barW = 46;
@@ -1065,10 +1060,10 @@ function drawSeagull(ctx, s) {
 }
 
 function renderMistRituals(ctx) {
-  const renderedCenters = new Set();
+  _renderedCenters.clear();
   entities.enemies.forEach(e => {
-    if (e.formationType === 'mist_ritual' && e.ritualCenter && !renderedCenters.has(e.ritualCenter)) {
-      renderedCenters.add(e.ritualCenter);
+    if (e.formationType === 'mist_ritual' && e.ritualCenter && !_renderedCenters.has(e.ritualCenter)) {
+      _renderedCenters.add(e.ritualCenter);
       const rc = e.ritualCenter;
 
       ctx.save();
@@ -1109,7 +1104,7 @@ function renderMistRituals(ctx) {
       ctx.stroke();
 
       // Central pulsing arcane wisp orb
-      const corePulse = Math.sin(Date.now() * 0.005) * 3 + 9;
+      const corePulse = Math.sin(_now * 0.005) * 3 + 9;
       ctx.fillStyle = 'rgba(34, 211, 238, 0.55)';
       ctx.beginPath();
       ctx.arc(0, 0, corePulse, 0, Math.PI * 2);
@@ -1152,9 +1147,11 @@ function getMistSprite(isBlood) {
 }
 
 function render() {
+  _now = Date.now();
+  _perfNow = performance.now() * 0.001;
   const playerDist = Math.hypot(playerState.x, playerState.y);
   const biome = getBiomeInfo(playerDist);
-  const time = performance.now() * 0.001;
+  const time = _perfNow;
 
   // Hardware-accelerated linear gradient for mobile GPU fill rate efficiency
   const [r1, g1, b1] = biome.waterA;
@@ -1176,10 +1173,10 @@ function render() {
 
   ctx.translate(width / 2 - playerState.x + shakeX, height / 2 - playerState.y + shakeY);
 
-  const viewLeft = playerState.x - width / 2 - 120;
-  const viewRight = playerState.x + width / 2 + 120;
-  const viewTop = playerState.y - height / 2 - 120;
-  const viewBottom = playerState.y + height / 2 + 120;
+  viewLeft = playerState.x - width / 2 - 120;
+  viewRight = playerState.x + width / 2 + 120;
+  viewTop = playerState.y - height / 2 - 120;
+  viewBottom = playerState.y + height / 2 + 120;
 
   // Ocean Wave Ribbons (Optimized step and spacing to cut trig calls and stroke paths)
   const waveSpacing = 135;
@@ -1228,16 +1225,26 @@ function render() {
   });
 
   // Render Sunken Ships (High-Fidelity Wreck)
-  entities.sunkenShips.forEach(s => drawSunkenShip(ctx, s));
+  entities.sunkenShips.forEach(s => {
+    if (!isVisible(s.x, s.y, 200)) return;
+    drawSunkenShip(ctx, s)
+  });
 
   // Render Spiked Floating Sea Mines (Iron Islands)
-  entities.spikedMines.forEach(sm => drawSpikedMine(ctx, sm));
+  entities.spikedMines.forEach(sm => {
+    if (!isVisible(sm.x, sm.y, 100)) return;
+    drawSpikedMine(ctx, sm)
+  });
 
   // Render Occult Watchtowers (Mist Atoll)
-  entities.towers.forEach(tw => drawOccultTower(ctx, tw));
+  entities.towers.forEach(tw => {
+    if (!isVisible(tw.x, tw.y, 200)) return;
+    drawOccultTower(ctx, tw)
+  });
 
   // Render Player Mines
   entities.mines.forEach(m => {
+    if (!isVisible(m.x, m.y, 50)) return;
     ctx.fillStyle = '#78350f';
     ctx.beginPath();
     ctx.arc(m.x, m.y, 7, 0, Math.PI * 2);
@@ -1253,6 +1260,7 @@ function render() {
 
   // Render Floating Loots
   entities.floatingLoots.forEach(loot => {
+    if (!isVisible(loot.x, loot.y, 50)) return;
     ctx.fillStyle = loot.type === 'repair' ? '#b45309' : '#fbbf24';
     ctx.beginPath();
     ctx.roundRect(loot.x - 7, loot.y - 7, 14, 14, 3);
@@ -1264,6 +1272,7 @@ function render() {
 
   // Render Sea Ripples & Water Trails
   entities.seaRipples.forEach(r => {
+    if (!isVisible(r.x, r.y, 50)) return;
     const strokeColor = r.color ? `${r.color}${r.alpha})` : `rgba(255, 255, 255, ${r.alpha})`;
     ctx.strokeStyle = strokeColor;
     ctx.lineWidth = 1.6;
@@ -1273,13 +1282,19 @@ function render() {
   });
 
   // Render Sinking Ships in death sequence
-  entities.sinkingShips.forEach(s => drawSinkingShip(ctx, s));
+  entities.sinkingShips.forEach(s => {
+    if (!isVisible(s.x, s.y, 200)) return;
+    drawSinkingShip(ctx, s)
+  });
 
   // Render Mist Occult Ritual Circles
   renderMistRituals(ctx);
 
   // Render Enemy Ships
-  entities.enemies.forEach(e => drawVectorShip(ctx, e, false));
+  entities.enemies.forEach(e => {
+    if (!isVisible(e.x, e.y, 300)) return;
+    drawVectorShip(ctx, e, false)
+  });
 
   // Render Player Ship
   const tierInfo = getShipTier();
@@ -1287,6 +1302,7 @@ function render() {
 
   // Render Projectiles
   entities.projectiles.forEach(p => {
+    if (!isVisible(p.x, p.y, 50)) return;
     ctx.save();
     ctx.translate(p.x, p.y);
 
@@ -1311,8 +1327,6 @@ function render() {
       ctx.stroke();
 
     } else if (p.type === 'spirit') {
-      ctx.shadowColor = '#22d3ee';
-      ctx.shadowBlur = 12;
       ctx.fillStyle = 'rgba(6, 182, 212, 0.85)';
       ctx.beginPath();
       ctx.arc(0, 0, p.radius || 6, 0, Math.PI * 2);
@@ -1321,7 +1335,6 @@ function render() {
       ctx.beginPath();
       ctx.arc(-1, -1, (p.radius || 6) * 0.45, 0, Math.PI * 2);
       ctx.fill();
-      ctx.shadowBlur = 0;
 
     } else if (p.type === 'spike') {
       ctx.rotate(p.angle || 0);
@@ -1342,29 +1355,45 @@ function render() {
   });
 
   // Render Particles
+  const particlesByColor = {};
   entities.particles.forEach(p => {
-    ctx.fillStyle = p.color;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-    ctx.fill();
+    if (!isVisible(p.x, p.y, 20)) return;
+    (particlesByColor[p.color] || (particlesByColor[p.color] = [])).push(p);
   });
+  for (const color in particlesByColor) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    const group = particlesByColor[color];
+    for (let i = 0; i < group.length; i++) {
+      const p = group[i];
+      ctx.moveTo(p.x + p.size, p.y);
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    }
+    ctx.fill();
+  }
 
   // Render Floating Combat Numbers
   entities.floatingTexts.forEach(ft => {
+    if (!isVisible(ft.x, ft.y, 50)) return;
     ctx.save();
     ctx.font = ft.isCrit ? '900 13px "Cinzel", sans-serif' : 'bold 11px sans-serif';
     ctx.fillStyle = ft.color;
     ctx.globalAlpha = Math.max(0, ft.alpha);
     ctx.textAlign = 'center';
-    ctx.shadowColor = 'black';
-    ctx.shadowBlur = 4;
+    const prevFill = ctx.fillStyle;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillText(ft.text, ft.x + 2, ft.y + 2);
+    ctx.fillStyle = prevFill;
     ctx.fillText(ft.text, ft.x, ft.y);
     ctx.restore();
   });
 
   // Render Oceanic Seagulls overhead
   if (entities.seagulls) {
-    entities.seagulls.forEach(s => drawSeagull(ctx, s));
+    entities.seagulls.forEach(s => {
+      if (!isVisible(s.x, s.y, 100)) return;
+      drawSeagull(ctx, s)
+    });
   }
 
   ctx.restore();

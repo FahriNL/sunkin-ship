@@ -18,6 +18,9 @@ const joystickState = {
 };
 
 const maxRadius = 50;
+let pendingKnobX = 0;
+let pendingKnobY = 0;
+let knobDirty = false;
 
 function updateJoystickPosition(clientX, clientY) {
   const diffX = clientX - joystickState.originX;
@@ -33,9 +36,9 @@ function updateJoystickPosition(clientX, clientY) {
 
   const visualX = Math.cos(angle) * clampedDist;
   const visualY = Math.sin(angle) * clampedDist;
-  if (joystickKnob) {
-    joystickKnob.style.transform = `translate(${visualX}px, ${visualY}px)`;
-  }
+  pendingKnobX = visualX;
+  pendingKnobY = visualY;
+  knobDirty = true;
 }
 
 function handleTouchStart(e) {
@@ -88,21 +91,30 @@ function handleTouchEnd(e) {
     joystickState.dx = 0;
     joystickState.dy = 0;
     joystickState.magnitude = 0;
-    if (joystickKnob) joystickKnob.style.transform = `translate(0px, 0px)`;
+    pendingKnobX = 0;
+    pendingKnobY = 0;
+    knobDirty = true;
   }
 }
 
 if (joystickZone) {
   // Touch listeners
   joystickZone.addEventListener('touchstart', handleTouchStart, { passive: false });
-  window.addEventListener('touchmove', handleTouchMove, { passive: false });
-  window.addEventListener('touchend', handleTouchEnd, { passive: false });
-  window.addEventListener('touchcancel', handleTouchEnd, { passive: false });
+  window.addEventListener('touchmove', handleTouchMove, { passive: true });
+  window.addEventListener('touchend', handleTouchEnd, { passive: true });
+  window.addEventListener('touchcancel', handleTouchEnd, { passive: true });
 
   // Mouse drag listeners
   joystickZone.addEventListener('mousedown', handleTouchStart);
   window.addEventListener('mousemove', handleTouchMove);
   window.addEventListener('mouseup', handleTouchEnd);
+}
+
+function flushJoystickVisual() {
+  if (knobDirty && joystickKnob) {
+    joystickKnob.style.transform = `translate(${pendingKnobX}px, ${pendingKnobY}px)`;
+    knobDirty = false;
+  }
 }
 
 /* ==========================================================================

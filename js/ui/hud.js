@@ -60,6 +60,7 @@ let lastZoneName = '';
 let lastShipRank = -1;
 let lastStealthPercent = -1;
 let lastStealthState = '';
+let lastNeedleDeg = -999;
 
 const STEALTH_ICONS = {
   detected: `<svg class="w-4 h-4 text-rose-500 animate-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/><line x1="1" y1="1" x2="23" y2="23" stroke="#ef4444" stroke-width="2.5"/></svg>`,
@@ -113,8 +114,11 @@ function updateHUD() {
   }
 
   if (elNeedle) {
-    const deg = (playerState.angle * 180 / Math.PI) + 90;
-    elNeedle.style.transform = `rotate(${deg}deg)`;
+    const deg = Math.round((playerState.angle * 180 / Math.PI) + 90);
+    if (deg !== lastNeedleDeg) {
+      lastNeedleDeg = deg;
+      elNeedle.style.transform = `rotate(${deg}deg)`;
+    }
   }
 
   const biome = getBiomeInfo(dist);

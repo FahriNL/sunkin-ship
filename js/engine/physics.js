@@ -3,11 +3,22 @@
    Procedural Coastline Raycasting, Search & Hide Stealth AI, Spiked Mines, & Occult Towers
    ========================================================================== */
 
+let _cachedSalvageContainer = null;
+let _cachedSalvageCircle = null;
+let _lastSpawnCheck = 0;
+
+function normAngle(a) {
+  a = a % (Math.PI * 2);
+  if (a > Math.PI) a -= Math.PI * 2;
+  else if (a < -Math.PI) a += Math.PI * 2;
+  return a;
+}
+
 // Line of Sight: Checks if any island obstructs view between two coordinates using organic radius
 function hasLineOfSight(x1, y1, x2, y2) {
   const dx = x2 - x1;
   const dy = y2 - y1;
-  const dist = Math.hypot(dx, dy);
+  const dist = Math.sqrt((dx) * (dx) + (dy) * (dy));
   if (dist < 1) return true;
 
   const steps = Math.ceil(dist / 35);
@@ -16,7 +27,7 @@ function hasLineOfSight(x1, y1, x2, y2) {
     const ty = y1 + (dy / steps) * s;
     for (let i = 0; i < WORLD_ISLANDS.length; i++) {
       const isl = WORLD_ISLANDS[i];
-      const distToIsl = Math.hypot(tx - isl.x, ty - isl.y);
+      const distToIsl = Math.sqrt((tx - isl.x) * (tx - isl.x) + (ty - isl.y) * (ty - isl.y));
       if (distToIsl > (isl.radius || 200) + 40) continue; // Skip distant islands without trigonometry
       const ang = Math.atan2(ty - isl.y, tx - isl.x);
       const rAtAng = getIslandRadiusAt(isl, ang);
@@ -115,7 +126,7 @@ function getIslandHarborAnchor(isl, slotOffset = 0) {
 function avoidIslandObstacles(ship, desiredHeading, lookahead = 175) {
   for (let i = 0; i < WORLD_ISLANDS.length; i++) {
     const isl = WORLD_ISLANDS[i];
-    const dToCenter = Math.hypot(isl.x - ship.x, isl.y - ship.y);
+    const dToCenter = Math.sqrt((isl.x - ship.x) * (isl.x - ship.x) + (isl.y - ship.y) * (isl.y - ship.y));
     if (dToCenter > isl.radius + lookahead + 120) continue;
 
     // Whisker probes: center probe, left flank (+0.42 rad), right flank (-0.42 rad)
@@ -131,7 +142,7 @@ function avoidIslandObstacles(ship, desiredHeading, lookahead = 175) {
       const py = ship.y + Math.sin(whiskers[w].angle) * whiskers[w].dist;
       const pAngle = Math.atan2(py - isl.y, px - isl.x);
       const rAtAngle = getIslandRadiusAt(isl, pAngle) + (ship.radius || 20) + 40;
-      if (Math.hypot(px - isl.x, py - isl.y) < rAtAngle) {
+      if (Math.sqrt((px - isl.x) * (px - isl.x) + (py - isl.y) * (py - isl.y)) < rAtAngle) {
         blocked = true;
         break;
       }
@@ -140,7 +151,7 @@ function avoidIslandObstacles(ship, desiredHeading, lookahead = 175) {
     // Proximity check to coastline
     const currAngle = Math.atan2(ship.y - isl.y, ship.x - isl.x);
     const currR = getIslandRadiusAt(isl, currAngle) + (ship.radius || 20) + 32;
-    const currDist = Math.hypot(ship.x - isl.x, ship.y - isl.y);
+    const currDist = Math.sqrt((ship.x - isl.x) * (ship.x - isl.x) + (ship.y - isl.y) * (ship.y - isl.y));
     if (currDist < currR + 25) {
       blocked = true;
     }
@@ -149,12 +160,10 @@ function avoidIslandObstacles(ship, desiredHeading, lookahead = 175) {
       // Steer tangentially around the island contour
       const normalAngle = Math.atan2(ship.y - isl.y, ship.x - isl.x);
       let diffCW = (normalAngle + Math.PI / 2) - desiredHeading;
-      while (diffCW < -Math.PI) diffCW += Math.PI * 2;
-      while (diffCW > Math.PI) diffCW -= Math.PI * 2;
+      diffCW = normAngle(diffCW);
 
       let diffCCW = (normalAngle - Math.PI / 2) - desiredHeading;
-      while (diffCCW < -Math.PI) diffCCW += Math.PI * 2;
-      while (diffCCW > Math.PI) diffCCW -= Math.PI * 2;
+      diffCCW = normAngle(diffCCW);
 
       // Choose tangent that aligns closest to intended course
       const bestTangent = Math.abs(diffCW) < Math.abs(diffCCW)
@@ -197,7 +206,7 @@ function updateHumanVoyage(e, dt) {
   const harbor = getIslandHarborAnchor(destIsl);
   const dx = harbor.x - e.x;
   const dy = harbor.y - e.y;
-  const distToHarbor = Math.hypot(dx, dy);
+  const distToHarbor = Math.sqrt((dx) * (dx) + (dy) * (dy));
 
   if (distToHarbor < 95) {
     // Reached port harbor! Drop anchor and trade/dock
@@ -213,8 +222,7 @@ function updateHumanVoyage(e, dt) {
 
   // Smooth turn towards targetHeading
   let angleDiff = targetHeading - e.angle;
-  while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-  while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+  angleDiff = normAngle(angleDiff);
   e.angle += Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), e.turnRate * 0.9 * dt);
 
   // Cruising forward across shipping lanes
@@ -340,18 +348,46 @@ function spawnSolitaryShip(ex, ey, angle, clan, distFromCenter) {
 let encounterSpawnCooldown = 4.0;
 
 function spawnWorldEntities() {
-  const playerDist = Math.hypot(playerState.x, playerState.y);
+  const playerDist = Math.sqrt((playerState.x) * (playerState.x) + (playerState.y) * (playerState.y));
   const biome = getBiomeInfo(playerDist);
 
   const maxDist = 2400;
-  entities.enemies = entities.enemies.filter(e => Math.hypot(e.x - playerState.x, e.y - playerState.y) < maxDist);
-  entities.sunkenShips = entities.sunkenShips.filter(s => Math.hypot(s.x - playerState.x, s.y - playerState.y) < maxDist);
-  entities.floatingLoots = entities.floatingLoots.filter(l => Math.hypot(l.x - playerState.x, l.y - playerState.y) < maxDist);
-  entities.mines = entities.mines.filter(m => Math.hypot(m.x - playerState.x, m.y - playerState.y) < maxDist);
+  for (let i = entities.enemies.length - 1; i >= 0; i--) {
+    const e = entities.enemies[i];
+    const dx = e.x - playerState.x, dy = e.y - playerState.y;
+    if (dx * dx + dy * dy >= maxDist * maxDist) {
+      entities.enemies[i] = entities.enemies[entities.enemies.length - 1];
+      entities.enemies.pop();
+    }
+  }
+  for (let i = entities.sunkenShips.length - 1; i >= 0; i--) {
+    const s = entities.sunkenShips[i];
+    const dx = s.x - playerState.x, dy = s.y - playerState.y;
+    if (dx * dx + dy * dy >= maxDist * maxDist) {
+      entities.sunkenShips[i] = entities.sunkenShips[entities.sunkenShips.length - 1];
+      entities.sunkenShips.pop();
+    }
+  }
+  for (let i = entities.floatingLoots.length - 1; i >= 0; i--) {
+    const l = entities.floatingLoots[i];
+    const dx = l.x - playerState.x, dy = l.y - playerState.y;
+    if (dx * dx + dy * dy >= maxDist * maxDist) {
+      entities.floatingLoots[i] = entities.floatingLoots[entities.floatingLoots.length - 1];
+      entities.floatingLoots.pop();
+    }
+  }
+  for (let i = entities.mines.length - 1; i >= 0; i--) {
+    const m = entities.mines[i];
+    const dx = m.x - playerState.x, dy = m.y - playerState.y;
+    if (dx * dx + dy * dy >= maxDist * maxDist) {
+      entities.mines[i] = entities.mines[entities.mines.length - 1];
+      entities.mines.pop();
+    }
+  }
 
   // Maintain docked clan guards / island patrols (Max 1 guard per outpost)
   WORLD_ISLANDS.forEach(isl => {
-    const distToPlayer = Math.hypot(isl.x - playerState.x, isl.y - playerState.y);
+    const distToPlayer = Math.sqrt((isl.x - playerState.x) * (isl.x - playerState.x) + (isl.y - playerState.y) * (isl.y - playerState.y));
     if (distToPlayer < 1400 && isl.clan !== 'neutral') {
       const islandGuards = entities.enemies.filter(e => e.homeIslandId === isl.id);
       if (islandGuards.length < 1) {
@@ -386,14 +422,14 @@ function spawnWorldEntities() {
     for (let i = 0; i < WORLD_ISLANDS.length; i++) {
       const isl = WORLD_ISLANDS[i];
       const ang = Math.atan2(ey - isl.y, ex - isl.x);
-      if (Math.hypot(ex - isl.x, ey - isl.y) < getIslandRadiusAt(isl, ang) + 120) {
+      if (Math.sqrt((ex - isl.x) * (ex - isl.x) + (ey - isl.y) * (ey - isl.y)) < getIslandRadiusAt(isl, ang) + 120) {
         insideIsland = true;
         break;
       }
     }
 
     if (!insideIsland) {
-      const distFromCenter = Math.hypot(ex, ey);
+      const distFromCenter = Math.sqrt((ex) * (ex) + (ey) * (ey));
       // Safe Zone: No hostile armadas patrol inside Home Harbor waters (within 750px of center)
       if (distFromCenter >= 750) {
         const encounterAngle = Math.random() * Math.PI * 2;
@@ -490,12 +526,12 @@ function spawnWorldEntities() {
     const sDist = 450 + Math.random() * 700;
     const sx = playerState.x + Math.cos(sAngle) * sDist;
     const sy = playerState.y + Math.sin(sAngle) * sDist;
-    const sDistCenter = Math.hypot(sx, sy);
+    const sDistCenter = Math.sqrt((sx) * (sx) + (sy) * (sy));
 
     let onLand = false;
     WORLD_ISLANDS.forEach(isl => {
       const ang = Math.atan2(sy - isl.y, sx - isl.x);
-      if (Math.hypot(sx - isl.x, sy - isl.y) < getIslandRadiusAt(isl, ang) + 30) onLand = true;
+      if (Math.sqrt((sx - isl.x) * (sx - isl.x) + (sy - isl.y) * (sy - isl.y)) < getIslandRadiusAt(isl, ang) + 30) onLand = true;
     });
 
     if (!onLand) {
@@ -540,8 +576,7 @@ function updateGame(dt) {
     const targetAngle = joystickState.angle;
     let diff = targetAngle - playerState.angle;
     
-    while (diff < -Math.PI) diff += Math.PI * 2;
-    while (diff > Math.PI) diff -= Math.PI * 2;
+    diff = normAngle(diff);
 
     const turnSpeed = 3.2 * dt;
     playerState.angle += Math.sign(diff) * Math.min(Math.abs(diff), turnSpeed);
@@ -567,9 +602,12 @@ function updateGame(dt) {
 
   // Island physical collision using Procedural Coastline Radius
   WORLD_ISLANDS.forEach(isl => {
-    const ang = Math.atan2(playerState.y - isl.y, playerState.x - isl.x);
+    const _dx = playerState.x - isl.x, _dy = playerState.y - isl.y;
+    const _maxR = ((isl.radius || 200) * 1.3 + 50);
+    if (_dx * _dx + _dy * _dy > _maxR * _maxR) return;
+    const ang = Math.atan2(_dy, _dx);
     const rAtAng = getIslandRadiusAt(isl, ang);
-    const d = Math.hypot(playerState.x - isl.x, playerState.y - isl.y);
+    const d = Math.sqrt(_dx * _dx + _dy * _dy);
     const minDist = rAtAng + 15;
     if (d < minDist && d > 0.001) {
       playerState.x = isl.x + Math.cos(ang) * minDist;
@@ -578,7 +616,7 @@ function updateGame(dt) {
   });
 
   // Max Distance Record
-  const distFromStart = Math.floor(Math.hypot(playerState.x, playerState.y));
+  const distFromStart = Math.floor(Math.sqrt((playerState.x) * (playerState.x) + (playerState.y) * (playerState.y)));
   if (distFromStart > playerState.maxDistanceReached) {
     playerState.maxDistanceReached = distFromStart;
   }
@@ -600,8 +638,9 @@ function updateGame(dt) {
 
   if (currentTimeSec - lastFireTime >= fireDelay) {
     const targetInBroadside = entities.enemies.some(e => {
-      const d = Math.hypot(e.x - playerState.x, e.y - playerState.y);
-      if (d > 260) return false;
+      const dx = e.x - playerState.x, dy = e.y - playerState.y;
+      if (dx * dx + dy * dy > 260 * 260) return false;
+      const d = Math.sqrt(dx * dx + dy * dy);
       if (!hasLineOfSight(playerState.x, playerState.y, e.x, e.y)) return false;
       const angleToEnemy = Math.atan2(e.y - playerState.y, e.x - playerState.x);
       let relativeAngle = Math.abs(angleToEnemy - playerState.angle);
@@ -617,8 +656,9 @@ function updateGame(dt) {
   // Rear Defense / Stern Chaser check
   if (playerState.upgrades.rearDefense > 0) {
     const targetInRear = entities.enemies.some(e => {
-      const d = Math.hypot(e.x - playerState.x, e.y - playerState.y);
-      if (d > 220) return false;
+      const dx = e.x - playerState.x, dy = e.y - playerState.y;
+      if (dx * dx + dy * dy > 220 * 220) return false;
+      const d = Math.sqrt(dx * dx + dy * dy);
       if (!hasLineOfSight(playerState.x, playerState.y, e.x, e.y)) return false;
       const angleToEnemy = Math.atan2(e.y - playerState.y, e.x - playerState.x);
       let relativeAngle = Math.abs(angleToEnemy - playerState.angle);
@@ -638,7 +678,8 @@ function updateGame(dt) {
 
     for (let j = entities.enemies.length - 1; j >= 0; j--) {
       const e = entities.enemies[j];
-      if (Math.hypot(e.x - mine.x, e.y - mine.y) < e.radius + mine.radius) {
+      const dx = e.x - mine.x, dy = e.y - mine.y;
+      if (dx * dx + dy * dy < (e.radius + mine.radius) * (e.radius + mine.radius)) {
         e.hp -= mine.damage;
         sound.playMineExplosion(mine.x, mine.y);
         screenShake = Math.max(screenShake, 8);
@@ -673,7 +714,7 @@ function updateGame(dt) {
     sm.y = sm.baseY + Math.cos(sm.bobPhase * 0.7) * 4;
 
     // Check proximity to Player
-    const distToPlayer = Math.hypot(playerState.x - sm.x, playerState.y - sm.y);
+    const distToPlayer = Math.sqrt((playerState.x - sm.x) * (playerState.x - sm.x) + (playerState.y - sm.y) * (playerState.y - sm.y));
     if (distToPlayer < 55) {
       sm.detonating = true;
     }
@@ -681,7 +722,8 @@ function updateGame(dt) {
     // Check proximity to Enemies
     for (let j = 0; j < entities.enemies.length; j++) {
       const e = entities.enemies[j];
-      if (Math.hypot(e.x - sm.x, e.y - sm.y) < e.radius + 25) {
+      const dx = e.x - sm.x, dy = e.y - sm.y;
+      if (dx * dx + dy * dy < (e.radius + 25) * (e.radius + 25)) {
         sm.detonating = true;
         break;
       }
@@ -706,8 +748,8 @@ function updateGame(dt) {
 
         // Damage Enemies in blast radius
         entities.enemies.forEach(e => {
-          const de = Math.hypot(e.x - sm.x, e.y - sm.y);
-          if (de < 110) {
+          const dx = e.x - sm.x, dy = e.y - sm.y;
+          if (dx * dx + dy * dy < 110 * 110) {
             e.hp -= sm.damage * 1.3;
             addFloatingText(`RANJAU BESI! -${Math.round(sm.damage * 1.3)}`, e.x, e.y, '#f97316', true);
           }
@@ -740,13 +782,14 @@ function updateGame(dt) {
     tw.shootCooldown -= dt;
     if (tw.shootCooldown <= 0) {
       // Find targets: Player or non-Mist ships within 440px range
-      const distToPlayer = Math.hypot(playerState.x - tw.x, playerState.y - tw.y);
+      const dx = playerState.x - tw.x, dy = playerState.y - tw.y;
+      const distToPlayer = Math.sqrt(dx * dx + dy * dy);
       let target = null;
-      if (distToPlayer < 440 && hasLineOfSight(tw.x, tw.y, playerState.x, playerState.y)) {
+      if (dx * dx + dy * dy < 440 * 440 && hasLineOfSight(tw.x, tw.y, playerState.x, playerState.y)) {
         target = playerState;
       } else {
         // Target rival ships
-        const rival = entities.enemies.find(e => e.clan !== 'mist' && Math.hypot(e.x - tw.x, e.y - tw.y) < 440);
+        const rival = entities.enemies.find(e => e.clan !== 'mist' && ((e.x - tw.x) * (e.x - tw.x) + (e.y - tw.y) * (e.y - tw.y) < 440 * 440));
         if (rival) target = rival;
       }
 
@@ -764,7 +807,7 @@ function updateGame(dt) {
           tgtVy = Math.sin(target.angle || 0) * (target.speed || 1.4);
         }
 
-        const dToTgt = Math.hypot(target.x - tw.x, target.y - tw.y);
+        const dToTgt = Math.sqrt((target.x - tw.x) * (target.x - tw.x) + (target.y - tw.y) * (target.y - tw.y));
         const pSpeed = 4.8;
         const timeToHit = Math.min(1.4, dToTgt / pSpeed);
         const aimX = target.x + tgtVx * timeToHit * 0.85;
@@ -815,8 +858,7 @@ function updateGame(dt) {
 
       const targetAngle = Math.atan2(targetY - p.y, targetX - p.x);
       let diff = targetAngle - p.angle;
-      while (diff < -Math.PI) diff += Math.PI * 2;
-      while (diff > Math.PI) diff -= Math.PI * 2;
+      diff = normAngle(diff);
 
       const effectiveTurn = (p.turnRate || 3.5) * dt;
       p.angle += Math.sign(diff) * Math.min(Math.abs(diff), effectiveTurn);
@@ -844,8 +886,11 @@ function updateGame(dt) {
     let hitIsland = false;
     for (let k = 0; k < WORLD_ISLANDS.length; k++) {
       const isl = WORLD_ISLANDS[k];
-      const ang = Math.atan2(p.y - isl.y, p.x - isl.x);
-      if (Math.hypot(p.x - isl.x, p.y - isl.y) < getIslandRadiusAt(isl, ang) - 10) {
+      const _dx = p.x - isl.x, _dy = p.y - isl.y;
+      const _maxR = ((isl.radius || 200) * 1.3 + 50);
+      if (_dx * _dx + _dy * _dy > _maxR * _maxR) continue;
+      const ang = Math.atan2(_dy, _dx);
+      if (Math.sqrt(_dx * _dx + _dy * _dy) < getIslandRadiusAt(isl, ang) - 10) {
         hitIsland = true;
         break;
       }
@@ -872,7 +917,8 @@ function updateGame(dt) {
     if (p.isPlayer) {
       for (let k = 0; k < entities.spikedMines.length; k++) {
         const sm = entities.spikedMines[k];
-        if (Math.hypot(p.x - sm.x, p.y - sm.y) < sm.radius + 8) {
+        const dx = p.x - sm.x, dy = p.y - sm.y;
+        if (dx * dx + dy * dy < (sm.radius + 8) * (sm.radius + 8)) {
           sm.detonating = true;
           sm.detonateTimer = 0.05; // Detonate immediately!
           p.life = 0;
@@ -883,7 +929,7 @@ function updateGame(dt) {
       // Check hit against Occult Towers
       for (let t = entities.towers.length - 1; t >= 0; t--) {
         const tw = entities.towers[t];
-        if (Math.hypot(p.x - tw.x, p.y - tw.y) < tw.radius + 10) {
+        if (((p.x - tw.x) * (p.x - tw.x) + (p.y - tw.y) * (p.y - tw.y) < (tw.radius + 10) * (tw.radius + 10))) {
           tw.hp -= p.damage;
           p.life = 0;
           sound.playMistCast(tw.x, tw.y);
@@ -920,7 +966,8 @@ function updateGame(dt) {
     if (p.isPlayer) {
       for (let j = entities.enemies.length - 1; j >= 0; j--) {
         const e = entities.enemies[j];
-        if (Math.hypot(p.x - e.x, p.y - e.y) < e.radius) {
+        const dx = p.x - e.x, dy = p.y - e.y;
+        if (dx * dx + dy * dy < e.radius * e.radius) {
           e.hp -= p.damage;
           p.life = 0;
           if (e.isMonster || e.clan === 'blood') {
@@ -955,7 +1002,9 @@ function updateGame(dt) {
           // Aggro enemy
           e.alertState = 'alerted';
           e.detectionMeter = 100;
-          e.lastKnownPos = { x: playerState.x, y: playerState.y };
+          if (!e.lastKnownPos) e.lastKnownPos = { x: 0, y: 0 };
+          e.lastKnownPos.x = playerState.x;
+          e.lastKnownPos.y = playerState.y;
           e.targetEntity = playerState;
 
           if (e.hp <= 0) {
@@ -995,7 +1044,8 @@ function updateGame(dt) {
       }
     } else {
       // Enemy projectile hitting player OR rival clan ship
-      if (Math.hypot(p.x - playerState.x, p.y - playerState.y) < 22) {
+      const dx = p.x - playerState.x, dy = p.y - playerState.y;
+      if (dx * dx + dy * dy < 22 * 22) {
         playerState.hp -= p.damage;
         p.life = 0;
         sound.playHit(playerState.x, playerState.y);
@@ -1021,7 +1071,7 @@ function updateGame(dt) {
         // Inter-clan warfare hit
         for (let j = entities.enemies.length - 1; j >= 0; j--) {
           const rival = entities.enemies[j];
-          if (rival.clan !== p.sourceClan && Math.hypot(p.x - rival.x, p.y - rival.y) < rival.radius) {
+          if (rival.clan !== p.sourceClan && ((p.x - rival.x) * (p.x - rival.x) + (p.y - rival.y) * (p.y - rival.y) < rival.radius * rival.radius)) {
             rival.hp -= p.damage;
             p.life = 0;
             if (rival.isMonster || rival.clan === 'blood') {
@@ -1114,7 +1164,7 @@ function updateGame(dt) {
       const e2 = entities.enemies[j];
       const dx = e2.x - e1.x;
       const dy = e2.y - e1.y;
-      const dist = Math.hypot(dx, dy);
+      const dist = Math.sqrt((dx) * (dx) + (dy) * (dy));
 
       // Same convoy/formation: DO NOT violently push apart with safety buffer!
       if (e1.convoyId && e1.convoyId === e2.convoyId) {
@@ -1148,9 +1198,12 @@ function updateGame(dt) {
   entities.enemies.forEach(e => {
     // Collision with Organic Islands
     WORLD_ISLANDS.forEach(isl => {
-      const ang = Math.atan2(e.y - isl.y, e.x - isl.x);
+      const _dx = e.x - isl.x, _dy = e.y - isl.y;
+      const _maxR = ((isl.radius || 200) * 1.3 + 50);
+      if (_dx * _dx + _dy * _dy > _maxR * _maxR) return;
+      const ang = Math.atan2(_dy, _dx);
       const rAtAng = getIslandRadiusAt(isl, ang);
-      const d = Math.hypot(e.x - isl.x, e.y - isl.y);
+      const d = Math.sqrt(_dx * _dx + _dy * _dy);
       const minDist = rAtAng + e.radius + 8;
       if (d < minDist && d > 0.001) {
         e.x = isl.x + Math.cos(ang) * minDist;
@@ -1159,7 +1212,7 @@ function updateGame(dt) {
     });
 
     // Calculate actual movement displacement since previous frame!
-    const distMoved = Math.hypot(e.x - (e.prevX ?? e.x), e.y - (e.prevY ?? e.y));
+    const distMoved = Math.sqrt((e.x - (e.prevX ?? e.x)) * (e.x - (e.prevX ?? e.x)) + (e.y - (e.prevY ?? e.y) * (e.y - (e.prevY ?? e.y)));
     e.isMoving = distMoved > 0.22;
     e.prevX = e.x;
     e.prevY = e.y;
@@ -1198,33 +1251,45 @@ function updateGame(dt) {
       }
     }
 
-    const distToPlayer = Math.hypot(playerState.x - e.x, playerState.y - e.y);
+    const distToPlayer = Math.sqrt((playerState.x - e.x) * (playerState.x - e.x) + (playerState.y - e.y) * (playerState.y - e.y));
     const targetAngle = Math.atan2(playerState.y - e.y, playerState.x - e.x);
-    const canSeePlayerLine = hasLineOfSight(e.x, e.y, playerState.x, playerState.y);
-
     // STATE 1: UNAWARE / SUSPICIOUS
+    let checkLOS() = false;
+    let _canSeeComputed = false;
+    
+    function checkLOS() {
+      if (!_canSeeComputed) {
+         checkLOS() = hasLineOfSight(e.x, e.y, playerState.x, playerState.y);
+         _canSeeComputed = true;
+      }
+      return checkLOS();
+    }
+
     if (e.alertState === 'unaware' || e.alertState === 'suspicious') {
       let detected = false;
 
       if (e.isMonster) {
         // Sea Monster 360-degree circular underwater vibration sonar!
         const monsterAuraDist = 420 * (isPlayerMovingFast ? 1.25 : 0.95) * stealthMult;
-        detected = (distToPlayer <= monsterAuraDist) && canSeePlayerLine;
+        detected = (distToPlayer <= monsterAuraDist) && checkLOS();
       } else {
         // Ship visual lookout cone
         let headingDiff = Math.abs(targetAngle - e.angle);
-        while (headingDiff > Math.PI) headingDiff = Math.abs(headingDiff - Math.PI * 2);
+        headingDiff = normAngle(headingDiff);
+        headingDiff = Math.abs(headingDiff);
 
         // Convoys have wider coordinated lookouts
         const visionAngle = e.convoyId ? 0.85 : 0.65;
         const visionConeDist = (e.convoyId ? 340 : 270) * (isPlayerMovingFast ? 1.15 : 0.85) * stealthMult;
-        detected = ((headingDiff <= visionAngle && distToPlayer <= visionConeDist) || distToPlayer < 60) && canSeePlayerLine;
+        detected = ((headingDiff <= visionAngle && distToPlayer <= visionConeDist) || distToPlayer < 60) && checkLOS();
       }
 
       if (detected) {
         e.alertState = 'alerted';
         e.targetEntity = playerState;
-        e.lastKnownPos = { x: playerState.x, y: playerState.y };
+        if (!e.lastKnownPos) e.lastKnownPos = { x: 0, y: 0 };
+          e.lastKnownPos.x = playerState.x;
+          e.lastKnownPos.y = playerState.y;
         e.detectionMeter = 100;
         e.lostSightTimer = 0;
 
@@ -1234,7 +1299,9 @@ function updateGame(dt) {
             if (mate.convoyId === e.convoyId && mate !== e) {
               mate.alertState = 'alerted';
               mate.targetEntity = playerState;
-              mate.lastKnownPos = { x: playerState.x, y: playerState.y };
+              matif (!e.lastKnownPos) e.lastKnownPos = { x: 0, y: 0 };
+          e.lastKnownPos.x = playerState.x;
+          e.lastKnownPos.y = playerState.y;
               mate.detectionMeter = 100;
               mate.lostSightTimer = 0;
             }
@@ -1261,8 +1328,10 @@ function updateGame(dt) {
       const alertEscapeRadius = (e.isMonster ? 850 : (e.convoyId ? 780 : 720)) * stealthMult;
       const insideEscapeCircle = distToPlayer <= alertEscapeRadius;
 
-      if (insideEscapeCircle && canSeePlayerLine) {
-        e.lastKnownPos = { x: playerState.x, y: playerState.y };
+      if (insideEscapeCircle && checkLOS()) {
+        if (!e.lastKnownPos) e.lastKnownPos = { x: 0, y: 0 };
+          e.lastKnownPos.x = playerState.x;
+          e.lastKnownPos.y = playerState.y;
         e.detectionMeter = 100;
         e.lostSightTimer = 0;
       } else {
@@ -1281,12 +1350,14 @@ function updateGame(dt) {
       e.searchTimer -= dt;
       e.detectionMeter = Math.max(0, (e.searchTimer / 5.0) * 100);
 
-      const reDetected = (distToPlayer <= searchRadius) && canSeePlayerLine;
+      const reDetected = (distToPlayer <= searchRadius) && checkLOS();
 
       if (reDetected) {
         e.alertState = 'alerted';
         e.targetEntity = playerState;
-        e.lastKnownPos = { x: playerState.x, y: playerState.y };
+        if (!e.lastKnownPos) e.lastKnownPos = { x: 0, y: 0 };
+          e.lastKnownPos.x = playerState.x;
+          e.lastKnownPos.y = playerState.y;
         e.detectionMeter = 100;
         e.lostSightTimer = 0;
 
@@ -1295,7 +1366,9 @@ function updateGame(dt) {
             if (mate.convoyId === e.convoyId && mate !== e) {
               mate.alertState = 'alerted';
               mate.targetEntity = playerState;
-              mate.lastKnownPos = { x: playerState.x, y: playerState.y };
+              matif (!e.lastKnownPos) e.lastKnownPos = { x: 0, y: 0 };
+          e.lastKnownPos.x = playerState.x;
+          e.lastKnownPos.y = playerState.y;
               mate.detectionMeter = 100;
               mate.lostSightTimer = 0;
             }
@@ -1321,23 +1394,32 @@ function updateGame(dt) {
     highestDetectionLevel = Math.max(highestDetectionLevel, e.detectionMeter / 100);
 
     // Dynamic Inter-Clan Rivalry (Gold vs Iron vs Mist vs Blood)
+    const _now = Date.now();
     let nearestRival = null;
     let minRivalDist = 550;
 
-    for (let k = 0; k < entities.enemies.length; k++) {
-      const other = entities.enemies[k];
-      if (other === e || (other.convoyId && other.convoyId === e.convoyId)) continue;
-      if (other.clan !== e.clan && other.hp > 0) {
-        const dRival = Math.hypot(other.x - e.x, other.y - e.y);
-        if (dRival < minRivalDist && hasLineOfSight(e.x, e.y, other.x, other.y)) {
-          minRivalDist = dRival;
-          nearestRival = other;
+    if (e._lastRivalryCheck && _now - e._lastRivalryCheck < 500) {
+      nearestRival = e._cachedRival;
+      minRivalDist = e._cachedRivalDist;
+    } else {
+      e._lastRivalryCheck = _now;
+      for (let k = 0; k < entities.enemies.length; k++) {
+        const other = entities.enemies[k];
+        if (other === e || (other.convoyId && other.convoyId === e.convoyId)) continue;
+        if (other.clan !== e.clan && other.hp > 0) {
+          const dx = other.x - e.x, dy = other.y - e.y;
+          if (dx * dx + dy * dy < minRivalDist * minRivalDist && hasLineOfSight(e.x, e.y, other.x, other.y)) {
+            minRivalDist = Math.sqrt(dx * dx + dy * dy);
+            nearestRival = other;
+          }
         }
       }
+      e._cachedRival = nearestRival;
+      e._cachedRivalDist = minRivalDist;
     }
 
     if (nearestRival) {
-      const distToPlayer = Math.hypot(playerState.x - e.x, playerState.y - e.y);
+      const distToPlayer = Math.sqrt((playerState.x - e.x) * (playerState.x - e.x) + (playerState.y - e.y) * (playerState.y - e.y));
       // Engage rival if unaware, OR if currently targeting player but rival is closer/in immediate combat range
       const shouldEngageRival = (e.alertState === 'unaware') ||
                                 (e.targetEntity === playerState && (minRivalDist < distToPlayer * 1.25 || minRivalDist < 360)) ||
@@ -1346,14 +1428,18 @@ function updateGame(dt) {
       if (shouldEngageRival) {
         e.alertState = 'alerted';
         e.targetEntity = nearestRival;
-        e.lastKnownPos = { x: nearestRival.x, y: nearestRival.y };
+        if (!e.lastKnownPos) e.lastKnownPos = { x: 0, y: 0 };
+        e.lastKnownPos.x = nearestRival.x;
+        e.lastKnownPos.y = nearestRival.y;
         e.detectionMeter = 100;
         e.lostSightTimer = 0;
 
         if (nearestRival.alertState !== 'alerted' || (nearestRival.targetEntity === playerState && minRivalDist < 360)) {
           nearestRival.alertState = 'alerted';
           nearestRival.targetEntity = e;
-          nearestRival.lastKnownPos = { x: e.x, y: e.y };
+          if (!nearestRival.lastKnownPos) nearestRival.lastKnownPos = { x: 0, y: 0 };
+          nearestRival.lastKnownPos.x = e.x;
+          nearestRival.lastKnownPos.y = e.y;
           nearestRival.detectionMeter = 100;
           nearestRival.lostSightTimer = 0;
         }
@@ -1379,7 +1465,7 @@ function updateGame(dt) {
     }
 
     if (target) {
-      const targetDist = Math.hypot(target.x - e.x, target.y - e.y);
+      const targetDist = Math.sqrt((target.x - e.x) * (target.x - e.x) + (target.y - e.y) * (target.y - e.y));
       const targetAngle = Math.atan2(target.y - e.y, target.x - e.x);
 
       // Physical Ramming collision
@@ -1441,8 +1527,7 @@ function updateGame(dt) {
         const flankAngle = (target.angle || 0) + (Math.PI * 0.5) * e.orbitDir;
         const safeFlank = avoidIslandObstacles(e, flankAngle, 160);
         let flankDiff = safeFlank - e.angle;
-        while (flankDiff < -Math.PI) flankDiff += Math.PI * 2;
-        while (flankDiff > Math.PI) flankDiff -= Math.PI * 2;
+        flankDiff = normAngle(flankDiff);
         e.angle += Math.sign(flankDiff) * Math.min(Math.abs(flankDiff), e.turnRate * 1.3 * dt);
         e.x += Math.cos(e.angle) * (e.speed * 1.15);
         e.y += Math.sin(e.angle) * (e.speed * 1.15);
@@ -1533,8 +1618,7 @@ function updateGame(dt) {
           e.recoveryTimer -= dt;
           // Drift turnaround rudder: manuver putar balik cepat agar tidak kehilangan jejak!
           let angleDiff = targetAngle - e.angle;
-          while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-          while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+          angleDiff = normAngle(angleDiff);
           e.angle += Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), e.turnRate * 2.4 * dt);
           e.x += Math.cos(e.angle) * (cruiseSpeed * 0.75);
           e.y += Math.sin(e.angle) * (cruiseSpeed * 0.75);
@@ -1548,8 +1632,7 @@ function updateGame(dt) {
           let targetCourseAngle = (targetDist > e.preferredDist + 40 || isSearching) ? targetAngle : (targetAngle + (Math.PI / 2) * e.orbitDir);
           targetCourseAngle = avoidIslandObstacles(e, targetCourseAngle, 175);
           let angleDiff = targetCourseAngle - e.angle;
-          while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-          while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+          angleDiff = normAngle(angleDiff);
           e.angle += Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), e.turnRate * dt);
           e.x += Math.cos(e.angle) * cruiseSpeed;
           e.y += Math.sin(e.angle) * cruiseSpeed;
@@ -1577,8 +1660,7 @@ function updateGame(dt) {
         targetCourseAngle = avoidIslandObstacles(e, targetCourseAngle, 175);
 
         let angleDiff = targetCourseAngle - e.angle;
-        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        angleDiff = normAngle(angleDiff);
         e.angle += Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), e.turnRate * 1.3 * dt);
         const mSpeed = (!isSearching && targetDist > 300) ? cruiseSpeed * 1.35 : cruiseSpeed;
         e.x += Math.cos(e.angle) * mSpeed;
@@ -1595,8 +1677,7 @@ function updateGame(dt) {
         e.specialCooldown -= dt;
         let monsterHeading = avoidIslandObstacles(e, targetAngle, 160);
         let angleDiff = monsterHeading - e.angle;
-        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        angleDiff = normAngle(angleDiff);
         e.angle += Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), e.turnRate * dt);
         const surge = (!isSearching && targetDist < 160) ? 1.7 : 1.0;
         e.x += Math.cos(e.angle) * (cruiseSpeed * surge);
@@ -1617,8 +1698,7 @@ function updateGame(dt) {
         let targetCourseAngle = (targetDist > e.preferredDist + 40 || isSearching) ? targetAngle : (targetAngle + (Math.PI / 2) * e.orbitDir);
         targetCourseAngle = avoidIslandObstacles(e, targetCourseAngle, 175);
         let angleDiff = targetCourseAngle - e.angle;
-        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        angleDiff = normAngle(angleDiff);
         e.angle += Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), e.turnRate * dt);
         e.x += Math.cos(e.angle) * cruiseSpeed;
         e.y += Math.sin(e.angle) * cruiseSpeed;
@@ -1644,12 +1724,11 @@ function updateGame(dt) {
           const headingToPatrol = Math.atan2(targetPatrolY - e.y, targetPatrolX - e.x);
 
           let angleDiff = headingToPatrol - e.angle;
-          while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-          while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+          angleDiff = normAngle(angleDiff);
           e.angle += Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), e.turnRate * dt);
           e.x += Math.cos(e.angle) * (e.speed * 0.7);
           e.y += Math.sin(e.angle) * (e.speed * 0.7);
-          if (e.clan === 'blood' && Math.hypot(e.x - playerState.x, e.y - playerState.y) < 420) {
+          if (e.clan === 'blood' && (((e.x - playerState.x) * (e.x - playerState.x) + (e.y - playerState.y) * (e.y - playerState.y)) < (420) * (420))) {
             sound.playMonsterMove(e.x, e.y);
           }
         }
@@ -1663,12 +1742,11 @@ function updateGame(dt) {
         const targetY = e.ritualCenter.y + Math.sin(ang) * 85;
         const desiredHeading = ang + Math.PI / 2;
 
-        const dToPos = Math.hypot(targetX - e.x, targetY - e.y);
+        const dToPos = Math.sqrt((targetX - e.x) * (targetX - e.x) + (targetY - e.y) * (targetY - e.y));
         const steerAngle = dToPos > 25 ? Math.atan2(targetY - e.y, targetX - e.x) : desiredHeading;
 
         let angleDiff = steerAngle - e.angle;
-        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        angleDiff = normAngle(angleDiff);
         e.angle += Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), e.turnRate * 1.5 * dt);
         e.x += Math.cos(e.angle) * (e.speed * 0.55);
         e.y += Math.sin(e.angle) * (e.speed * 0.55);
@@ -1691,8 +1769,7 @@ function updateGame(dt) {
           // Alpha cruises open waters smoothly
           e.patrolAngle = (e.patrolAngle || e.angle) + (Math.random() - 0.5) * 0.03;
           let angleDiff = e.patrolAngle - e.angle;
-          while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-          while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+          angleDiff = normAngle(angleDiff);
           e.angle += Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), e.turnRate * dt);
           e.x += Math.cos(e.angle) * (e.speed * 0.65);
           e.y += Math.sin(e.angle) * (e.speed * 0.65);
@@ -1703,15 +1780,14 @@ function updateGame(dt) {
           const targetY = alpha.y + Math.sin(alpha.angle + 2.2 + weave) * 52;
           const headingToLead = Math.atan2(targetY - e.y, targetX - e.x);
           let angleDiff = headingToLead - e.angle;
-          while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-          while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+          angleDiff = normAngle(angleDiff);
           e.angle += Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), e.turnRate * 1.5 * dt);
-          const dToSlot = Math.hypot(targetX - e.x, targetY - e.y);
+          const dToSlot = Math.sqrt((targetX - e.x) * (targetX - e.x) + (targetY - e.y) * (targetY - e.y));
           const spd = dToSlot > 80 ? e.speed * 1.2 : e.speed * 0.75;
           e.x += Math.cos(e.angle) * spd;
           e.y += Math.sin(e.angle) * spd;
         }
-        if (Math.hypot(e.x - playerState.x, e.y - playerState.y) < 420) {
+        if ((((e.x - playerState.x) * (e.x - playerState.x) + (e.y - playerState.y) * (e.y - playerState.y)) < (420) * (420))) {
           sound.playMonsterMove(e.x, e.y);
         }
       } else if (e.convoyId) {
@@ -1736,7 +1812,7 @@ function updateGame(dt) {
             slotY = leader.y + Math.sin(leader.angle + side) * distFromLead;
           }
 
-          const distToSlot = Math.hypot(slotX - e.x, slotY - e.y);
+          const distToSlot = Math.sqrt((slotX - e.x) * (slotX - e.x) + (slotY - e.y) * (slotY - e.y));
 
           if (leader.isAnchored || leader.voyageState === 'docked') {
             // Convoy flagship is docked at harbor! Escorts anchor in their slots
@@ -1744,8 +1820,7 @@ function updateGame(dt) {
             if (distToSlot > 12) {
               const angleToSlot = Math.atan2(slotY - e.y, slotX - e.x);
               let angleDiff = angleToSlot - e.angle;
-              while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-              while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+              angleDiff = normAngle(angleDiff);
               e.angle += Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), e.turnRate * dt);
               const dockSpeed = Math.min(e.speed * 0.45, distToSlot * 0.08);
               e.x += Math.cos(e.angle) * dockSpeed;
@@ -1761,14 +1836,12 @@ function updateGame(dt) {
             let desiredAngle = leader.angle;
             if (slotWeight > 0.05) {
               let diff = angleToSlot - leader.angle;
-              while (diff < -Math.PI) diff += Math.PI * 2;
-              while (diff > Math.PI) diff -= Math.PI * 2;
+              diff = normAngle(diff);
               desiredAngle = leader.angle + diff * slotWeight;
             }
 
             let angleDiff = desiredAngle - e.angle;
-            while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+            angleDiff = normAngle(angleDiff);
             e.angle += Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), e.turnRate * 1.8 * dt);
 
             let speedMult = 0.65;
@@ -1789,8 +1862,7 @@ function updateGame(dt) {
           // Solitary deep monster roaming smoothly
           e.patrolAngle = (e.patrolAngle || e.angle) + (Math.random() - 0.5) * 0.025;
           let angleDiff = e.patrolAngle - e.angle;
-          while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-          while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+          angleDiff = normAngle(angleDiff);
           e.angle += Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), e.turnRate * 0.8 * dt);
           e.x += Math.cos(e.angle) * (e.speed * 0.5);
           e.y += Math.sin(e.angle) * (e.speed * 0.5);
@@ -1800,12 +1872,14 @@ function updateGame(dt) {
   });
 
   // Salvage Sunken Ships
-  const salvageContainer = document.getElementById('salvageContainer');
-  const salvageCircle = document.getElementById('salvageCircle');
+  if (!_cachedSalvageContainer) _cachedSalvageContainer = document.getElementById('salvageContainer');
+  const salvageContainer = _cachedSalvageContainer;
+  if (!_cachedSalvageCircle) _cachedSalvageCircle = document.getElementById('salvageCircle');
+  const salvageCircle = _cachedSalvageCircle;
   let nearWreck = null;
 
   entities.sunkenShips.forEach(s => {
-    const d = Math.hypot(playerState.x - s.x, playerState.y - s.y);
+    const d = Math.sqrt((playerState.x - s.x) * (playerState.x - s.x) + (playerState.y - s.y) * (playerState.y - s.y));
     if (d < 50 && !s.salvaged) {
       nearWreck = s;
     }
@@ -1850,7 +1924,7 @@ function updateGame(dt) {
   // Collect Floating Cargo
   for (let i = entities.floatingLoots.length - 1; i >= 0; i--) {
     const loot = entities.floatingLoots[i];
-    if (Math.hypot(playerState.x - loot.x, playerState.y - loot.y) < 36) {
+    if (((playerState.x - loot.x) * (playerState.x - loot.x) + (playerState.y - loot.y) * (playerState.y - loot.y) < 36 * 36)) {
       if (loot.type === 'repair') {
         playerState.hp = Math.min(currentMaxHp, playerState.hp + 25);
         addFloatingText("+25 HP", playerState.x, playerState.y, '#34d399');
@@ -1870,7 +1944,7 @@ function updateGame(dt) {
   entities.ambientMist.forEach(m => {
     m.x += m.vx;
     m.y += m.vy;
-    if (Math.hypot(m.x - playerState.x, m.y - playerState.y) > 2600) {
+    if (((m.x - playerState.x) * (m.x - playerState.x) + (m.y - playerState.y) * (m.y - playerState.y) > 2600 * 2600)) {
       m.x = playerState.x + (Math.random() - 0.5) * 2200;
       m.y = playerState.y + (Math.random() - 0.5) * 2200;
     }
@@ -1890,7 +1964,7 @@ function updateGame(dt) {
       }
 
       // Reposition seagulls if they drift too far from the player
-      const distToPlayer = Math.hypot(s.x - playerState.x, s.y - playerState.y);
+      const distToPlayer = Math.sqrt((s.x - playerState.x) * (s.x - playerState.x) + (s.y - playerState.y) * (s.y - playerState.y));
       if (distToPlayer > 1500) {
         const wrapAng = Math.random() * Math.PI * 2;
         s.x = playerState.x + Math.cos(wrapAng) * 950;
@@ -1916,21 +1990,25 @@ function updateGame(dt) {
 
   // Dynamic Battle Music (Mentrigger lagu tempur seketika saat berhadapan dengan konvoi terkoordinasi)
   const activeConvoyCombat = entities.enemies.some(e => 
-    e.alertState === 'alerted' && e.convoyId && e.clan !== 'blood' && Math.hypot(e.x - playerState.x, e.y - playerState.y) < 950
-  );
+    e.alertState === 'alerted' && e.convoyId && e.clan !== 'blood' && (((e.x - playerState.x) * (e.x - playerState.x) + (e.y - playerState.y) * (e.y - playerState.y)) < (950
+  ) * (950
+  )));
   const alertedCombatCount = entities.enemies.filter(e => 
-    e.alertState === 'alerted' && e.clan !== 'blood' && Math.hypot(e.x - playerState.x, e.y - playerState.y) < 750
-  ).length;
+    e.alertState === 'alerted' && e.clan !== 'blood' && (((e.x - playerState.x) * (e.x - playerState.x) + (e.y - playerState.y) * (e.y - playerState.y)) < (750
+  ) * (750
+  ))).length;
   const isHighThreatShip = entities.enemies.some(e => 
-    e.alertState === 'alerted' && e.tier >= 3 && e.clan !== 'blood' && Math.hypot(e.x - playerState.x, e.y - playerState.y) < 800
-  );
+    e.alertState === 'alerted' && e.tier >= 3 && e.clan !== 'blood' && (((e.x - playerState.x) * (e.x - playerState.x) + (e.y - playerState.y) * (e.y - playerState.y)) < (800
+  ) * (800
+  )));
   const inHeavyBattle = activeConvoyCombat || (alertedCombatCount >= 2) || isHighThreatShip;
   sound.updateBattleMusic(inHeavyBattle, dt);
 
   // Dynamic Abyssal Ambiance (Laut Darah atau saat diteror monster abisal di dekat kapal)
   const nearAlertedMonster = entities.enemies.some(e => 
-    e.isMonster && e.alertState === 'alerted' && Math.hypot(e.x - playerState.x, e.y - playerState.y) < 850
-  );
+    e.isMonster && e.alertState === 'alerted' && (((e.x - playerState.x) * (e.x - playerState.x) + (e.y - playerState.y) * (e.y - playerState.y)) < (850
+  ) * (850
+  )));
   sound.updateAbyssalAmbience(biome.isBloodSea || nearAlertedMonster, dt);
 
   // Particles, Ripples & Combat Text Lifecycle
@@ -1969,5 +2047,8 @@ function updateGame(dt) {
     screenShake = Math.max(0, screenShake - dt * 25);
   }
 
-  spawnWorldEntities();
+  if (Date.now() - _lastSpawnCheck > 1500) {
+    _lastSpawnCheck = Date.now();
+    spawnWorldEntities();
+  }
 }
