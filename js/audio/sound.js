@@ -13,9 +13,10 @@ class SoundFX {
     this.battleVolume = 0.85;
     this.screenShakeEnabled = true;
     this.autoFullscreen = true;
+    this.masterLimiter = null;
     this.sfxMasterGain = null;
     this._activeVoices = 0;
-    this._maxVoices = 12;
+    this._maxVoices = 16;
 
     this.cannonBuffers = [];
     this.hitBuffers = [];
@@ -100,13 +101,13 @@ class SoundFX {
       this.sfxMasterGain.gain.setValueAtTime(effSfx, this.ctx.currentTime);
     }
     if (this.seaAmbienceAudio) {
-      this.seaAmbienceAudio.volume = this._muted ? 0 : Math.max(0, Math.min(1, 0.32 * this.masterVolume * this.ambienceVolume));
+      this.seaAmbienceAudio.volume = this._muted ? 0 : Math.max(0, Math.min(1, 0.28 * this.masterVolume * this.ambienceVolume));
     }
     if (this.abyssalAmbienceAudio) {
-      this.abyssalAmbienceAudio.volume = this._muted ? 0 : Math.max(0, Math.min(1, this.abyssalAmbienceVolume * this.masterVolume * this.ambienceVolume));
+      this.abyssalAmbienceAudio.volume = this._muted ? 0 : Math.max(0, Math.min(1, this.abyssalAmbienceVolume * this.masterVolume * this.ambienceVolume * 0.9));
     }
     if (this.battleMusicAudio) {
-      this.battleMusicAudio.volume = this._muted ? 0 : Math.max(0, Math.min(1, this.battleMusicVolume * this.masterVolume * this.battleVolume));
+      this.battleMusicAudio.volume = this._muted ? 0 : Math.max(0, Math.min(1, this.battleMusicVolume * this.masterVolume * this.battleVolume * 0.92));
     }
   }
 
@@ -148,8 +149,18 @@ class SoundFX {
     if (!this.ctx) {
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       this.ctx = new AudioContext();
+
+      // Master Studio Limiter (DynamicsCompressorNode) prevents clipping & speaker distortion
+      this.masterLimiter = this.ctx.createDynamicsCompressor();
+      this.masterLimiter.threshold.setValueAtTime(-6, this.ctx.currentTime);
+      this.masterLimiter.knee.setValueAtTime(12, this.ctx.currentTime);
+      this.masterLimiter.ratio.setValueAtTime(10, this.ctx.currentTime);
+      this.masterLimiter.attack.setValueAtTime(0.003, this.ctx.currentTime);
+      this.masterLimiter.release.setValueAtTime(0.15, this.ctx.currentTime);
+      this.masterLimiter.connect(this.ctx.destination);
+
       this.sfxMasterGain = this.ctx.createGain();
-      this.sfxMasterGain.connect(this.ctx.destination);
+      this.sfxMasterGain.connect(this.masterLimiter);
       this.updateVolumeRatios();
     }
     if (this.ctx && this.ctx.state === 'suspended') {
@@ -159,6 +170,47 @@ class SoundFX {
       this.preloadAudioFiles();
     }
     this.startAmbience();
+  }
+
+  // Safe voice allocator and dispatcher - eliminates voice counter leakage
+  _safePlayBuffer(buffer, gain, playbackRate = 1.0, onEndedCallback = null) {
+    if (this._muted || !buffer) return null;
+    this.init();
+    if (!this.ctx) return null;
+    if (gain <= 0.01) return null;
+    if (this._activeVoices >= this._maxVoices) return null;
+
+    try {
+      const src = this.ctx.createBufferSource();
+      src.buffer = buffer;
+      src.playbackRate.value = playbackRate;
+
+      const gainNode = this.ctx.createGain();
+      gainNode.gain.setValueAtTime(gain, this.ctx.currentTime);
+
+      src.connect(gainNode);
+      gainNode.connect(this.destinationNode);
+
+      this._activeVoices++;
+      let isEnded = false;
+      src.onended = () => {
+        if (isEnded) return;
+        isEnded = true;
+        this._activeVoices = Math.max(0, this._activeVoices - 1);
+        try {
+          src.disconnect();
+          gainNode.disconnect();
+        } catch (e) {}
+        if (typeof onEndedCallback === 'function') {
+          try { onEndedCallback(); } catch (e) {}
+        }
+      };
+
+      src.start();
+      return src;
+    } catch (err) {
+      return null;
+    }
   }
 
   suspendAudio() {
@@ -344,69 +396,29 @@ class SoundFX {
 
   playSeagullNear(x, y) {
     if (this._muted) return;
-    this.init();
-    if (!this.ctx) return;
-    if (this._activeVoices >= this._maxVoices) return;
-    this._activeVoices++;
-
-    const gain = this.getSpatialVolume(x, y, 700, 0.38);
-    if (gain <= 0.02) return;
-
     const now = performance.now() / 1000;
     if (now - this.lastSeagullTime < 5.0) return; // Min 5 seconds between close calls
+    const gain = this.getSpatialVolume(x, y, 750, 0.28);
+    if (gain <= 0.02) return;
     this.lastSeagullTime = now;
 
     if (this.seagullBuffers.length > 0) {
       const chosen = this.seagullBuffers[Math.floor(Math.random() * this.seagullBuffers.length)];
-      const src = this.ctx.createBufferSource();
-      src.buffer = chosen;
-      src.playbackRate.value = 0.95 + Math.random() * 0.1;
-      const gainNode = this.ctx.createGain();
-      gainNode.gain.setValueAtTime(gain, this.ctx.currentTime);
-      src.connect(gainNode);
-      gainNode.connect(this.destinationNode);
-      src.onended = () => { this._activeVoices--; src.disconnect(); gainNode.disconnect(); };
-      src.start();
+      this._safePlayBuffer(chosen, gain, 0.95 + Math.random() * 0.1);
     }
   }
 
   playSeagullAway() {
     if (this._muted) return;
-    this.init();
-    if (!this.ctx) return;
-    if (this._activeVoices >= this._maxVoices) return;
-    this._activeVoices++;
-
     if (this.seagullAwayBuffer) {
-      const src = this.ctx.createBufferSource();
-      src.buffer = this.seagullAwayBuffer;
-      src.playbackRate.value = 0.94 + Math.random() * 0.12;
-      const gainNode = this.ctx.createGain();
-      gainNode.gain.setValueAtTime(0.24, this.ctx.currentTime);
-      src.connect(gainNode);
-      gainNode.connect(this.destinationNode);
-      src.onended = () => { this._activeVoices--; src.disconnect(); gainNode.disconnect(); };
-      src.start();
+      this._safePlayBuffer(this.seagullAwayBuffer, 0.22, 0.94 + Math.random() * 0.12);
     }
   }
 
   playCoin() {
     if (this._muted) return;
-    this.init();
-    if (!this.ctx) return;
-    if (this._activeVoices >= this._maxVoices) return;
-    this._activeVoices++;
-
     if (this.coinBuffer) {
-      const src = this.ctx.createBufferSource();
-      src.buffer = this.coinBuffer;
-      src.playbackRate.value = 0.96 + Math.random() * 0.1;
-      const gainNode = this.ctx.createGain();
-      gainNode.gain.setValueAtTime(0.55, this.ctx.currentTime);
-      src.connect(gainNode);
-      gainNode.connect(this.destinationNode);
-      src.onended = () => { this._activeVoices--; src.disconnect(); gainNode.disconnect(); };
-      src.start();
+      this._safePlayBuffer(this.coinBuffer, 0.52, 0.96 + Math.random() * 0.1);
     } else {
       this.playLoot();
     }
@@ -414,25 +426,12 @@ class SoundFX {
 
   playIronHit(x, y) {
     if (this._muted) return;
-    this.init();
-    if (!this.ctx) return;
-    if (this._activeVoices >= this._maxVoices) return;
-    this._activeVoices++;
-
-    const gain = this.getSpatialVolume(x, y, 1300, 0.85);
+    const gain = this.getSpatialVolume(x, y, 1300, 0.72);
     if (gain <= 0.01) return;
 
     if (this.ironHitBuffers.length > 0) {
       const chosen = this.ironHitBuffers[Math.floor(Math.random() * this.ironHitBuffers.length)];
-      const src = this.ctx.createBufferSource();
-      src.buffer = chosen;
-      src.playbackRate.value = 0.92 + Math.random() * 0.16;
-      const gainNode = this.ctx.createGain();
-      gainNode.gain.setValueAtTime(gain, this.ctx.currentTime);
-      src.connect(gainNode);
-      gainNode.connect(this.destinationNode);
-      src.onended = () => { this._activeVoices--; src.disconnect(); gainNode.disconnect(); };
-      src.start();
+      this._safePlayBuffer(chosen, gain, 0.92 + Math.random() * 0.16);
     } else {
       this.playRamHit();
     }
@@ -440,24 +439,11 @@ class SoundFX {
 
   playMistCast(x, y) {
     if (this._muted) return;
-    this.init();
-    if (!this.ctx) return;
-    if (this._activeVoices >= this._maxVoices) return;
-    this._activeVoices++;
-
-    const gain = this.getSpatialVolume(x, y, 1400, 0.7);
+    const gain = this.getSpatialVolume(x, y, 1400, 0.58);
     if (gain <= 0.01) return;
 
     if (this.mistBuffer) {
-      const src = this.ctx.createBufferSource();
-      src.buffer = this.mistBuffer;
-      src.playbackRate.value = 0.94 + Math.random() * 0.12;
-      const gainNode = this.ctx.createGain();
-      gainNode.gain.setValueAtTime(gain, this.ctx.currentTime);
-      src.connect(gainNode);
-      gainNode.connect(this.destinationNode);
-      src.onended = () => { this._activeVoices--; src.disconnect(); gainNode.disconnect(); };
-      src.start();
+      this._safePlayBuffer(this.mistBuffer, gain, 0.94 + Math.random() * 0.12);
     } else {
       this.playGhostWisp();
     }
@@ -465,29 +451,15 @@ class SoundFX {
 
   playMineExplosion(x, y) {
     if (this._muted) return;
-    this.init();
-    if (!this.ctx) return;
-    if (this._activeVoices >= this._maxVoices) return;
-    this._activeVoices++;
-
-    const gain = this.getSpatialVolume(x, y, 1600, 1.0);
-    if (gain <= 0.01) return;
-
     const now = performance.now() / 1000;
     if (now - this.lastMineExplosionTime < 0.08) return;
+    const gain = this.getSpatialVolume(x, y, 1600, 0.85);
+    if (gain <= 0.01) return;
     this.lastMineExplosionTime = now;
 
     if (this.navalMineExplosionBuffers.length > 0) {
       const chosen = this.navalMineExplosionBuffers[Math.floor(Math.random() * this.navalMineExplosionBuffers.length)];
-      const src = this.ctx.createBufferSource();
-      src.buffer = chosen;
-      src.playbackRate.value = 0.9 + Math.random() * 0.18;
-      const gainNode = this.ctx.createGain();
-      gainNode.gain.setValueAtTime(gain, this.ctx.currentTime);
-      src.connect(gainNode);
-      gainNode.connect(this.destinationNode);
-      src.onended = () => { this._activeVoices--; src.disconnect(); gainNode.disconnect(); };
-      src.start();
+      this._safePlayBuffer(chosen, gain, 0.9 + Math.random() * 0.18);
     } else {
       this.playCannon(x, y);
     }
@@ -495,29 +467,15 @@ class SoundFX {
 
   playMonsterRoar(x, y) {
     if (this._muted) return;
-    this.init();
-    if (!this.ctx) return;
-    if (this._activeVoices >= this._maxVoices) return;
-    this._activeVoices++;
-
-    const gain = this.getSpatialVolume(x, y, 1800, 0.85);
-    if (gain <= 0.02) return;
-
     const now = performance.now() / 1000;
     if (now - this.lastMonsterRoarTime < 2.5) return;
+    const gain = this.getSpatialVolume(x, y, 1800, 0.78);
+    if (gain <= 0.02) return;
     this.lastMonsterRoarTime = now;
 
     if (this.monsterRoarBuffers.length > 0) {
       const chosen = this.monsterRoarBuffers[Math.floor(Math.random() * this.monsterRoarBuffers.length)];
-      const src = this.ctx.createBufferSource();
-      src.buffer = chosen;
-      src.playbackRate.value = 0.92 + Math.random() * 0.15;
-      const gainNode = this.ctx.createGain();
-      gainNode.gain.setValueAtTime(gain, this.ctx.currentTime);
-      src.connect(gainNode);
-      gainNode.connect(this.destinationNode);
-      src.onended = () => { this._activeVoices--; src.disconnect(); gainNode.disconnect(); };
-      src.start();
+      this._safePlayBuffer(chosen, gain, 0.92 + Math.random() * 0.15);
     } else {
       this.playEerieRoar();
     }
@@ -525,24 +483,11 @@ class SoundFX {
 
   playMonsterAttack(x, y) {
     if (this._muted) return;
-    this.init();
-    if (!this.ctx) return;
-    if (this._activeVoices >= this._maxVoices) return;
-    this._activeVoices++;
-
-    const gain = this.getSpatialVolume(x, y, 1400, 0.75);
+    const gain = this.getSpatialVolume(x, y, 1400, 0.68);
     if (gain <= 0.02) return;
 
     if (this.monsterAttackBuffer) {
-      const src = this.ctx.createBufferSource();
-      src.buffer = this.monsterAttackBuffer;
-      src.playbackRate.value = 0.94 + Math.random() * 0.12;
-      const gainNode = this.ctx.createGain();
-      gainNode.gain.setValueAtTime(gain, this.ctx.currentTime);
-      src.connect(gainNode);
-      gainNode.connect(this.destinationNode);
-      src.onended = () => { this._activeVoices--; src.disconnect(); gainNode.disconnect(); };
-      src.start();
+      this._safePlayBuffer(this.monsterAttackBuffer, gain, 0.94 + Math.random() * 0.12);
     } else {
       this.playSpikeLaunch();
     }
@@ -550,28 +495,14 @@ class SoundFX {
 
   playMonsterCharge(x, y) {
     if (this._muted) return;
-    this.init();
-    if (!this.ctx) return;
-    if (this._activeVoices >= this._maxVoices) return;
-    this._activeVoices++;
-
-    const gain = this.getSpatialVolume(x, y, 1600, 0.85);
-    if (gain <= 0.02) return;
-
     const now = performance.now() / 1000;
     if (now - this.lastMonsterChargeTime < 3.0) return;
+    const gain = this.getSpatialVolume(x, y, 1600, 0.78);
+    if (gain <= 0.02) return;
     this.lastMonsterChargeTime = now;
 
     if (this.monsterChargeBuffer) {
-      const src = this.ctx.createBufferSource();
-      src.buffer = this.monsterChargeBuffer;
-      src.playbackRate.value = 0.92 + Math.random() * 0.15;
-      const gainNode = this.ctx.createGain();
-      gainNode.gain.setValueAtTime(gain, this.ctx.currentTime);
-      src.connect(gainNode);
-      gainNode.connect(this.destinationNode);
-      src.onended = () => { this._activeVoices--; src.disconnect(); gainNode.disconnect(); };
-      src.start();
+      this._safePlayBuffer(this.monsterChargeBuffer, gain, 0.92 + Math.random() * 0.15);
     } else {
       this.playIronChargeHorn();
     }
@@ -579,25 +510,12 @@ class SoundFX {
 
   playMonsterHit(x, y) {
     if (this._muted) return;
-    this.init();
-    if (!this.ctx) return;
-    if (this._activeVoices >= this._maxVoices) return;
-    this._activeVoices++;
-
-    const gain = this.getSpatialVolume(x, y, 1300, 0.8);
+    const gain = this.getSpatialVolume(x, y, 1300, 0.72);
     if (gain <= 0.01) return;
 
     if (this.monsterHitBuffers.length > 0) {
       const chosen = this.monsterHitBuffers[Math.floor(Math.random() * this.monsterHitBuffers.length)];
-      const src = this.ctx.createBufferSource();
-      src.buffer = chosen;
-      src.playbackRate.value = 0.93 + Math.random() * 0.14;
-      const gainNode = this.ctx.createGain();
-      gainNode.gain.setValueAtTime(gain, this.ctx.currentTime);
-      src.connect(gainNode);
-      gainNode.connect(this.destinationNode);
-      src.onended = () => { this._activeVoices--; src.disconnect(); gainNode.disconnect(); };
-      src.start();
+      this._safePlayBuffer(chosen, gain, 0.93 + Math.random() * 0.14);
     } else {
       this.playHit(x, y);
     }
@@ -605,29 +523,15 @@ class SoundFX {
 
   playMonsterMove(x, y) {
     if (this._muted) return;
-    this.init();
-    if (!this.ctx) return;
-    if (this._activeVoices >= this._maxVoices) return;
-    this._activeVoices++;
-
-    const gain = this.getSpatialVolume(x, y, 900, 0.55);
-    if (gain <= 0.03) return;
-
     const now = performance.now() / 1000;
     if (now - this.lastMonsterMoveTime < 4.0) return;
+    const gain = this.getSpatialVolume(x, y, 950, 0.48);
+    if (gain <= 0.02) return;
     this.lastMonsterMoveTime = now;
 
     if (this.monsterMoveBuffers.length > 0) {
       const chosen = this.monsterMoveBuffers[Math.floor(Math.random() * this.monsterMoveBuffers.length)];
-      const src = this.ctx.createBufferSource();
-      src.buffer = chosen;
-      src.playbackRate.value = 0.94 + Math.random() * 0.12;
-      const gainNode = this.ctx.createGain();
-      gainNode.gain.setValueAtTime(gain, this.ctx.currentTime);
-      src.connect(gainNode);
-      gainNode.connect(this.destinationNode);
-      src.onended = () => { this._activeVoices--; src.disconnect(); gainNode.disconnect(); };
-      src.start();
+      this._safePlayBuffer(chosen, gain, 0.94 + Math.random() * 0.12);
     } else {
       this.playSplash();
     }
@@ -647,38 +551,24 @@ class SoundFX {
 
   playCannon(x, y) {
     if (this.muted) return;
-    this.init();
-    if (!this.ctx) return;
-
-    const gain = this.getSpatialVolume(x, y, 1300, 0.75);
+    const gain = this.getSpatialVolume(x, y, 1300, 0.65);
     if (gain <= 0.01) return; // Out of hearing distance
 
-    // Anti-overlapping & throttling: limit max 3 concurrent voices, min 65ms gap
+    // Anti-overlapping & throttling: limit max 4 concurrent voices, min 60ms gap
     const nowSec = performance.now() / 1000;
-    if (nowSec - this.lastCannonTime < 0.065 && this.activeCannonCount >= 3) return;
+    if (nowSec - this.lastCannonTime < 0.06 && this.activeCannonCount >= 4) return;
     this.lastCannonTime = nowSec;
 
     if (this.cannonBuffers.length > 0) {
       const chosenBuf = this.cannonBuffers[Math.floor(Math.random() * this.cannonBuffers.length)];
-      const src = this.ctx.createBufferSource();
-      src.buffer = chosenBuf;
-      src.playbackRate.value = 0.94 + Math.random() * 0.12;
-
-      const gainNode = this.ctx.createGain();
-      gainNode.gain.setValueAtTime(gain, this.ctx.currentTime);
-
-      src.connect(gainNode);
-      gainNode.connect(this.destinationNode);
-
       this.activeCannonCount++;
-      src.onended = () => {
+      this._safePlayBuffer(chosenBuf, gain, 0.94 + Math.random() * 0.12, () => {
         this.activeCannonCount = Math.max(0, this.activeCannonCount - 1);
-      };
-      const origOnEndedCannon = src.onended;
-      src.onended = () => { origOnEndedCannon(); src.disconnect(); gainNode.disconnect(); };
-      src.start();
+      });
     } else {
       // Procedural synthesizer fallback
+      this.init();
+      if (!this.ctx) return;
       const now = this.ctx.currentTime;
       const osc = this.ctx.createOscillator();
       const gainNode = this.ctx.createGain();
@@ -691,7 +581,9 @@ class SoundFX {
       gainNode.connect(this.destinationNode);
       osc.start(now);
       osc.stop(now + 0.35);
-      osc.onended = () => { osc.disconnect(); gain.disconnect(); };
+      osc.onended = () => {
+        try { osc.disconnect(); gainNode.disconnect(); } catch (e) {}
+      };
     }
   }
 
@@ -832,38 +724,24 @@ class SoundFX {
 
   playHit(x, y) {
     if (this.muted) return;
-    this.init();
-    if (!this.ctx) return;
-
-    const gain = this.getSpatialVolume(x, y, 1200, 0.7);
+    const gain = this.getSpatialVolume(x, y, 1200, 0.65);
     if (gain <= 0.01) return; // Too far away to hear
 
-    // Anti-overlapping & throttling: limit max 3 concurrent voices, min 80ms gap
+    // Anti-overlapping & throttling: limit max 4 concurrent voices, min 65ms gap
     const nowSec = performance.now() / 1000;
-    if (nowSec - this.lastHitTime < 0.08 && this.activeHitCount >= 3) return;
+    if (nowSec - this.lastHitTime < 0.065 && this.activeHitCount >= 4) return;
     this.lastHitTime = nowSec;
 
     if (this.hitBuffers.length > 0) {
       const chosenBuf = this.hitBuffers[Math.floor(Math.random() * this.hitBuffers.length)];
-      const src = this.ctx.createBufferSource();
-      src.buffer = chosenBuf;
-      src.playbackRate.value = 0.92 + Math.random() * 0.16;
-
-      const gainNode = this.ctx.createGain();
-      gainNode.gain.setValueAtTime(gain, this.ctx.currentTime);
-
-      src.connect(gainNode);
-      gainNode.connect(this.destinationNode);
-
       this.activeHitCount++;
-      src.onended = () => {
+      this._safePlayBuffer(chosenBuf, gain, 0.92 + Math.random() * 0.16, () => {
         this.activeHitCount = Math.max(0, this.activeHitCount - 1);
-      };
-      const origOnEndedHit = src.onended;
-      src.onended = () => { origOnEndedHit(); src.disconnect(); gainNode.disconnect(); };
-      src.start();
+      });
     } else {
       // Procedural synthesizer fallback
+      this.init();
+      if (!this.ctx) return;
       const now = this.ctx.currentTime;
       const osc = this.ctx.createOscillator();
       const gainNode = this.ctx.createGain();
@@ -876,7 +754,9 @@ class SoundFX {
       gainNode.connect(this.destinationNode);
       osc.start(now);
       osc.stop(now + 0.2);
-      osc.onended = () => { osc.disconnect(); gain.disconnect(); };
+      osc.onended = () => {
+        try { osc.disconnect(); gainNode.disconnect(); } catch (e) {}
+      };
     }
   }
 

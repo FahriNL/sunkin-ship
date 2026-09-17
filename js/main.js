@@ -20,13 +20,13 @@ function gameLoop(time) {
 
   if (isGameStarted && !isGamePaused) {
     updateGame(dt);
+    if (typeof flushJoystickVisual === 'function') flushJoystickVisual();
     render();
     updateHUD();
-  } else if (isGameStarted) {
-    // When paused: render once, then stop (dirty flag approach)
-    // We still need a single render when pause state changes
+  } else if (!isGameStarted) {
+    // Render animated scenic sea behind main menu
+    render();
   }
-  // When not started and not paused: don't render at all (main menu handles its own display)
 }
 
 // Auto-save player state every 10 seconds during active voyage

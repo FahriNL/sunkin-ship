@@ -107,6 +107,10 @@ function openLoreModal() {
   closeUpgradeModal();
   closeHelpModal();
   renderClanCodexUI();
+  const elGen = document.getElementById('worldGenLabel');
+  if (elGen) {
+    elGen.innerText = `Generasi #${currentWorldGenNumber || 1} (Seed: ${currentWorldGenSeed || 'Default'})`;
+  }
   loreModal.classList.remove('modal-enter', 'hidden');
   loreModal.classList.add('modal-active');
   isGamePaused = true;
@@ -517,6 +521,10 @@ function openPauseModal() {
   }
 
   if (pauseModal) {
+    const elPauseGen = document.getElementById('pauseWorldGenLabel');
+    if (elPauseGen) {
+      elPauseGen.innerText = `Peta Samudra: Generasi #${currentWorldGenNumber || 1} (Seed: ${currentWorldGenSeed || 'Default'})`;
+    }
     pauseModal.classList.remove('modal-enter', 'hidden');
     pauseModal.classList.add('modal-active');
   }

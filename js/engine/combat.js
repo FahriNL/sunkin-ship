@@ -12,9 +12,16 @@ function fireCannons(source, target = null, isPlayer = false) {
 
   sound.playCannon(source.x, source.y);
 
-  const angles = [source.angle - Math.PI / 2, source.angle + Math.PI / 2];
+  let angles = [source.angle - Math.PI / 2, source.angle + Math.PI / 2];
+
+  // If AI has a targeted enemy or rival, aim cannon fire directly towards target
+  if (!isPlayer && target) {
+    const targetAngle = Math.atan2(target.y - source.y, target.x - source.x);
+    angles = [targetAngle];
+  }
+
   const damage = isPlayer ? getStatValue('cannons', playerState.upgrades.cannons) : source.damage;
-  const count = isPlayer ? Math.min(4, 1 + Math.floor(playerState.upgrades.cannons / 2)) : (source.tier || 1);
+  const count = isPlayer ? Math.min(4, 1 + Math.floor(playerState.upgrades.cannons / 2)) : Math.max(1, source.tier || 1);
 
   angles.forEach(sideAngle => {
     const muzzleX = source.x + Math.cos(sideAngle) * (source.radius || 20);
@@ -40,12 +47,12 @@ function fireCannons(source, target = null, isPlayer = false) {
         sourceClan: isPlayer ? 'player' : source.clan,
         x: muzzleX,
         y: muzzleY,
-        vx: Math.cos(fireDir) * (isPlayer ? 7.2 : 6.2),
-        vy: Math.sin(fireDir) * (isPlayer ? 7.2 : 6.2),
+        vx: Math.cos(fireDir) * (isPlayer ? 7.2 : 6.4),
+        vy: Math.sin(fireDir) * (isPlayer ? 7.2 : 6.4),
         radius: isPlayer ? 4.5 : 4,
         damage,
         isPlayer,
-        life: 1.15
+        life: 1.25
       });
     }
   });

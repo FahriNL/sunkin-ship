@@ -39,78 +39,6 @@ function hasLineOfSight(x1, y1, x2, y2) {
   return true;
 }
 
-function createEnemyEntity(clanKey, tierIndex, x, y, angle, options = {}) {
-  const clanData = CLAN_LORE[clanKey];
-  const tierData = clanData.tiers[Math.max(0, Math.min(2, tierIndex))];
-  const isMonster = clanKey === 'blood';
-
-  return {
-    id: Math.random(),
-    homeIslandId: options.homeIslandId || null,
-    convoyId: options.convoyId || null,
-    formationType: options.formationType || 'solitary',
-    formationRole: options.formationRole || 'solitary',
-    formationIndex: options.formationIndex || 0,
-    formationTotal: options.formationTotal || 1,
-    ritualCenter: options.ritualCenter || null,
-    isAnchored: Boolean(options.isAnchored),
-    voyageState: options.voyageState || (options.isAnchored ? 'docked' : 'voyaging'),
-    destinationIslandId: options.destinationIslandId || null,
-    dockTimer: options.dockTimer !== undefined ? options.dockTimer : (options.isAnchored ? (16 + Math.random() * 20) : 0),
-    x: x,
-    y: y,
-    prevX: x,
-    prevY: y,
-    angle: angle,
-    clan: clanKey,
-    tier: tierData.level,
-    name: options.name || tierData.name,
-    isMonster: isMonster,
-    hp: options.hp || tierData.hp,
-    maxHp: options.hp || tierData.hp,
-    speed: options.speed || tierData.speed,
-    baseSpeed: options.speed || tierData.speed,
-    damage: options.damage || tierData.damage,
-    radius: options.radius || tierData.radius,
-    shootCooldown: 1.2 + Math.random() * 1.5,
-    specialCooldown: 3.2 + Math.random() * 2.5,
-    chargeState: 'idle',
-    chargeTimer: 0,
-    recoveryTimer: 0,
-    lostSightTimer: 0,
-    disengageTimer: 0,
-    tailgateTimer: 0,
-    orbitDir: Math.random() > 0.5 ? 1 : -1,
-    preferredDist: isMonster ? (100 + tierIndex * 30) : (clanKey === 'iron' ? (120 + tierIndex * 20) : (180 + tierIndex * 35)),
-    turnRate: isMonster ? 3.6 : 2.2,
-    patrolAngle: angle,
-    detectionMeter: 0,
-    alertState: 'unaware',
-    searchTimer: 0,
-    lastKnownPos: null,
-    targetEntity: null,
-    bulletColor: '#475569'
-  };
-}
-
-// Ports frequented by human seafaring clans
-const HUMAN_PORTS = ['haven', 'batavia_outpost', 'iron_forge_isle', 'shark_reef', 'mist_atoll'];
-
-function pickDestinationIsland(shipOrClan, currentIslandId = null) {
-  const clan = (typeof shipOrClan === 'string') ? shipOrClan : (shipOrClan && shipOrClan.clan);
-  let candidates = HUMAN_PORTS.filter(id => id !== currentIslandId);
-  if (clan === 'gold') {
-    candidates = ['batavia_outpost', 'haven', 'iron_forge_isle'].filter(id => id !== currentIslandId);
-  } else if (clan === 'iron') {
-    candidates = ['iron_forge_isle', 'shark_reef', 'batavia_outpost', 'haven'].filter(id => id !== currentIslandId);
-  } else if (clan === 'mist') {
-    candidates = ['mist_atoll', 'shark_reef', 'haven'].filter(id => id !== currentIslandId);
-  }
-  if (!candidates || candidates.length === 0) candidates = ['haven', 'batavia_outpost', 'iron_forge_isle'];
-  const chosenId = candidates[Math.floor(Math.random() * candidates.length)];
-  return WORLD_ISLANDS.find(isl => isl.id === chosenId) || WORLD_ISLANDS[0];
-}
-
 function getIslandHarborAnchor(isl, slotOffset = 0) {
   const angle = (isl.dockAngle !== undefined ? isl.dockAngle : 0) + slotOffset;
   const rAtAng = getIslandRadiusAt(isl, angle);
@@ -231,157 +159,42 @@ function updateHumanVoyage(e, dt) {
   e.y += Math.sin(e.angle) * cruiseSpeed;
 }
 
-function spawnBataviaConvoy(ex, ey, angle) {
-  const convoyId = 'convoy_batavia_' + Math.random().toString(36).substr(2, 6);
-  const destIsl = pickDestinationIsland('gold');
-  // Flagship Galleon Leader
-  entities.enemies.push(createEnemyEntity('gold', 1, ex, ey, angle, {
-    convoyId,
-    formationType: 'batavia_column',
-    formationRole: 'leader',
-    formationIndex: 0,
-    voyageState: 'voyaging',
-    destinationIslandId: destIsl ? destIsl.id : 'haven'
-  }));
-
-  // Column Escorts: spaced at 75px intervals behind leader for clean, majestic formation
-  const escortCount = 2 + Math.floor(Math.random() * 2);
-  for (let i = 1; i <= escortCount; i++) {
-    const dist = i * 75;
-    const sx = ex + Math.cos(angle + Math.PI) * dist;
-    const sy = ey + Math.sin(angle + Math.PI) * dist;
-    entities.enemies.push(createEnemyEntity('gold', 0, sx, sy, angle, {
-      convoyId,
-      formationType: 'batavia_column',
-      formationRole: 'escort_' + i,
-      formationIndex: i,
-      voyageState: 'voyaging',
-      destinationIslandId: destIsl ? destIsl.id : 'haven'
-    }));
-  }
-}
-
-function spawnIronWedge(ex, ey, angle) {
-  const convoyId = 'convoy_iron_' + Math.random().toString(36).substr(2, 6);
-  const destIsl = pickDestinationIsland('iron');
-  // Heavy Ironclad Leader at apex of wedge
-  entities.enemies.push(createEnemyEntity('iron', 1, ex, ey, angle, {
-    convoyId,
-    formationType: 'iron_wedge',
-    formationRole: 'leader',
-    formationIndex: 0,
-    voyageState: 'voyaging',
-    destinationIslandId: destIsl ? destIsl.id : 'haven'
-  }));
-
-  // Left & Right Flank Rams at angle ± 2.4 rad, distance 78px
-  const lx = ex + Math.cos(angle + 2.4) * 78;
-  const ly = ey + Math.sin(angle + 2.4) * 78;
-  entities.enemies.push(createEnemyEntity('iron', 0, lx, ly, angle, {
-    convoyId,
-    formationType: 'iron_wedge',
-    formationRole: 'wing_left',
-    formationIndex: 1,
-    voyageState: 'voyaging',
-    destinationIslandId: destIsl ? destIsl.id : 'haven'
-  }));
-
-  const rx = ex + Math.cos(angle - 2.4) * 78;
-  const ry = ey + Math.sin(angle - 2.4) * 78;
-  entities.enemies.push(createEnemyEntity('iron', 0, rx, ry, angle, {
-    convoyId,
-    formationType: 'iron_wedge',
-    formationRole: 'wing_right',
-    formationIndex: 2,
-    voyageState: 'voyaging',
-    destinationIslandId: destIsl ? destIsl.id : 'haven'
-  }));
-
-  if (Math.random() < 0.5) {
-    const bx = ex + Math.cos(angle + Math.PI) * 115;
-    const by = ey + Math.sin(angle + Math.PI) * 115;
-    entities.enemies.push(createEnemyEntity('iron', 0, bx, by, angle, {
-      convoyId,
-      formationType: 'iron_wedge',
-      formationRole: 'escort_rear',
-      formationIndex: 3,
-      voyageState: 'voyaging',
-      destinationIslandId: destIsl ? destIsl.id : 'haven'
-    }));
-  }
-}
-
-function spawnMistRitual(ex, ey) {
-  const convoyId = 'convoy_mist_' + Math.random().toString(36).substr(2, 6);
-  const ritualCenter = { x: ex, y: ey, angle: Math.random() * Math.PI * 2 };
-  const cultistCount = 3 + Math.floor(Math.random() * 2);
-
-  for (let i = 0; i < cultistCount; i++) {
-    const ang = ritualCenter.angle + (i / cultistCount) * Math.PI * 2;
-    const cx = ex + Math.cos(ang) * 85;
-    const cy = ey + Math.sin(ang) * 85;
-    entities.enemies.push(createEnemyEntity('mist', i === 0 ? 1 : 0, cx, cy, ang + Math.PI / 2, {
-      convoyId,
-      formationType: 'mist_ritual',
-      formationRole: i === 0 ? 'leader' : 'ritual_cultist',
-      formationIndex: i,
-      formationTotal: cultistCount,
-      ritualCenter: ritualCenter
-    }));
-  }
-}
-
-function spawnSolitaryShip(ex, ey, angle, clan, distFromCenter) {
-  const destIsl = pickDestinationIsland(clan);
-  const isStartingDocked = Math.random() < 0.35;
-  const tier = Math.min(2, Math.floor(distFromCenter / 2600));
-  entities.enemies.push(createEnemyEntity(clan, tier, ex, ey, angle, {
-    formationType: 'solitary',
-    formationRole: 'solitary',
-    isAnchored: isStartingDocked,
-    voyageState: isStartingDocked ? 'docked' : 'voyaging',
-    destinationIslandId: destIsl ? destIsl.id : 'haven',
-    dockTimer: isStartingDocked ? (16 + Math.random() * 20) : 0
-  }));
-}
-
-let encounterSpawnCooldown = 4.0;
+let encounterSpawnCooldown = 3.0;
 
 function spawnWorldEntities() {
   const playerDist = Math.sqrt((playerState.x) * (playerState.x) + (playerState.y) * (playerState.y));
   const biome = getBiomeInfo(playerDist);
 
-  const maxDist = 2400;
+  // Distance-Based Entity Recycling: Only despawn unaware enemies when far away (> 3400px)
+  const maxEnemyDist = 3400;
   for (let i = entities.enemies.length - 1; i >= 0; i--) {
     const e = entities.enemies[i];
     const dx = e.x - playerState.x, dy = e.y - playerState.y;
-    if (dx * dx + dy * dy >= maxDist * maxDist) {
-      entities.enemies[i] = entities.enemies[entities.enemies.length - 1];
-      entities.enemies.pop();
+    if (dx * dx + dy * dy >= maxEnemyDist * maxEnemyDist && e.alertState !== 'alerted') {
+      entities.enemies.splice(i, 1);
     }
   }
+
+  const maxPropDist = 2600;
   for (let i = entities.sunkenShips.length - 1; i >= 0; i--) {
     const s = entities.sunkenShips[i];
     const dx = s.x - playerState.x, dy = s.y - playerState.y;
-    if (dx * dx + dy * dy >= maxDist * maxDist) {
-      entities.sunkenShips[i] = entities.sunkenShips[entities.sunkenShips.length - 1];
-      entities.sunkenShips.pop();
+    if (dx * dx + dy * dy >= maxPropDist * maxPropDist) {
+      entities.sunkenShips.splice(i, 1);
     }
   }
   for (let i = entities.floatingLoots.length - 1; i >= 0; i--) {
     const l = entities.floatingLoots[i];
     const dx = l.x - playerState.x, dy = l.y - playerState.y;
-    if (dx * dx + dy * dy >= maxDist * maxDist) {
-      entities.floatingLoots[i] = entities.floatingLoots[entities.floatingLoots.length - 1];
-      entities.floatingLoots.pop();
+    if (dx * dx + dy * dy >= maxPropDist * maxPropDist) {
+      entities.floatingLoots.splice(i, 1);
     }
   }
   for (let i = entities.mines.length - 1; i >= 0; i--) {
     const m = entities.mines[i];
     const dx = m.x - playerState.x, dy = m.y - playerState.y;
-    if (dx * dx + dy * dy >= maxDist * maxDist) {
-      entities.mines[i] = entities.mines[entities.mines.length - 1];
-      entities.mines.pop();
+    if (dx * dx + dy * dy >= maxPropDist * maxPropDist) {
+      entities.mines.splice(i, 1);
     }
   }
 
@@ -391,7 +204,7 @@ function spawnWorldEntities() {
     if (distToPlayer < 1400 && isl.clan !== 'neutral') {
       const islandGuards = entities.enemies.filter(e => e.homeIslandId === isl.id);
       if (islandGuards.length < 1) {
-        const spawnAngle = isl.dockAngle + (Math.random() - 0.5) * 0.9;
+        const spawnAngle = (isl.dockAngle !== undefined ? isl.dockAngle : 0) + (Math.random() - 0.5) * 0.9;
         const rAtAng = getIslandRadiusAt(isl, spawnAngle);
         const spawnDist = rAtAng + 45 + Math.random() * 55;
         const ex = isl.x + Math.cos(spawnAngle) * spawnDist;
@@ -407,14 +220,14 @@ function spawnWorldEntities() {
     }
   });
 
-  // Open Ocean Structured Encounters (Spawn Throttled & Distant: Max 8 enemies total)
+  // Open Ocean Structured Encounters (Cap: 16 enemies total)
   encounterSpawnCooldown -= 0.016;
-  const maxEnemies = 8;
+  const maxEnemies = 16;
   if (entities.enemies.length < maxEnemies && encounterSpawnCooldown <= 0) {
-    encounterSpawnCooldown = 9.0 + Math.random() * 7.0; // Wait 9-16 seconds between open ocean spawns
+    encounterSpawnCooldown = 3.5 + Math.random() * 4.0; // Responsive 3.5-7.5s interval
     const spawnAngle = Math.random() * Math.PI * 2;
-    // Spawn safely off-screen (1250 - 1750px away from player)
-    const spawnDist = 1250 + Math.random() * 500;
+    // Spawn off-screen (1150 - 1550px away from player)
+    const spawnDist = 1150 + Math.random() * 400;
     const ex = playerState.x + Math.cos(spawnAngle) * spawnDist;
     const ey = playerState.y + Math.sin(spawnAngle) * spawnDist;
 
@@ -434,86 +247,49 @@ function spawnWorldEntities() {
       if (distFromCenter >= 750) {
         const encounterAngle = Math.random() * Math.PI * 2;
 
-        if (distFromCenter >= 6500) {
-          // BLOOD SEA: 65% Solo Leviathan apex roaming, 35% Monster Pairs (Mother + Juvenile)
-          const isPair = Math.random() < 0.35;
-          const convoyId = 'monster_' + Math.random().toString(36).substr(2, 6);
-
-          if (isPair) {
-            // 1 Alpha Monster + 1 Agile Juvenile
-            const alphaTier = Math.random() < 0.5 ? 1 : 2;
-            entities.enemies.push(createEnemyEntity('blood', alphaTier, ex, ey, encounterAngle, {
-              convoyId: convoyId,
-              formationType: 'monster_pair',
-              formationRole: 'monster_alpha'
-            }));
-
-            const juvAngle = encounterAngle + 2.2;
-            const jx = ex + Math.cos(juvAngle) * 60;
-            const jy = ey + Math.sin(juvAngle) * 60;
-            entities.enemies.push(createEnemyEntity('blood', 0, jx, jy, encounterAngle, {
-              convoyId: convoyId,
-              formationType: 'monster_pair',
-              formationRole: 'monster_juvenile',
-              name: 'Anak Monster Palung'
-            }));
-          } else {
-            // Solo Ancient Leviathan (Highest rate for monsters)
+        if (distFromCenter >= 4200) {
+          // BLOOD SEA / ABYSS: 45% Monster Pairs (Mother + Juvenile), 30% Solo Apex, 25% Mist Ritual
+          const roll = Math.random();
+          if (roll < 0.45) {
+            spawnMonsterPair(ex, ey, encounterAngle);
+          } else if (roll < 0.75) {
             entities.enemies.push(createEnemyEntity('blood', 2, ex, ey, encounterAngle, {
               formationType: 'solitary',
               formationRole: 'solitary',
               name: 'Leviathan Raksasa Purba'
             }));
-          }
-
-        } else {
-          // EMPIRE SEAS: Single Ship Cruising (Highest Rate: 65-70%), Convoys & Formations Rarer (10-15%)
-          const roll = Math.random();
-
-          if (distFromCenter < 2400) {
-            // Inner Empire: 70% Single Ship Cruising, 15% Batavia Column, 15% Iron Wedge
-            if (roll < 0.70) {
-              spawnSolitaryShip(ex, ey, encounterAngle, Math.random() < 0.55 ? 'gold' : 'iron', distFromCenter);
-            } else if (roll < 0.85) {
-              spawnBataviaConvoy(ex, ey, encounterAngle);
-            } else {
-              spawnIronWedge(ex, ey, encounterAngle);
-            }
-
-          } else if (distFromCenter < 4800) {
-            // Mid Seas: 65% Single Ship Cruising, 15% Batavia Column, 10% Iron Wedge, 10% Mist Ritual
-            if (roll < 0.65) {
-              spawnSolitaryShip(ex, ey, encounterAngle, Math.random() < 0.4 ? 'gold' : (Math.random() < 0.75 ? 'iron' : 'mist'), distFromCenter);
-            } else if (roll < 0.80) {
-              spawnBataviaConvoy(ex, ey, encounterAngle);
-            } else if (roll < 0.90) {
-              spawnIronWedge(ex, ey, encounterAngle);
-            } else {
-              spawnMistRitual(ex, ey);
-            }
-
           } else {
-            // Outer Reaches: 65% Solitary Ship Cruising, 15% Mist Ritual, 10% Iron Wedge, 10% Monster Pair
-            if (roll < 0.65) {
-              spawnSolitaryShip(ex, ey, encounterAngle, Math.random() < 0.6 ? 'mist' : 'iron', distFromCenter);
-            } else if (roll < 0.80) {
-              spawnMistRitual(ex, ey);
-            } else if (roll < 0.90) {
-              spawnIronWedge(ex, ey, encounterAngle);
-            } else {
-              // Rare monster scouting pair near deep abyss
-              const convoyId = 'monster_' + Math.random().toString(36).substr(2, 6);
-              entities.enemies.push(createEnemyEntity('blood', 1, ex, ey, encounterAngle, {
-                convoyId: convoyId,
-                formationType: 'monster_pair',
-                formationRole: 'monster_alpha'
-              }));
-              entities.enemies.push(createEnemyEntity('blood', 0, ex + 55, ey + 55, encounterAngle, {
-                convoyId: convoyId,
-                formationType: 'monster_pair',
-                formationRole: 'monster_juvenile'
-              }));
-            }
+            spawnMistRitual(ex, ey);
+          }
+        } else if (distFromCenter >= 2600) {
+          // MIST WATERS / SELAT KUTUKAN: 45% Mist Ritual Circle, 25% Iron Wedge, 30% Solitary Occult
+          const roll = Math.random();
+          if (roll < 0.45) {
+            spawnMistRitual(ex, ey);
+          } else if (roll < 0.70) {
+            spawnIronWedge(ex, ey, encounterAngle);
+          } else {
+            spawnSolitaryShip(ex, ey, encounterAngle, 'mist', distFromCenter);
+          }
+        } else if (distFromCenter >= 1600) {
+          // IRON SEAS / SELAT BESI: 40% Iron Wedge Armada, 25% Batavia Convoy, 35% Solitary
+          const roll = Math.random();
+          if (roll < 0.40) {
+            spawnIronWedge(ex, ey, encounterAngle);
+          } else if (roll < 0.65) {
+            spawnBataviaConvoy(ex, ey, encounterAngle);
+          } else {
+            spawnSolitaryShip(ex, ey, encounterAngle, 'iron', distFromCenter);
+          }
+        } else {
+          // BATAVIA SEAS: 40% Batavia Column Convoy, 25% Iron Wedge, 35% Solitary Merchant
+          const roll = Math.random();
+          if (roll < 0.40) {
+            spawnBataviaConvoy(ex, ey, encounterAngle);
+          } else if (roll < 0.65) {
+            spawnIronWedge(ex, ey, encounterAngle);
+          } else {
+            spawnSolitaryShip(ex, ey, encounterAngle, 'gold', distFromCenter);
           }
         }
       }
@@ -1071,7 +847,8 @@ function updateGame(dt) {
         // Inter-clan warfare hit
         for (let j = entities.enemies.length - 1; j >= 0; j--) {
           const rival = entities.enemies[j];
-          if (rival.clan !== p.sourceClan && ((p.x - rival.x) * (p.x - rival.x) + (p.y - rival.y) * (p.y - rival.y) < rival.radius * rival.radius)) {
+          const hitDist = rival.radius + (p.radius || 4) + 5;
+          if (rival.clan !== p.sourceClan && ((p.x - rival.x) * (p.x - rival.x) + (p.y - rival.y) * (p.y - rival.y) < hitDist * hitDist)) {
             rival.hp -= p.damage;
             p.life = 0;
             if (rival.isMonster || rival.clan === 'blood') {
@@ -1181,15 +958,18 @@ function updateGame(dt) {
         continue;
       }
 
-      const minSafeDist = e1.radius + e2.radius + 18;
+      // Hostile rivals: allow them to close in and ram each other!
+      const isRival = e1.clan !== e2.clan;
+      const minSafeDist = e1.radius + e2.radius + (isRival ? 2 : 16);
       if (dist < minSafeDist && dist > 0.001) {
         const overlap = (minSafeDist - dist) / 2;
         const nx = dx / dist;
         const ny = dy / dist;
-        e1.x -= nx * overlap * 0.6;
-        e1.y -= ny * overlap * 0.6;
-        e2.x += nx * overlap * 0.6;
-        e2.y += ny * overlap * 0.6;
+        const pushFactor = isRival ? 0.35 : 0.6;
+        e1.x -= nx * overlap * pushFactor;
+        e1.y -= ny * overlap * pushFactor;
+        e2.x += nx * overlap * pushFactor;
+        e2.y += ny * overlap * pushFactor;
       }
     }
   }
@@ -1212,7 +992,9 @@ function updateGame(dt) {
     });
 
     // Calculate actual movement displacement since previous frame!
-    const distMoved = Math.sqrt((e.x - (e.prevX ?? e.x)) * (e.x - (e.prevX ?? e.x)) + (e.y - (e.prevY ?? e.y) * (e.y - (e.prevY ?? e.y)));
+    const dxMoved = e.x - (e.prevX ?? e.x);
+    const dyMoved = e.y - (e.prevY ?? e.y);
+    const distMoved = Math.sqrt(dxMoved * dxMoved + dyMoved * dyMoved);
     e.isMoving = distMoved > 0.22;
     e.prevX = e.x;
     e.prevY = e.y;
@@ -1254,15 +1036,15 @@ function updateGame(dt) {
     const distToPlayer = Math.sqrt((playerState.x - e.x) * (playerState.x - e.x) + (playerState.y - e.y) * (playerState.y - e.y));
     const targetAngle = Math.atan2(playerState.y - e.y, playerState.x - e.x);
     // STATE 1: UNAWARE / SUSPICIOUS
-    let checkLOS() = false;
+    let _canSeeVal = false;
     let _canSeeComputed = false;
     
     function checkLOS() {
       if (!_canSeeComputed) {
-         checkLOS() = hasLineOfSight(e.x, e.y, playerState.x, playerState.y);
-         _canSeeComputed = true;
+        _canSeeVal = hasLineOfSight(e.x, e.y, playerState.x, playerState.y);
+        _canSeeComputed = true;
       }
-      return checkLOS();
+      return _canSeeVal;
     }
 
     if (e.alertState === 'unaware' || e.alertState === 'suspicious') {
@@ -1299,9 +1081,9 @@ function updateGame(dt) {
             if (mate.convoyId === e.convoyId && mate !== e) {
               mate.alertState = 'alerted';
               mate.targetEntity = playerState;
-              matif (!e.lastKnownPos) e.lastKnownPos = { x: 0, y: 0 };
-          e.lastKnownPos.x = playerState.x;
-          e.lastKnownPos.y = playerState.y;
+              if (!mate.lastKnownPos) mate.lastKnownPos = { x: 0, y: 0 };
+              mate.lastKnownPos.x = playerState.x;
+              mate.lastKnownPos.y = playerState.y;
               mate.detectionMeter = 100;
               mate.lostSightTimer = 0;
             }
@@ -1325,22 +1107,36 @@ function updateGame(dt) {
 
     // STATE 2: ALERTED (Notice / Mengejar: Jangkauan Luas & Memori Pemburuan Cerdas)
     } else if (e.alertState === 'alerted') {
-      const alertEscapeRadius = (e.isMonster ? 850 : (e.convoyId ? 780 : 720)) * stealthMult;
-      const insideEscapeCircle = distToPlayer <= alertEscapeRadius;
+      const isTargetingRival = Boolean(e.targetEntity && e.targetEntity !== playerState);
+      const activeTarget = isTargetingRival ? e.targetEntity : playerState;
 
-      if (insideEscapeCircle && checkLOS()) {
-        if (!e.lastKnownPos) e.lastKnownPos = { x: 0, y: 0 };
-          e.lastKnownPos.x = playerState.x;
-          e.lastKnownPos.y = playerState.y;
-        e.detectionMeter = 100;
-        e.lostSightTimer = 0;
+      if (isTargetingRival && (!activeTarget || activeTarget.hp <= 0)) {
+        e.targetEntity = null;
+        e.alertState = 'searching';
+        e.searchTimer = 3.0;
+        e.detectionMeter = 60;
       } else {
-        // Grace period 5.5 detik: jangan langsung lepas target saat charging melewatinya atau manuver menjauh!
-        e.lostSightTimer = (e.lostSightTimer || 0) + dt;
-        if (e.lostSightTimer > 5.5 || distToPlayer > 950) {
-          e.alertState = 'searching';
-          e.searchTimer = 5.0;
+        const distToTarget = isTargetingRival 
+          ? Math.sqrt((activeTarget.x - e.x) * (activeTarget.x - e.x) + (activeTarget.y - e.y) * (activeTarget.y - e.y))
+          : distToPlayer;
+        const alertEscapeRadius = (e.isMonster ? 850 : (e.convoyId ? 780 : 720)) * (isTargetingRival ? 1.0 : stealthMult);
+        const insideEscapeCircle = distToTarget <= alertEscapeRadius;
+        const canSeeTarget = isTargetingRival ? hasLineOfSight(e.x, e.y, activeTarget.x, activeTarget.y) : checkLOS();
+
+        if (insideEscapeCircle && canSeeTarget) {
+          if (!e.lastKnownPos) e.lastKnownPos = { x: 0, y: 0 };
+          e.lastKnownPos.x = activeTarget.x;
+          e.lastKnownPos.y = activeTarget.y;
           e.detectionMeter = 100;
+          e.lostSightTimer = 0;
+        } else {
+          // Grace period 5.5 detik: jangan langsung lepas target saat charging melewatinya atau manuver menjauh!
+          e.lostSightTimer = (e.lostSightTimer || 0) + dt;
+          if (e.lostSightTimer > 5.5 || distToTarget > 950) {
+            e.alertState = 'searching';
+            e.searchTimer = 5.0;
+            e.detectionMeter = 100;
+          }
         }
       }
 
@@ -1366,9 +1162,9 @@ function updateGame(dt) {
             if (mate.convoyId === e.convoyId && mate !== e) {
               mate.alertState = 'alerted';
               mate.targetEntity = playerState;
-              matif (!e.lastKnownPos) e.lastKnownPos = { x: 0, y: 0 };
-          e.lastKnownPos.x = playerState.x;
-          e.lastKnownPos.y = playerState.y;
+              if (!mate.lastKnownPos) mate.lastKnownPos = { x: 0, y: 0 };
+              mate.lastKnownPos.x = playerState.x;
+              mate.lastKnownPos.y = playerState.y;
               mate.detectionMeter = 100;
               mate.lostSightTimer = 0;
             }
@@ -1420,8 +1216,8 @@ function updateGame(dt) {
 
     if (nearestRival) {
       const distToPlayer = Math.sqrt((playerState.x - e.x) * (playerState.x - e.x) + (playerState.y - e.y) * (playerState.y - e.y));
-      // Engage rival if unaware, OR if currently targeting player but rival is closer/in immediate combat range
-      const shouldEngageRival = (e.alertState === 'unaware') ||
+      // Engage rival if unaware/searching, OR if currently targeting player but rival is closer/in immediate combat range
+      const shouldEngageRival = (e.alertState === 'unaware' || e.alertState === 'searching') ||
                                 (e.targetEntity === playerState && (minRivalDist < distToPlayer * 1.25 || minRivalDist < 360)) ||
                                 (e.targetEntity && e.targetEntity !== playerState && e.targetEntity.hp <= 0);
 
@@ -1477,8 +1273,9 @@ function updateGame(dt) {
           e.x = target.x + pushX * minTargetDist;
           e.y = target.y + pushY * minTargetDist;
 
-          if (e.chargeState === 'charging' || e.clan === 'iron' || e.isMonster) {
-            const ramDmg = Math.round(e.damage * (e.chargeState === 'charging' ? 1.4 : 0.85));
+          if (e.chargeState === 'charging' || e.clan === 'iron' || e.isMonster || (target !== playerState && target.clan !== e.clan)) {
+            const mult = e.chargeState === 'charging' ? 1.4 : (e.clan === 'iron' || e.isMonster ? 0.85 : 0.6);
+            const ramDmg = Math.max(8, Math.round(e.damage * mult));
             target.hp -= ramDmg;
             if (e.clan === 'iron') {
               sound.playIronHit(target.x, target.y);
@@ -1501,6 +1298,41 @@ function updateGame(dt) {
 
             if (target === playerState && playerState.hp <= 0) {
               triggerGameOver("Kapal Anda remuk ditabrak kapal perang baja/monster palung!");
+            } else if (target !== playerState && target.hp <= 0) {
+              // Destroy and sink rival ship!
+              sound.playCannon(target.x, target.y);
+              entities.sinkingShips.push({
+                x: target.x,
+                y: target.y,
+                angle: target.angle || 0,
+                clan: target.clan,
+                tier: target.tier || 0,
+                name: target.name || 'Kapal',
+                isMonster: Boolean(target.isMonster),
+                rotSpeed: (Math.random() - 0.5) * 1.6,
+                progress: 0,
+                maxLife: 2.0,
+                life: 2.0
+              });
+
+              for (let sp = 0; sp < 10; sp++) {
+                entities.particles.push({
+                  x: target.x,
+                  y: target.y,
+                  vx: (Math.random() - 0.5) * 5,
+                  vy: (Math.random() - 0.5) * 5,
+                  life: 0.45,
+                  color: target.isMonster ? '#be123c' : '#854d0e',
+                  size: 2.5 + Math.random() * 2.5
+                });
+              }
+
+              const tIdx = entities.enemies.indexOf(target);
+              if (tIdx !== -1) {
+                entities.enemies.splice(tIdx, 1);
+              }
+              e.targetEntity = null;
+              e.alertState = 'unaware';
             }
           }
         }
