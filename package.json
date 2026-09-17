@@ -1,0 +1,13 @@
+{
+  "name": "laut-darah-naval-odyssey",
+  "version": "1.0.0",
+  "description": "Laut Darah - 2D Vector Maritime Exploration & Combat RPG",
+  "scripts": {
+    "dev": "vite --host --port 5173",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^6.2.0"
+  }
+}
