@@ -21,6 +21,85 @@ body, html {
   font-family: 'Cinzel', serif;
 }
 
+.font-pirata {
+  font-family: 'Pirata One', cursive, serif;
+}
+
+.font-cinzel-decorative {
+  font-family: 'Cinzel Decorative', serif;
+}
+
+/* Glowing Title: "SUNKIN SHIP" */
+.title-glow {
+  color: #fef08a;
+  letter-spacing: 0.12em;
+  text-shadow: 
+    0 0 10px rgba(251, 191, 36, 0.9),
+    0 0 25px rgba(245, 158, 11, 0.8),
+    0 0 50px rgba(220, 38, 38, 0.65),
+    0 3px 6px rgba(0, 0, 0, 0.95);
+  animation: titlePulse 3.2s ease-in-out infinite alternate;
+}
+
+@keyframes titlePulse {
+  0% {
+    text-shadow: 
+      0 0 10px rgba(251, 191, 36, 0.8),
+      0 0 22px rgba(245, 158, 11, 0.6),
+      0 0 40px rgba(220, 38, 38, 0.45),
+      0 3px 6px rgba(0, 0, 0, 0.95);
+    filter: drop-shadow(0 0 6px rgba(251, 191, 36, 0.5));
+  }
+  100% {
+    text-shadow: 
+      0 0 18px rgba(254, 240, 138, 1),
+      0 0 35px rgba(245, 158, 11, 0.95),
+      0 0 70px rgba(239, 68, 68, 0.85),
+      0 3px 8px rgba(0, 0, 0, 1);
+    filter: drop-shadow(0 0 15px rgba(245, 158, 11, 0.8));
+  }
+}
+
+/* Custom Nautical Range Slider */
+.nautical-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  background: #0f172a;
+  border: 1px solid rgba(217, 119, 6, 0.4);
+  border-radius: 9999px;
+  outline: none;
+  transition: all 0.2s;
+}
+
+.nautical-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #fbbf24 0%, #b45309 85%);
+  border: 2px solid #fef08a;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.6);
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.nautical-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.9);
+}
+
+.nautical-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #fbbf24 0%, #b45309 85%);
+  border: 2px solid #fef08a;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.6);
+  cursor: pointer;
+}
+
 canvas {
   position: absolute;
   top: 0;

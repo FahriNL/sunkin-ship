@@ -9,23 +9,30 @@ function gameLoop(time) {
   const dt = Math.min(0.1, (time - lastTime) / 1000);
   lastTime = time;
 
-  if (!isGamePaused) {
+  if (isGameStarted && !isGamePaused) {
     updateGame(dt);
   }
   render();
-  updateHUD();
+  if (isGameStarted) {
+    updateHUD();
+  }
 
   requestAnimationFrame(gameLoop);
 }
 
-// Auto-save player state every 10 seconds
+// Auto-save player state every 10 seconds during active voyage
 setInterval(() => {
-  saveGame();
+  if (isGameStarted && !isGamePaused) {
+    saveGame();
+  }
 }, 10000);
 
 // Bootstrap on window load
 window.addEventListener('load', () => {
-  showToast("Gunakan kemudi sentuh atau keyboard (WASD / Panah) untuk berlayar!", "compass");
+  resizeCanvas();
+  if (typeof updateFullscreenUI === 'function') {
+    updateFullscreenUI();
+  }
   requestAnimationFrame(gameLoop);
 });
 

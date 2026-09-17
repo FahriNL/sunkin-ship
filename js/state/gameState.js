@@ -148,6 +148,7 @@ for (let i = 0; i < 14; i++) {
 }
 
 // Runtime dynamic gameplay flags
+let isGameStarted = false;
 let isGamePaused = false;
 let lastFireTime = 0;
 let lastRearDefenseTime = 0;
@@ -158,6 +159,66 @@ let salvageProgress = 0;
 let screenShake = 0;
 let highestDetectionLevel = 0; // 0 to 1 for HUD stealth bar
 let battleIntensityLevel = 0;  // 0 to 1 for battle music fading
+
+// Hardcore Roguelike Reset: Wipes upgrades, stats, currencies, procedural seeds, and entities
+function resetRoguelikeRun() {
+  playerState.x = PLAYER_SPAWN.x;
+  playerState.y = PLAYER_SPAWN.y;
+  playerState.angle = PLAYER_SPAWN.angle;
+  playerState.gold = 50;
+  playerState.bloodEssence = 0;
+  playerState.kills = 0;
+  playerState.salvages = 0;
+  playerState.maxDistanceReached = 0;
+  playerState.upgrades = {
+    hull: 1,
+    speed: 1,
+    cannons: 1,
+    rearDefense: 0,
+    stealthCamo: 1,
+    relicSiphon: 1
+  };
+  playerState.hp = getStatValue('hull', 1);
+
+  // 1. Procedural Coastline Re-Seed for all Archipelago Islands
+  WORLD_ISLANDS.forEach(isl => {
+    isl.seed = Math.random() * 50 + 1;
+  });
+
+  // 2. Re-initialize spiked sea mines & occult towers
+  initTerritorialDefenses();
+
+  // 3. Clear all dynamic sea entities
+  entities.enemies = [];
+  entities.sinkingShips = [];
+  entities.projectiles = [];
+  entities.mines = [];
+  entities.sunkenShips = [];
+  entities.floatingLoots = [];
+  entities.particles = [];
+  entities.seaRipples = [];
+  entities.floatingTexts = [];
+
+  // 4. Reset indicators & trackers
+  highestDetectionLevel = 0;
+  battleIntensityLevel = 0;
+  currentSalvagingShip = null;
+  salvageProgress = 0;
+  screenShake = 0;
+
+  // 5. Perma-Death Storage Reset
+  try {
+    localStorage.removeItem(SAVE_KEY);
+    saveGame();
+  } catch (e) {
+    console.warn("Roguelike wipe storage error:", e);
+  }
+
+  // 6. Update HUD
+  if (typeof updateHUD === 'function') {
+    updateHUD();
+  }
+}
 
 function loadSavedGame() {
   try {

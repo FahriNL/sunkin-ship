@@ -332,54 +332,56 @@ function drawVectorShip(ctx, ship, isPlayer = false, tier = 1) {
     const clan = ship.clan || 'gold';
     const t = ship.tier || 1;
 
-    // 1. UNAWARE (Tidak notice): Bentuk Segitiga / Vision Cone di hadapan kapal
+    // 1. UNAWARE (Tidak notice): Segitiga untuk kapal, Lingkaran Penuh 360 untuk Monster Laut
     if (ship.alertState === 'unaware' || ship.alertState === 'suspicious') {
       ctx.save();
-      const coneDist = ship.isMonster ? 300 : 260;
-      const coneAngle = 0.65;
-      ctx.fillStyle = 'rgba(251, 191, 36, 0.05)';
-      ctx.strokeStyle = 'rgba(251, 191, 36, 0.32)';
-      ctx.lineWidth = 1.3;
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.arc(0, 0, coneDist, -coneAngle, coneAngle);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
+      if (ship.isMonster) {
+        // Monster memiliki sensor getaran air sirkular 360 derajat yang luas!
+        const auraR = 420;
+        const auraGrad = ctx.createRadialGradient(0, 0, 10, 0, 0, auraR);
+        auraGrad.addColorStop(0, 'rgba(244, 63, 94, 0.04)');
+        auraGrad.addColorStop(0.75, 'rgba(244, 63, 94, 0.015)');
+        auraGrad.addColorStop(1, 'rgba(244, 63, 94, 0.16)');
+        ctx.fillStyle = auraGrad;
+        ctx.beginPath();
+        ctx.arc(0, 0, auraR, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Pulsing underwater acoustic sonar ring
+        const sonarPulse = (Date.now() * 0.002) % 1;
+        ctx.strokeStyle = `rgba(244, 63, 94, ${0.45 - sonarPulse * 0.35})`;
+        ctx.lineWidth = 1.4;
+        ctx.setLineDash([8, 8]);
+        ctx.beginPath();
+        ctx.arc(0, 0, auraR * (0.75 + sonarPulse * 0.25), 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      } else {
+        const coneDist = ship.convoyId ? 340 : 270;
+        const coneAngle = ship.convoyId ? 0.85 : 0.65;
+        ctx.fillStyle = ship.convoyId ? 'rgba(251, 191, 36, 0.06)' : 'rgba(251, 191, 36, 0.05)';
+        ctx.strokeStyle = ship.convoyId ? 'rgba(251, 191, 36, 0.42)' : 'rgba(251, 191, 36, 0.32)';
+        ctx.lineWidth = ship.convoyId ? 1.6 : 1.3;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.arc(0, 0, coneDist, -coneAngle, coneAngle);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
       ctx.restore();
 
-    // 2. ALERTED (Notice / Mengejar): Bentuk berubah menjadi Full Circle Besar untuk lari
-    } else if (ship.alertState === 'alerted') {
-      ctx.save();
-      const alertR = ship.isMonster ? 520 : 460;
-      const alertGrad = ctx.createRadialGradient(0, 0, 15, 0, 0, alertR);
-      alertGrad.addColorStop(0, 'rgba(239, 68, 68, 0.05)');
-      alertGrad.addColorStop(0.85, 'rgba(239, 68, 68, 0.02)');
-      alertGrad.addColorStop(1, 'rgba(239, 68, 68, 0.15)');
-      ctx.fillStyle = alertGrad;
-      ctx.beginPath();
-      ctx.arc(0, 0, alertR, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Pulsing warning ring
-      ctx.strokeStyle = (Math.sin(Date.now() * 0.007) > 0) ? 'rgba(239, 68, 68, 0.5)' : 'rgba(249, 115, 22, 0.3)';
-      ctx.lineWidth = 1.6;
-      ctx.setLineDash([8, 6]);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.restore();
-
-    // 3. SEARCHING (Saat mencari): Bentuk Circle Kecil dengan sapuan radar
+    // 2. SEARCHING (Saat mencari): Lingkaran kecil bersih tanda penyelidikan
     } else if (ship.alertState === 'searching') {
       ctx.save();
-      const searchR = 150;
-      ctx.fillStyle = 'rgba(245, 158, 11, 0.06)';
+      const searchR = ship.isMonster ? 240 : 160;
+      ctx.fillStyle = 'rgba(245, 158, 11, 0.04)';
       ctx.beginPath();
       ctx.arc(0, 0, searchR, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.strokeStyle = 'rgba(245, 158, 11, 0.4)';
-      ctx.lineWidth = 1.3;
+      ctx.strokeStyle = 'rgba(245, 158, 11, 0.35)';
+      ctx.lineWidth = 1.2;
       ctx.setLineDash([4, 4]);
       ctx.stroke();
       ctx.setLineDash([]);
@@ -578,6 +580,25 @@ function drawVectorShip(ctx, ship, isPlayer = false, tier = 1) {
       }
     }
 
+    // Flagship Command Pennant for Convoy Leaders
+    if (ship.formationRole === 'leader' && !ship.isMonster) {
+      ctx.save();
+      const mastX = -ship.radius * 0.15;
+      const pennantColor = clan === 'iron' ? '#94a3b8' : (clan === 'mist' ? '#22d3ee' : '#f59e0b');
+      ctx.fillStyle = pennantColor;
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(mastX, 0);
+      ctx.lineTo(mastX - 16, -6 + Math.sin(Date.now() * 0.008) * 2.5);
+      ctx.lineTo(mastX - 11, 0);
+      ctx.lineTo(mastX - 16, 6 + Math.sin(Date.now() * 0.008) * 2.5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+
     ctx.rotate(-ship.angle);
     const barWidth = 38;
     const barHeight = 4;
@@ -638,13 +659,18 @@ function drawVectorShip(ctx, ship, isPlayer = false, tier = 1) {
     }
 
     // HP & Clan Info Plaque
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
-    ctx.fillRect(-barWidth / 2 - 2, -36, barWidth + 4, barHeight + 11);
+    const isDocked = ship.isAnchored && !ship.isMonster && ship.alertState === 'unaware';
+    const plaqueWidth = isDocked ? barWidth + 22 : barWidth;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.78)';
+    ctx.fillRect(-plaqueWidth / 2 - 2, -36, plaqueWidth + 4, barHeight + 11);
 
     ctx.font = 'bold 8px sans-serif';
     ctx.fillStyle = clanInfo.badgeColor;
     ctx.textAlign = 'center';
-    ctx.fillText(`Lv.${t} ${clan === 'blood' ? 'ELD' : clan.toUpperCase()}`, 0, -28);
+    const label = isDocked 
+      ? `Lv.${t} ${clan.toUpperCase()} [BERLABUH]`
+      : `Lv.${t} ${clan === 'blood' ? 'ELD' : clan.toUpperCase()}`;
+    ctx.fillText(label, 0, -28);
 
     ctx.fillStyle = 'rgba(20, 20, 20, 0.85)';
     ctx.fillRect(-barWidth / 2, -26, barWidth, barHeight);
@@ -1009,6 +1035,62 @@ function drawSeagull(ctx, s) {
   ctx.restore();
 }
 
+function renderMistRituals(ctx) {
+  const renderedCenters = new Set();
+  entities.enemies.forEach(e => {
+    if (e.formationType === 'mist_ritual' && e.ritualCenter && !renderedCenters.has(e.ritualCenter)) {
+      renderedCenters.add(e.ritualCenter);
+      const rc = e.ritualCenter;
+
+      ctx.save();
+      ctx.translate(rc.x, rc.y);
+      ctx.rotate(rc.angle || 0);
+
+      // Ethereal glowing circle on water
+      const grad = ctx.createRadialGradient(0, 0, 10, 0, 0, 98);
+      grad.addColorStop(0, 'rgba(34, 211, 238, 0.16)');
+      grad.addColorStop(0.5, 'rgba(168, 85, 247, 0.08)');
+      grad.addColorStop(1, 'rgba(34, 211, 238, 0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(0, 0, 98, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Outer arcane dashed ritual circle
+      ctx.strokeStyle = 'rgba(34, 211, 238, 0.45)';
+      ctx.lineWidth = 1.8;
+      ctx.setLineDash([12, 8, 4, 8]);
+      ctx.beginPath();
+      ctx.arc(0, 0, 85, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Inner occult pentagram / runic star
+      ctx.strokeStyle = 'rgba(168, 85, 247, 0.35)';
+      ctx.lineWidth = 1.2;
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      for (let i = 0; i < 5; i++) {
+        const a = (i * 4 * Math.PI) / 5;
+        const rx = Math.cos(a) * 55;
+        const ry = Math.sin(a) * 55;
+        if (i === 0) ctx.moveTo(rx, ry);
+        else ctx.lineTo(rx, ry);
+      }
+      ctx.closePath();
+      ctx.stroke();
+
+      // Central pulsing arcane wisp orb
+      const corePulse = Math.sin(Date.now() * 0.005) * 3 + 9;
+      ctx.fillStyle = 'rgba(34, 211, 238, 0.55)';
+      ctx.beginPath();
+      ctx.arc(0, 0, corePulse, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    }
+  });
+}
+
 function render() {
   const playerDist = Math.hypot(playerState.x, playerState.y);
   const biome = getBiomeInfo(playerDist);
@@ -1026,7 +1108,7 @@ function render() {
 
   let shakeX = 0;
   let shakeY = 0;
-  if (screenShake > 0) {
+  if (screenShake > 0 && sound.screenShakeEnabled) {
     shakeX = (Math.random() - 0.5) * screenShake * 2;
     shakeY = (Math.random() - 0.5) * screenShake * 2;
   }
@@ -1134,6 +1216,9 @@ function render() {
 
   // Render Sinking Ships in death sequence
   entities.sinkingShips.forEach(s => drawSinkingShip(ctx, s));
+
+  // Render Mist Occult Ritual Circles
+  renderMistRituals(ctx);
 
   // Render Enemy Ships
   entities.enemies.forEach(e => drawVectorShip(ctx, e, false));

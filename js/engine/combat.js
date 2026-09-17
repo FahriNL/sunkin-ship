@@ -94,33 +94,55 @@ function triggerPlayerRearDefense() {
   }
 }
 
-function fireSpiritWisps(enemy) {
-  sound.playGhostWisp();
+function fireSpiritWisps(enemy, target = null) {
+  sound.playMistCast(enemy.x, enemy.y);
+  const tgt = target || enemy.targetEntity || playerState;
   const count = enemy.tier === 3 ? 3 : (enemy.tier === 2 ? 2 : 1);
   
+  // Predictive lead targeting (Kalkulasi posisi masa depan target)
+  let targetVx = 0;
+  let targetVy = 0;
+  if (tgt === playerState) {
+    targetVx = Math.cos(playerState.angle) * (playerState.speed || 0);
+    targetVy = Math.sin(playerState.angle) * (playerState.speed || 0);
+  } else if (tgt) {
+    targetVx = Math.cos(tgt.angle || 0) * (tgt.speed || 1.4);
+    targetVy = Math.sin(tgt.angle || 0) * (tgt.speed || 1.4);
+  }
+
+  const distToTgt = Math.hypot((tgt.x || enemy.x) - enemy.x, (tgt.y || enemy.y) - enemy.y);
+  const projSpeed = 4.8 + enemy.tier * 0.4;
+  const travelTime = Math.min(1.4, distToTgt / projSpeed);
+
+  // Titik intersepsi prediktif
+  const predX = (tgt.x || enemy.x) + targetVx * travelTime * 0.85;
+  const predY = (tgt.y || enemy.y) + targetVy * travelTime * 0.85;
+  const baseAngle = Math.atan2(predY - enemy.y, predX - enemy.x);
+  
   for (let i = 0; i < count; i++) {
-    const spreadAngle = enemy.angle + (i - (count - 1) / 2) * 0.5;
+    const spreadAngle = baseAngle + (i - (count - 1) / 2) * 0.26;
     entities.projectiles.push({
       type: 'spirit',
       sourceClan: enemy.clan,
+      target: tgt,
       x: enemy.x + Math.cos(spreadAngle) * 20,
       y: enemy.y + Math.sin(spreadAngle) * 20,
-      vx: Math.cos(spreadAngle) * 3.5,
-      vy: Math.sin(spreadAngle) * 3.5,
+      vx: Math.cos(spreadAngle) * projSpeed,
+      vy: Math.sin(spreadAngle) * projSpeed,
       angle: spreadAngle,
-      speed: 3.8 + enemy.tier * 0.4,
-      turnRate: 1.8,
-      radius: 6,
-      damage: enemy.damage * 0.85,
+      speed: projSpeed,
+      turnRate: 3.6,
+      radius: 6.5,
+      damage: enemy.damage * 0.95,
       isPlayer: false,
-      life: 3.2,
+      life: 3.6,
       clan: 'mist'
     });
   }
 }
 
 function fireChitinSpikes(enemy, isNova = false) {
-  sound.playSpikeLaunch();
+  sound.playMonsterAttack(enemy.x, enemy.y);
 
   if (isNova) {
     for (let i = 0; i < 8; i++) {

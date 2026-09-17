@@ -4,6 +4,7 @@
    ========================================================================== */
 
 const SAVE_KEY = 'BLOOD_SEA_SAVE_DATA_v2';
+const SETTINGS_KEY = 'BLOOD_SEA_SETTINGS_v2';
 
 // Clean SVG Icon paths for Upgrades & UI elements
 const SVG_ICONS = {

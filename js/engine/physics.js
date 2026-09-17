@@ -26,6 +26,317 @@ function hasLineOfSight(x1, y1, x2, y2) {
   return true;
 }
 
+function createEnemyEntity(clanKey, tierIndex, x, y, angle, options = {}) {
+  const clanData = CLAN_LORE[clanKey];
+  const tierData = clanData.tiers[Math.max(0, Math.min(2, tierIndex))];
+  const isMonster = clanKey === 'blood';
+
+  return {
+    id: Math.random(),
+    homeIslandId: options.homeIslandId || null,
+    convoyId: options.convoyId || null,
+    formationType: options.formationType || 'solitary',
+    formationRole: options.formationRole || 'solitary',
+    formationIndex: options.formationIndex || 0,
+    formationTotal: options.formationTotal || 1,
+    ritualCenter: options.ritualCenter || null,
+    isAnchored: Boolean(options.isAnchored),
+    voyageState: options.voyageState || (options.isAnchored ? 'docked' : 'voyaging'),
+    destinationIslandId: options.destinationIslandId || null,
+    dockTimer: options.dockTimer !== undefined ? options.dockTimer : (options.isAnchored ? (16 + Math.random() * 20) : 0),
+    x: x,
+    y: y,
+    prevX: x,
+    prevY: y,
+    angle: angle,
+    clan: clanKey,
+    tier: tierData.level,
+    name: options.name || tierData.name,
+    isMonster: isMonster,
+    hp: options.hp || tierData.hp,
+    maxHp: options.hp || tierData.hp,
+    speed: options.speed || tierData.speed,
+    baseSpeed: options.speed || tierData.speed,
+    damage: options.damage || tierData.damage,
+    radius: options.radius || tierData.radius,
+    shootCooldown: 1.2 + Math.random() * 1.5,
+    specialCooldown: 3.2 + Math.random() * 2.5,
+    chargeState: 'idle',
+    chargeTimer: 0,
+    recoveryTimer: 0,
+    lostSightTimer: 0,
+    disengageTimer: 0,
+    tailgateTimer: 0,
+    orbitDir: Math.random() > 0.5 ? 1 : -1,
+    preferredDist: isMonster ? (100 + tierIndex * 30) : (clanKey === 'iron' ? (120 + tierIndex * 20) : (180 + tierIndex * 35)),
+    turnRate: isMonster ? 3.6 : 2.2,
+    patrolAngle: angle,
+    detectionMeter: 0,
+    alertState: 'unaware',
+    searchTimer: 0,
+    lastKnownPos: null,
+    targetEntity: null,
+    bulletColor: '#475569'
+  };
+}
+
+// Ports frequented by human seafaring clans
+const HUMAN_PORTS = ['haven', 'batavia_outpost', 'iron_forge_isle', 'shark_reef', 'mist_atoll'];
+
+function pickDestinationIsland(shipOrClan, currentIslandId = null) {
+  const clan = (typeof shipOrClan === 'string') ? shipOrClan : (shipOrClan && shipOrClan.clan);
+  let candidates = HUMAN_PORTS.filter(id => id !== currentIslandId);
+  if (clan === 'gold') {
+    candidates = ['batavia_outpost', 'haven', 'iron_forge_isle'].filter(id => id !== currentIslandId);
+  } else if (clan === 'iron') {
+    candidates = ['iron_forge_isle', 'shark_reef', 'batavia_outpost', 'haven'].filter(id => id !== currentIslandId);
+  } else if (clan === 'mist') {
+    candidates = ['mist_atoll', 'shark_reef', 'haven'].filter(id => id !== currentIslandId);
+  }
+  if (!candidates || candidates.length === 0) candidates = ['haven', 'batavia_outpost', 'iron_forge_isle'];
+  const chosenId = candidates[Math.floor(Math.random() * candidates.length)];
+  return WORLD_ISLANDS.find(isl => isl.id === chosenId) || WORLD_ISLANDS[0];
+}
+
+function getIslandHarborAnchor(isl, slotOffset = 0) {
+  const angle = (isl.dockAngle !== undefined ? isl.dockAngle : 0) + slotOffset;
+  const rAtAng = getIslandRadiusAt(isl, angle);
+  const dist = Math.max(isl.dockDist || (rAtAng + 55), rAtAng + 55);
+  return {
+    x: isl.x + Math.cos(angle) * dist,
+    y: isl.y + Math.sin(angle) * dist,
+    heading: angle + Math.PI
+  };
+}
+
+// Smart Island Contour Lookahead Obstacle Avoidance
+function avoidIslandObstacles(ship, desiredHeading, lookahead = 175) {
+  for (let i = 0; i < WORLD_ISLANDS.length; i++) {
+    const isl = WORLD_ISLANDS[i];
+    const dToCenter = Math.hypot(isl.x - ship.x, isl.y - ship.y);
+    if (dToCenter > isl.radius + lookahead + 120) continue;
+
+    // Whisker probes: center probe, left flank (+0.42 rad), right flank (-0.42 rad)
+    const whiskers = [
+      { angle: desiredHeading, dist: lookahead },
+      { angle: desiredHeading + 0.42, dist: lookahead * 0.8 },
+      { angle: desiredHeading - 0.42, dist: lookahead * 0.8 }
+    ];
+
+    let blocked = false;
+    for (let w = 0; w < whiskers.length; w++) {
+      const px = ship.x + Math.cos(whiskers[w].angle) * whiskers[w].dist;
+      const py = ship.y + Math.sin(whiskers[w].angle) * whiskers[w].dist;
+      const pAngle = Math.atan2(py - isl.y, px - isl.x);
+      const rAtAngle = getIslandRadiusAt(isl, pAngle) + (ship.radius || 20) + 40;
+      if (Math.hypot(px - isl.x, py - isl.y) < rAtAngle) {
+        blocked = true;
+        break;
+      }
+    }
+
+    // Proximity check to coastline
+    const currAngle = Math.atan2(ship.y - isl.y, ship.x - isl.x);
+    const currR = getIslandRadiusAt(isl, currAngle) + (ship.radius || 20) + 32;
+    const currDist = Math.hypot(ship.x - isl.x, ship.y - isl.y);
+    if (currDist < currR + 25) {
+      blocked = true;
+    }
+
+    if (blocked) {
+      // Steer tangentially around the island contour
+      const normalAngle = Math.atan2(ship.y - isl.y, ship.x - isl.x);
+      let diffCW = (normalAngle + Math.PI / 2) - desiredHeading;
+      while (diffCW < -Math.PI) diffCW += Math.PI * 2;
+      while (diffCW > Math.PI) diffCW -= Math.PI * 2;
+
+      let diffCCW = (normalAngle - Math.PI / 2) - desiredHeading;
+      while (diffCCW < -Math.PI) diffCCW += Math.PI * 2;
+      while (diffCCW > Math.PI) diffCCW -= Math.PI * 2;
+
+      // Choose tangent that aligns closest to intended course
+      const bestTangent = Math.abs(diffCW) < Math.abs(diffCCW)
+        ? (normalAngle + Math.PI / 2)
+        : (normalAngle - Math.PI / 2);
+
+      // If dangerously close to shore, steer directly away from island
+      if (currDist < currR + 10) {
+        return normalAngle;
+      }
+      return bestTangent;
+    }
+  }
+  return desiredHeading;
+}
+
+function updateHumanVoyage(e, dt) {
+  if (e.isAnchored || e.voyageState === 'docked') {
+    e.dockTimer = (e.dockTimer || 20) - dt;
+    // Gentle bobbing at harbor anchor with ocean swell
+    e.angle += Math.sin(Date.now() * 0.0012 + (e.id || 0)) * 0.002;
+    if (e.dockTimer <= 0) {
+      // Departure! Hoist anchor and set sail for next port of call
+      e.isAnchored = false;
+      e.voyageState = 'voyaging';
+      const nextIsl = pickDestinationIsland(e, e.destinationIslandId);
+      e.destinationIslandId = nextIsl ? nextIsl.id : 'haven';
+      e.dockTimer = 0;
+    }
+    return;
+  }
+
+  // Active open sea voyage between harbor ports
+  let destIsl = e.destinationIslandId ? WORLD_ISLANDS.find(i => i.id === e.destinationIslandId) : null;
+  if (!destIsl) {
+    destIsl = pickDestinationIsland(e);
+    e.destinationIslandId = destIsl ? destIsl.id : 'haven';
+  }
+
+  const harbor = getIslandHarborAnchor(destIsl);
+  const dx = harbor.x - e.x;
+  const dy = harbor.y - e.y;
+  const distToHarbor = Math.hypot(dx, dy);
+
+  if (distToHarbor < 95) {
+    // Reached port harbor! Drop anchor and trade/dock
+    e.voyageState = 'docked';
+    e.isAnchored = true;
+    e.dockTimer = 18 + Math.random() * 16;
+    return;
+  }
+
+  // Heading towards destination harbor with intelligent island contour avoidance
+  let targetHeading = Math.atan2(dy, dx);
+  targetHeading = avoidIslandObstacles(e, targetHeading, 190);
+
+  // Smooth turn towards targetHeading
+  let angleDiff = targetHeading - e.angle;
+  while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+  while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+  e.angle += Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), e.turnRate * 0.9 * dt);
+
+  // Cruising forward across shipping lanes
+  const cruiseSpeed = e.speed * 0.65;
+  e.x += Math.cos(e.angle) * cruiseSpeed;
+  e.y += Math.sin(e.angle) * cruiseSpeed;
+}
+
+function spawnBataviaConvoy(ex, ey, angle) {
+  const convoyId = 'convoy_batavia_' + Math.random().toString(36).substr(2, 6);
+  const destIsl = pickDestinationIsland('gold');
+  // Flagship Galleon Leader
+  entities.enemies.push(createEnemyEntity('gold', 1, ex, ey, angle, {
+    convoyId,
+    formationType: 'batavia_column',
+    formationRole: 'leader',
+    formationIndex: 0,
+    voyageState: 'voyaging',
+    destinationIslandId: destIsl ? destIsl.id : 'haven'
+  }));
+
+  // Column Escorts: spaced at 75px intervals behind leader for clean, majestic formation
+  const escortCount = 2 + Math.floor(Math.random() * 2);
+  for (let i = 1; i <= escortCount; i++) {
+    const dist = i * 75;
+    const sx = ex + Math.cos(angle + Math.PI) * dist;
+    const sy = ey + Math.sin(angle + Math.PI) * dist;
+    entities.enemies.push(createEnemyEntity('gold', 0, sx, sy, angle, {
+      convoyId,
+      formationType: 'batavia_column',
+      formationRole: 'escort_' + i,
+      formationIndex: i,
+      voyageState: 'voyaging',
+      destinationIslandId: destIsl ? destIsl.id : 'haven'
+    }));
+  }
+}
+
+function spawnIronWedge(ex, ey, angle) {
+  const convoyId = 'convoy_iron_' + Math.random().toString(36).substr(2, 6);
+  const destIsl = pickDestinationIsland('iron');
+  // Heavy Ironclad Leader at apex of wedge
+  entities.enemies.push(createEnemyEntity('iron', 1, ex, ey, angle, {
+    convoyId,
+    formationType: 'iron_wedge',
+    formationRole: 'leader',
+    formationIndex: 0,
+    voyageState: 'voyaging',
+    destinationIslandId: destIsl ? destIsl.id : 'haven'
+  }));
+
+  // Left & Right Flank Rams at angle ± 2.4 rad, distance 78px
+  const lx = ex + Math.cos(angle + 2.4) * 78;
+  const ly = ey + Math.sin(angle + 2.4) * 78;
+  entities.enemies.push(createEnemyEntity('iron', 0, lx, ly, angle, {
+    convoyId,
+    formationType: 'iron_wedge',
+    formationRole: 'wing_left',
+    formationIndex: 1,
+    voyageState: 'voyaging',
+    destinationIslandId: destIsl ? destIsl.id : 'haven'
+  }));
+
+  const rx = ex + Math.cos(angle - 2.4) * 78;
+  const ry = ey + Math.sin(angle - 2.4) * 78;
+  entities.enemies.push(createEnemyEntity('iron', 0, rx, ry, angle, {
+    convoyId,
+    formationType: 'iron_wedge',
+    formationRole: 'wing_right',
+    formationIndex: 2,
+    voyageState: 'voyaging',
+    destinationIslandId: destIsl ? destIsl.id : 'haven'
+  }));
+
+  if (Math.random() < 0.5) {
+    const bx = ex + Math.cos(angle + Math.PI) * 115;
+    const by = ey + Math.sin(angle + Math.PI) * 115;
+    entities.enemies.push(createEnemyEntity('iron', 0, bx, by, angle, {
+      convoyId,
+      formationType: 'iron_wedge',
+      formationRole: 'escort_rear',
+      formationIndex: 3,
+      voyageState: 'voyaging',
+      destinationIslandId: destIsl ? destIsl.id : 'haven'
+    }));
+  }
+}
+
+function spawnMistRitual(ex, ey) {
+  const convoyId = 'convoy_mist_' + Math.random().toString(36).substr(2, 6);
+  const ritualCenter = { x: ex, y: ey, angle: Math.random() * Math.PI * 2 };
+  const cultistCount = 3 + Math.floor(Math.random() * 2);
+
+  for (let i = 0; i < cultistCount; i++) {
+    const ang = ritualCenter.angle + (i / cultistCount) * Math.PI * 2;
+    const cx = ex + Math.cos(ang) * 85;
+    const cy = ey + Math.sin(ang) * 85;
+    entities.enemies.push(createEnemyEntity('mist', i === 0 ? 1 : 0, cx, cy, ang + Math.PI / 2, {
+      convoyId,
+      formationType: 'mist_ritual',
+      formationRole: i === 0 ? 'leader' : 'ritual_cultist',
+      formationIndex: i,
+      formationTotal: cultistCount,
+      ritualCenter: ritualCenter
+    }));
+  }
+}
+
+function spawnSolitaryShip(ex, ey, angle, clan, distFromCenter) {
+  const destIsl = pickDestinationIsland(clan);
+  const isStartingDocked = Math.random() < 0.35;
+  const tier = Math.min(2, Math.floor(distFromCenter / 2600));
+  entities.enemies.push(createEnemyEntity(clan, tier, ex, ey, angle, {
+    formationType: 'solitary',
+    formationRole: 'solitary',
+    isAnchored: isStartingDocked,
+    voyageState: isStartingDocked ? 'docked' : 'voyaging',
+    destinationIslandId: destIsl ? destIsl.id : 'haven',
+    dockTimer: isStartingDocked ? (16 + Math.random() * 20) : 0
+  }));
+}
+
+let encounterSpawnCooldown = 4.0;
+
 function spawnWorldEntities() {
   const playerDist = Math.hypot(playerState.x, playerState.y);
   const biome = getBiomeInfo(playerDist);
@@ -36,65 +347,36 @@ function spawnWorldEntities() {
   entities.floatingLoots = entities.floatingLoots.filter(l => Math.hypot(l.x - playerState.x, l.y - playerState.y) < maxDist);
   entities.mines = entities.mines.filter(m => Math.hypot(m.x - playerState.x, m.y - playerState.y) < maxDist);
 
-  // Maintain docked clan guards / patrol fleets
+  // Maintain docked clan guards / island patrols (Max 1 guard per outpost)
   WORLD_ISLANDS.forEach(isl => {
     const distToPlayer = Math.hypot(isl.x - playerState.x, isl.y - playerState.y);
-    if (distToPlayer < 1800 && isl.clan !== 'neutral') {
+    if (distToPlayer < 1400 && isl.clan !== 'neutral') {
       const islandGuards = entities.enemies.filter(e => e.homeIslandId === isl.id);
-      if (islandGuards.length < 3) {
+      if (islandGuards.length < 1) {
         const spawnAngle = isl.dockAngle + (Math.random() - 0.5) * 0.9;
         const rAtAng = getIslandRadiusAt(isl, spawnAngle);
         const spawnDist = rAtAng + 45 + Math.random() * 55;
         const ex = isl.x + Math.cos(spawnAngle) * spawnDist;
         const ey = isl.y + Math.sin(spawnAngle) * spawnDist;
 
-        const clanData = CLAN_LORE[isl.clan];
         const tierIndex = Math.min(2, Math.floor(isl.radius / 150) - 1);
-        const tierData = clanData.tiers[Math.max(0, tierIndex)];
-
-        entities.enemies.push({
-          id: Math.random(),
+        entities.enemies.push(createEnemyEntity(isl.clan, Math.max(0, tierIndex), ex, ey, spawnAngle + Math.PI / 2, {
           homeIslandId: isl.id,
-          x: ex,
-          y: ey,
-          prevX: ex,
-          prevY: ey,
-          angle: spawnAngle + Math.PI / 2,
-          clan: isl.clan,
-          tier: tierData.level,
-          name: tierData.name,
-          isMonster: isl.clan === 'blood',
-          hp: tierData.hp,
-          maxHp: tierData.hp,
-          speed: tierData.speed,
-          baseSpeed: tierData.speed,
-          damage: tierData.damage,
-          radius: tierData.radius,
-          shootCooldown: 1.5 + Math.random() * 1.5,
-          specialCooldown: 3.5 + Math.random() * 3.0,
-          chargeState: 'idle',
-          chargeTimer: 0,
-          disengageTimer: 0,
-          tailgateTimer: 0,
-          orbitDir: Math.random() > 0.5 ? 1 : -1,
-          preferredDist: isl.clan === 'blood' ? 120 : (isl.clan === 'iron' ? 140 : 200),
-          turnRate: isl.clan === 'blood' ? 3.6 : 2.2,
-          patrolAngle: spawnAngle,
-          detectionMeter: 0,
-          alertState: 'unaware', // 'unaware', 'suspicious', 'alerted', 'searching'
-          searchTimer: 0,
-          lastKnownPos: null,
-          targetEntity: null,
-          bulletColor: '#475569'
-        });
+          formationType: 'solitary',
+          formationRole: 'guard'
+        }));
       }
     }
   });
 
-  // Roaming fleets cap at 10 ships nearby
-  if (entities.enemies.length < 10) {
+  // Open Ocean Structured Encounters (Spawn Throttled & Distant: Max 8 enemies total)
+  encounterSpawnCooldown -= 0.016;
+  const maxEnemies = 8;
+  if (entities.enemies.length < maxEnemies && encounterSpawnCooldown <= 0) {
+    encounterSpawnCooldown = 9.0 + Math.random() * 7.0; // Wait 9-16 seconds between open ocean spawns
     const spawnAngle = Math.random() * Math.PI * 2;
-    const spawnDist = 700 + Math.random() * 550;
+    // Spawn safely off-screen (1250 - 1750px away from player)
+    const spawnDist = 1250 + Math.random() * 500;
     const ex = playerState.x + Math.cos(spawnAngle) * spawnDist;
     const ey = playerState.y + Math.sin(spawnAngle) * spawnDist;
 
@@ -102,7 +384,7 @@ function spawnWorldEntities() {
     for (let i = 0; i < WORLD_ISLANDS.length; i++) {
       const isl = WORLD_ISLANDS[i];
       const ang = Math.atan2(ey - isl.y, ex - isl.x);
-      if (Math.hypot(ex - isl.x, ey - isl.y) < getIslandRadiusAt(isl, ang) + 50) {
+      if (Math.hypot(ex - isl.x, ey - isl.y) < getIslandRadiusAt(isl, ang) + 120) {
         insideIsland = true;
         break;
       }
@@ -110,66 +392,93 @@ function spawnWorldEntities() {
 
     if (!insideIsland) {
       const distFromCenter = Math.hypot(ex, ey);
-      // Safe Zone: No enemy ships patrol inside Home Harbor waters (within 750px of center)
-      if (distFromCenter < 750) return;
+      // Safe Zone: No hostile armadas patrol inside Home Harbor waters (within 750px of center)
+      if (distFromCenter >= 750) {
+        const encounterAngle = Math.random() * Math.PI * 2;
 
-      let chosenClanKey = 'gold';
-      let tierIndex = 0;
+        if (distFromCenter >= 6500) {
+          // BLOOD SEA: 65% Solo Leviathan apex roaming, 35% Monster Pairs (Mother + Juvenile)
+          const isPair = Math.random() < 0.35;
+          const convoyId = 'monster_' + Math.random().toString(36).substr(2, 6);
 
-      if (distFromCenter < 1500) {
-        chosenClanKey = Math.random() < 0.6 ? 'gold' : 'iron';
-        tierIndex = Math.random() < 0.85 ? 0 : 1;
-      } else if (distFromCenter < 3800) {
-        const roll = Math.random();
-        chosenClanKey = roll < 0.4 ? 'iron' : (roll < 0.75 ? 'gold' : 'mist');
-        tierIndex = Math.random() < 0.6 ? 1 : 0;
-      } else if (distFromCenter < 6800) {
-        chosenClanKey = Math.random() < 0.65 ? 'mist' : 'iron';
-        tierIndex = Math.random() < 0.45 ? 1 : 2;
-      } else {
-        chosenClanKey = 'blood';
-        const bloodRoll = Math.random();
-        tierIndex = bloodRoll < 0.35 ? 0 : (bloodRoll < 0.75 ? 1 : 2);
+          if (isPair) {
+            // 1 Alpha Monster + 1 Agile Juvenile
+            const alphaTier = Math.random() < 0.5 ? 1 : 2;
+            entities.enemies.push(createEnemyEntity('blood', alphaTier, ex, ey, encounterAngle, {
+              convoyId: convoyId,
+              formationType: 'monster_pair',
+              formationRole: 'monster_alpha'
+            }));
+
+            const juvAngle = encounterAngle + 2.2;
+            const jx = ex + Math.cos(juvAngle) * 60;
+            const jy = ey + Math.sin(juvAngle) * 60;
+            entities.enemies.push(createEnemyEntity('blood', 0, jx, jy, encounterAngle, {
+              convoyId: convoyId,
+              formationType: 'monster_pair',
+              formationRole: 'monster_juvenile',
+              name: 'Anak Monster Palung'
+            }));
+          } else {
+            // Solo Ancient Leviathan (Highest rate for monsters)
+            entities.enemies.push(createEnemyEntity('blood', 2, ex, ey, encounterAngle, {
+              formationType: 'solitary',
+              formationRole: 'solitary',
+              name: 'Leviathan Raksasa Purba'
+            }));
+          }
+
+        } else {
+          // EMPIRE SEAS: Single Ship Cruising (Highest Rate: 65-70%), Convoys & Formations Rarer (10-15%)
+          const roll = Math.random();
+
+          if (distFromCenter < 2400) {
+            // Inner Empire: 70% Single Ship Cruising, 15% Batavia Column, 15% Iron Wedge
+            if (roll < 0.70) {
+              spawnSolitaryShip(ex, ey, encounterAngle, Math.random() < 0.55 ? 'gold' : 'iron', distFromCenter);
+            } else if (roll < 0.85) {
+              spawnBataviaConvoy(ex, ey, encounterAngle);
+            } else {
+              spawnIronWedge(ex, ey, encounterAngle);
+            }
+
+          } else if (distFromCenter < 4800) {
+            // Mid Seas: 65% Single Ship Cruising, 15% Batavia Column, 10% Iron Wedge, 10% Mist Ritual
+            if (roll < 0.65) {
+              spawnSolitaryShip(ex, ey, encounterAngle, Math.random() < 0.4 ? 'gold' : (Math.random() < 0.75 ? 'iron' : 'mist'), distFromCenter);
+            } else if (roll < 0.80) {
+              spawnBataviaConvoy(ex, ey, encounterAngle);
+            } else if (roll < 0.90) {
+              spawnIronWedge(ex, ey, encounterAngle);
+            } else {
+              spawnMistRitual(ex, ey);
+            }
+
+          } else {
+            // Outer Reaches: 65% Solitary Ship Cruising, 15% Mist Ritual, 10% Iron Wedge, 10% Monster Pair
+            if (roll < 0.65) {
+              spawnSolitaryShip(ex, ey, encounterAngle, Math.random() < 0.6 ? 'mist' : 'iron', distFromCenter);
+            } else if (roll < 0.80) {
+              spawnMistRitual(ex, ey);
+            } else if (roll < 0.90) {
+              spawnIronWedge(ex, ey, encounterAngle);
+            } else {
+              // Rare monster scouting pair near deep abyss
+              const convoyId = 'monster_' + Math.random().toString(36).substr(2, 6);
+              entities.enemies.push(createEnemyEntity('blood', 1, ex, ey, encounterAngle, {
+                convoyId: convoyId,
+                formationType: 'monster_pair',
+                formationRole: 'monster_alpha'
+              }));
+              entities.enemies.push(createEnemyEntity('blood', 0, ex + 55, ey + 55, encounterAngle, {
+                convoyId: convoyId,
+                formationType: 'monster_pair',
+                formationRole: 'monster_juvenile'
+              }));
+            }
+          }
+        }
       }
-
-      const clanData = CLAN_LORE[chosenClanKey];
-      const tierData = clanData.tiers[tierIndex];
-
-      entities.enemies.push({
-        id: Math.random(),
-        homeIslandId: null,
-        x: ex,
-        y: ey,
-        prevX: ex,
-        prevY: ey,
-        angle: Math.random() * Math.PI * 2,
-        clan: chosenClanKey,
-        tier: tierData.level,
-        name: tierData.name,
-        isMonster: chosenClanKey === 'blood',
-        hp: tierData.hp,
-        maxHp: tierData.hp,
-        speed: tierData.speed,
-        baseSpeed: tierData.speed,
-        damage: tierData.damage,
-        radius: tierData.radius,
-        shootCooldown: 1.4 + Math.random() * 1.6,
-        specialCooldown: 3.5 + Math.random() * 3.0,
-        chargeState: 'idle',
-        chargeTimer: 0,
-        disengageTimer: 0,
-        tailgateTimer: 0,
-        orbitDir: Math.random() > 0.5 ? 1 : -1,
-        preferredDist: chosenClanKey === 'blood' ? (100 + tierIndex * 30) : (chosenClanKey === 'iron' ? (120 + tierIndex * 20) : (180 + tierIndex * 35)),
-        turnRate: chosenClanKey === 'blood' ? 3.6 : 2.2,
-        patrolAngle: Math.random() * Math.PI * 2,
-        detectionMeter: 0,
-        alertState: 'unaware',
-        searchTimer: 0,
-        lastKnownPos: null,
-        targetEntity: null,
-        bulletColor: '#475569'
-      });
     }
   }
 
@@ -329,8 +638,7 @@ function updateGame(dt) {
       const e = entities.enemies[j];
       if (Math.hypot(e.x - mine.x, e.y - mine.y) < e.radius + mine.radius) {
         e.hp -= mine.damage;
-        sound.playCannon(mine.x, mine.y);
-        sound.playHit(mine.x, mine.y);
+        sound.playMineExplosion(mine.x, mine.y);
         screenShake = Math.max(screenShake, 8);
         addFloatingText(`RANJAU! -${Math.round(mine.damage)}`, e.x, e.y, '#f97316', true);
 
@@ -382,8 +690,7 @@ function updateGame(dt) {
       sm.flashTimer += dt * 16;
       if (sm.detonateTimer <= 0) {
         // DETONATE!
-        sound.playCannon(sm.x, sm.y);
-        sound.playHit(sm.x, sm.y);
+        sound.playMineExplosion(sm.x, sm.y);
         screenShake = Math.max(screenShake, 10);
 
         // Damage Player if in blast radius
@@ -442,23 +749,41 @@ function updateGame(dt) {
       }
 
       if (target) {
-        tw.shootCooldown = 3.2;
-        sound.playGhostWisp();
-        const fireAngle = Math.atan2(target.y - tw.y, target.x - tw.x);
+        tw.shootCooldown = 3.0;
+        sound.playMistCast(tw.x, tw.y);
+
+        let tgtVx = 0;
+        let tgtVy = 0;
+        if (target === playerState) {
+          tgtVx = Math.cos(playerState.angle) * (playerState.speed || 0);
+          tgtVy = Math.sin(playerState.angle) * (playerState.speed || 0);
+        } else {
+          tgtVx = Math.cos(target.angle || 0) * (target.speed || 1.4);
+          tgtVy = Math.sin(target.angle || 0) * (target.speed || 1.4);
+        }
+
+        const dToTgt = Math.hypot(target.x - tw.x, target.y - tw.y);
+        const pSpeed = 4.8;
+        const timeToHit = Math.min(1.4, dToTgt / pSpeed);
+        const aimX = target.x + tgtVx * timeToHit * 0.85;
+        const aimY = target.y + tgtVy * timeToHit * 0.85;
+        const fireAngle = Math.atan2(aimY - tw.y, aimX - tw.x);
+
         entities.projectiles.push({
           type: 'spirit',
           sourceClan: 'mist',
+          target: target,
           x: tw.x,
           y: tw.y - 15,
-          vx: Math.cos(fireAngle) * 3.6,
-          vy: Math.sin(fireAngle) * 3.6,
+          vx: Math.cos(fireAngle) * pSpeed,
+          vy: Math.sin(fireAngle) * pSpeed,
           angle: fireAngle,
-          speed: 4.2,
-          turnRate: 1.6,
+          speed: pSpeed,
+          turnRate: 3.4,
           radius: 7,
-          damage: 26,
+          damage: 28,
           isPlayer: false,
-          life: 3.5,
+          life: 3.8,
           clan: 'mist'
         });
       }
@@ -470,15 +795,43 @@ function updateGame(dt) {
     const p = entities.projectiles[i];
 
     if (p.type === 'spirit') {
-      const targetX = p.target ? p.target.x : playerState.x;
-      const targetY = p.target ? p.target.y : playerState.y;
+      const tgt = p.target || playerState;
+      let targetX = tgt.x || playerState.x;
+      let targetY = tgt.y || playerState.y;
+
+      let tgtVx = 0;
+      let tgtVy = 0;
+      if (tgt === playerState) {
+        tgtVx = Math.cos(playerState.angle) * (playerState.speed || 0);
+        tgtVy = Math.sin(playerState.angle) * (playerState.speed || 0);
+      } else if (tgt) {
+        tgtVx = Math.cos(tgt.angle || 0) * (tgt.speed || 1.4);
+        tgtVy = Math.sin(tgt.angle || 0) * (tgt.speed || 1.4);
+      }
+      targetX += tgtVx * 0.45;
+      targetY += tgtVy * 0.45;
+
       const targetAngle = Math.atan2(targetY - p.y, targetX - p.x);
       let diff = targetAngle - p.angle;
       while (diff < -Math.PI) diff += Math.PI * 2;
       while (diff > Math.PI) diff -= Math.PI * 2;
-      p.angle += Math.sign(diff) * Math.min(Math.abs(diff), p.turnRate * dt);
+
+      const effectiveTurn = (p.turnRate || 3.5) * dt;
+      p.angle += Math.sign(diff) * Math.min(Math.abs(diff), effectiveTurn);
       p.vx = Math.cos(p.angle) * p.speed;
       p.vy = Math.sin(p.angle) * p.speed;
+
+      if (Math.random() < 0.35) {
+        entities.particles.push({
+          x: p.x,
+          y: p.y,
+          vx: (Math.random() - 0.5) * 1.5,
+          vy: (Math.random() - 0.5) * 1.5,
+          life: 0.28,
+          color: '#22d3ee',
+          size: 2.2
+        });
+      }
     }
 
     p.x += p.vx;
@@ -531,7 +884,7 @@ function updateGame(dt) {
         if (Math.hypot(p.x - tw.x, p.y - tw.y) < tw.radius + 10) {
           tw.hp -= p.damage;
           p.life = 0;
-          sound.playHit(tw.x, tw.y);
+          sound.playMistCast(tw.x, tw.y);
           addFloatingText(`-${Math.round(p.damage)}`, tw.x, tw.y - 20, '#22d3ee', true);
 
           if (tw.hp <= 0) {
@@ -568,7 +921,13 @@ function updateGame(dt) {
         if (Math.hypot(p.x - e.x, p.y - e.y) < e.radius) {
           e.hp -= p.damage;
           p.life = 0;
-          sound.playHit(e.x, e.y);
+          if (e.isMonster || e.clan === 'blood') {
+            sound.playMonsterHit(e.x, e.y);
+          } else if (e.clan === 'iron') {
+            sound.playIronHit(e.x, e.y);
+          } else {
+            sound.playHit(e.x, e.y);
+          }
           addFloatingText(`-${Math.round(p.damage)}`, e.x, e.y, '#f59e0b', p.damage > 28);
 
           // Wood Splinters
@@ -610,7 +969,7 @@ function updateGame(dt) {
             } else {
               showToast(`+${goldGained} Koin: Menenggelamkan ${e.name}!`, "gold");
             }
-            sound.playLoot();
+            sound.playCoin();
 
             // Transition to Sinking Sequence
             entities.sinkingShips.push({
@@ -663,7 +1022,13 @@ function updateGame(dt) {
           if (rival.clan !== p.sourceClan && Math.hypot(p.x - rival.x, p.y - rival.y) < rival.radius) {
             rival.hp -= p.damage;
             p.life = 0;
-            sound.playHit(rival.x, rival.y);
+            if (rival.isMonster || rival.clan === 'blood') {
+              sound.playMonsterHit(rival.x, rival.y);
+            } else if (rival.clan === 'iron') {
+              sound.playIronHit(rival.x, rival.y);
+            } else {
+              sound.playHit(rival.x, rival.y);
+            }
             addFloatingText(`-${Math.round(p.damage)}`, rival.x, rival.y, '#94a3b8');
 
             if (rival.hp <= 0) {
@@ -748,8 +1113,23 @@ function updateGame(dt) {
       const dx = e2.x - e1.x;
       const dy = e2.y - e1.y;
       const dist = Math.hypot(dx, dy);
-      const minSafeDist = e1.radius + e2.radius + 18;
 
+      // Same convoy/formation: DO NOT violently push apart with safety buffer!
+      if (e1.convoyId && e1.convoyId === e2.convoyId) {
+        const hullMin = e1.radius + e2.radius;
+        if (dist < hullMin && dist > 0.001) {
+          const overlap = (hullMin - dist) / 2;
+          const nx = dx / dist;
+          const ny = dy / dist;
+          e1.x -= nx * overlap * 0.25;
+          e1.y -= ny * overlap * 0.25;
+          e2.x += nx * overlap * 0.25;
+          e2.y += ny * overlap * 0.25;
+        }
+        continue;
+      }
+
+      const minSafeDist = e1.radius + e2.radius + 18;
       if (dist < minSafeDist && dist > 0.001) {
         const overlap = (minSafeDist - dist) / 2;
         const nx = dx / dist;
@@ -820,75 +1200,179 @@ function updateGame(dt) {
     const targetAngle = Math.atan2(playerState.y - e.y, playerState.x - e.x);
     const canSeePlayerLine = hasLineOfSight(e.x, e.y, playerState.x, playerState.y);
 
-    // STATE 1: UNAWARE (Posisi sedang tidak notice -> bentuk segitiga di hadapannya seperti biasa)
+    // STATE 1: UNAWARE / SUSPICIOUS
     if (e.alertState === 'unaware' || e.alertState === 'suspicious') {
-      let headingDiff = Math.abs(targetAngle - e.angle);
-      while (headingDiff > Math.PI) headingDiff = Math.abs(headingDiff - Math.PI * 2);
+      let detected = false;
 
-      const visionConeDist = (e.isMonster ? 300 : 260) * (isPlayerMovingFast ? 1.15 : 0.85) * stealthMult;
-      const inTriangleVisionCone = (headingDiff <= 0.65 && distToPlayer <= visionConeDist) || distToPlayer < 55;
+      if (e.isMonster) {
+        // Sea Monster 360-degree circular underwater vibration sonar!
+        const monsterAuraDist = 420 * (isPlayerMovingFast ? 1.25 : 0.95) * stealthMult;
+        detected = (distToPlayer <= monsterAuraDist) && canSeePlayerLine;
+      } else {
+        // Ship visual lookout cone
+        let headingDiff = Math.abs(targetAngle - e.angle);
+        while (headingDiff > Math.PI) headingDiff = Math.abs(headingDiff - Math.PI * 2);
 
-      if (inTriangleVisionCone && canSeePlayerLine) {
-        // Player entered forward triangle vision cone -> NOTICE & switch to Full Circle Besar!
+        // Convoys have wider coordinated lookouts
+        const visionAngle = e.convoyId ? 0.85 : 0.65;
+        const visionConeDist = (e.convoyId ? 340 : 270) * (isPlayerMovingFast ? 1.15 : 0.85) * stealthMult;
+        detected = ((headingDiff <= visionAngle && distToPlayer <= visionConeDist) || distToPlayer < 60) && canSeePlayerLine;
+      }
+
+      if (detected) {
         e.alertState = 'alerted';
         e.targetEntity = playerState;
         e.lastKnownPos = { x: playerState.x, y: playerState.y };
         e.detectionMeter = 100;
-        sound.playAlertHorn();
-        showToast(`${e.name} Melihatmu & Mulai Mengejar!`, "alert");
+        e.lostSightTimer = 0;
+
+        // Broadcast alert to entire fleet if in a convoy/formation!
+        if (e.convoyId) {
+          entities.enemies.forEach(mate => {
+            if (mate.convoyId === e.convoyId && mate !== e) {
+              mate.alertState = 'alerted';
+              mate.targetEntity = playerState;
+              mate.lastKnownPos = { x: playerState.x, y: playerState.y };
+              mate.detectionMeter = 100;
+              mate.lostSightTimer = 0;
+            }
+          });
+        }
+
+        if (e.isMonster || e.clan === 'blood') {
+          sound.playMonsterRoar(e.x, e.y);
+        } else {
+          sound.playAlertHorn();
+        }
+
+        if (e.convoyId && e.clan !== 'blood') {
+          showToast(`Armada ${e.name} Mengunci Target! Bersiap Tempur!`, "alert");
+        } else {
+          showToast(`${e.name} Melihatmu & Mulai Mengejar!`, "alert");
+        }
       } else {
         e.detectionMeter = Math.max(0, e.detectionMeter - 30 * dt);
       }
 
-    // STATE 2: ALERTED (Ketika notice -> bentuk berubah menjadi full circle besar untuk lari)
+    // STATE 2: ALERTED (Notice / Mengejar: Jangkauan Luas & Memori Pemburuan Cerdas)
     } else if (e.alertState === 'alerted') {
-      const alertEscapeRadius = (e.isMonster ? 520 : 460) * stealthMult;
+      const alertEscapeRadius = (e.isMonster ? 850 : (e.convoyId ? 780 : 720)) * stealthMult;
       const insideEscapeCircle = distToPlayer <= alertEscapeRadius;
 
-      // Bentuk akan terintersepsi jika ada pulau untuk sembunyi, atau lari keluar circle besar
       if (insideEscapeCircle && canSeePlayerLine) {
-        // Still actively tracking player inside large circle without island obstruction
         e.lastKnownPos = { x: playerState.x, y: playerState.y };
         e.detectionMeter = 100;
+        e.lostSightTimer = 0;
       } else {
-        // Sembunyi di balik pulau ATAU lari keluar dari full circle besar -> beralih ke posisi mencari!
-        e.alertState = 'searching';
-        e.searchTimer = 4.5;
-        e.detectionMeter = 100;
+        // Grace period 5.5 detik: jangan langsung lepas target saat charging melewatinya atau manuver menjauh!
+        e.lostSightTimer = (e.lostSightTimer || 0) + dt;
+        if (e.lostSightTimer > 5.5 || distToPlayer > 950) {
+          e.alertState = 'searching';
+          e.searchTimer = 5.0;
+          e.detectionMeter = 100;
+        }
       }
 
-    // STATE 3: SEARCHING (Saat mencari -> bentuk circle namun kecil)
+    // STATE 3: SEARCHING (Saat mencari: Menyelidiki posisi terakhir)
     } else if (e.alertState === 'searching') {
-      const searchRadius = 150; // Circle kecil saat mencari
+      const searchRadius = e.isMonster ? 260 : 180;
       e.searchTimer -= dt;
-      e.detectionMeter = Math.max(0, (e.searchTimer / 4.5) * 100);
+      e.detectionMeter = Math.max(0, (e.searchTimer / 5.0) * 100);
 
-      // Jika pemain tertangkap di dalam circle kecil dan tidak tertutup pulau -> notice lagi!
-      if (distToPlayer <= searchRadius && canSeePlayerLine) {
+      const reDetected = (distToPlayer <= searchRadius) && canSeePlayerLine;
+
+      if (reDetected) {
         e.alertState = 'alerted';
         e.targetEntity = playerState;
         e.lastKnownPos = { x: playerState.x, y: playerState.y };
         e.detectionMeter = 100;
-        sound.playAlertHorn();
+        e.lostSightTimer = 0;
+
+        if (e.convoyId) {
+          entities.enemies.forEach(mate => {
+            if (mate.convoyId === e.convoyId && mate !== e) {
+              mate.alertState = 'alerted';
+              mate.targetEntity = playerState;
+              mate.lastKnownPos = { x: playerState.x, y: playerState.y };
+              mate.detectionMeter = 100;
+              mate.lostSightTimer = 0;
+            }
+          });
+        }
+
+        if (e.isMonster || e.clan === 'blood') {
+          sound.playMonsterRoar(e.x, e.y);
+        } else {
+          sound.playAlertHorn();
+        }
         showToast(`${e.name} Menemukanmu Kembali!`, "alert");
       } else if (e.searchTimer <= 0) {
-        // Jika sudah tidak dapat -> barulah kembali ke posisi tidak notice (segitiga biasa)
         e.alertState = 'unaware';
         e.detectionMeter = 0;
         e.targetEntity = null;
         e.lastKnownPos = null;
+        e.lostSightTimer = 0;
         showToast(`${e.name} Kehilangan Jejak dan Kembali Berpatroli.`, "info");
       }
     }
 
     highestDetectionLevel = Math.max(highestDetectionLevel, e.detectionMeter / 100);
 
+    // Dynamic Inter-Clan Rivalry (Gold vs Iron vs Mist vs Blood)
+    let nearestRival = null;
+    let minRivalDist = 550;
+
+    for (let k = 0; k < entities.enemies.length; k++) {
+      const other = entities.enemies[k];
+      if (other === e || (other.convoyId && other.convoyId === e.convoyId)) continue;
+      if (other.clan !== e.clan && other.hp > 0) {
+        const dRival = Math.hypot(other.x - e.x, other.y - e.y);
+        if (dRival < minRivalDist && hasLineOfSight(e.x, e.y, other.x, other.y)) {
+          minRivalDist = dRival;
+          nearestRival = other;
+        }
+      }
+    }
+
+    if (nearestRival) {
+      const distToPlayer = Math.hypot(playerState.x - e.x, playerState.y - e.y);
+      // Engage rival if unaware, OR if currently targeting player but rival is closer/in immediate combat range
+      const shouldEngageRival = (e.alertState === 'unaware') ||
+                                (e.targetEntity === playerState && (minRivalDist < distToPlayer * 1.25 || minRivalDist < 360)) ||
+                                (e.targetEntity && e.targetEntity !== playerState && e.targetEntity.hp <= 0);
+
+      if (shouldEngageRival) {
+        e.alertState = 'alerted';
+        e.targetEntity = nearestRival;
+        e.lastKnownPos = { x: nearestRival.x, y: nearestRival.y };
+        e.detectionMeter = 100;
+        e.lostSightTimer = 0;
+
+        if (nearestRival.alertState !== 'alerted' || (nearestRival.targetEntity === playerState && minRivalDist < 360)) {
+          nearestRival.alertState = 'alerted';
+          nearestRival.targetEntity = e;
+          nearestRival.lastKnownPos = { x: e.x, y: e.y };
+          nearestRival.detectionMeter = 100;
+          nearestRival.lostSightTimer = 0;
+        }
+      }
+    } else if (e.targetEntity && e.targetEntity !== playerState && e.targetEntity.hp <= 0) {
+      e.targetEntity = null;
+      e.alertState = 'searching';
+      e.searchTimer = 3.0;
+    }
+
     // Active Target Selection
     let target = null;
     if (e.alertState === 'alerted') {
       target = e.targetEntity || playerState;
+      if (target && target !== playerState && target.hp <= 0) {
+        e.targetEntity = null;
+        e.alertState = 'searching';
+        e.searchTimer = 3.0;
+        target = null;
+      }
     } else if (e.alertState === 'searching') {
-      // Sail towards the last known position to investigate
       target = e.lastKnownPos ? { x: e.lastKnownPos.x, y: e.lastKnownPos.y, angle: 0, radius: 10 } : null;
     }
 
@@ -896,7 +1380,7 @@ function updateGame(dt) {
       const targetDist = Math.hypot(target.x - e.x, target.y - e.y);
       const targetAngle = Math.atan2(target.y - e.y, target.x - e.x);
 
-      // Physical Ramming collision (Only when alerted and attacking, not searching empty ocean)
+      // Physical Ramming collision
       if (e.alertState === 'alerted') {
         const minTargetDist = e.radius + (target === playerState ? 20 : (target.radius || 20));
         if (targetDist < minTargetDist && targetDist > 0.001) {
@@ -908,7 +1392,13 @@ function updateGame(dt) {
           if (e.chargeState === 'charging' || e.clan === 'iron' || e.isMonster) {
             const ramDmg = Math.round(e.damage * (e.chargeState === 'charging' ? 1.4 : 0.85));
             target.hp -= ramDmg;
-            sound.playRamHit();
+            if (e.clan === 'iron') {
+              sound.playIronHit(target.x, target.y);
+            } else if (e.isMonster || e.clan === 'blood') {
+              sound.playMonsterHit(target.x, target.y);
+            } else {
+              sound.playRamHit();
+            }
             addFloatingText(`TERJANG! -${ramDmg}`, target.x, target.y, '#f87171', true);
 
             e.x += pushX * 55;
@@ -917,8 +1407,8 @@ function updateGame(dt) {
             e.orbitDir = Math.random() > 0.5 ? 1 : -1;
 
             if (e.chargeState === 'charging') {
-              e.chargeState = 'idle';
-              e.chargeTimer = 0;
+              e.chargeState = 'recovering';
+              e.recoveryTimer = 1.0;
             }
 
             if (target === playerState && playerState.hp <= 0) {
@@ -947,7 +1437,8 @@ function updateGame(dt) {
       if (e.disengageTimer > 0) {
         e.disengageTimer -= dt;
         const flankAngle = (target.angle || 0) + (Math.PI * 0.5) * e.orbitDir;
-        let flankDiff = flankAngle - e.angle;
+        const safeFlank = avoidIslandObstacles(e, flankAngle, 160);
+        let flankDiff = safeFlank - e.angle;
         while (flankDiff < -Math.PI) flankDiff += Math.PI * 2;
         while (flankDiff > Math.PI) flankDiff -= Math.PI * 2;
         e.angle += Math.sign(flankDiff) * Math.min(Math.abs(flankDiff), e.turnRate * 1.3 * dt);
@@ -965,14 +1456,13 @@ function updateGame(dt) {
         if (e.chargeState === 'idle') {
           let facingDiff = Math.abs(targetAngle - e.angle);
           while (facingDiff > Math.PI) facingDiff = Math.abs(facingDiff - Math.PI * 2);
-          if (!isSearching && e.specialCooldown <= 0 && targetDist < 240 && facingDiff < 0.6) {
+          if (!isSearching && e.specialCooldown <= 0 && targetDist < 260 && facingDiff < 0.65) {
             e.chargeState = 'windup';
             e.chargeTimer = 0.55;
             sound.playSteamHiss();
           }
         } else if (e.chargeState === 'windup') {
           e.chargeTimer -= dt;
-          // Steam venting from twin boiler pipes during windup
           if (Math.random() < 0.7) {
             entities.particles.push({
               x: e.x - Math.cos(e.angle) * 12 + (Math.random() - 0.5) * 8,
@@ -997,7 +1487,7 @@ function updateGame(dt) {
           e.x += Math.cos(e.angle) * chargeSpeed;
           e.y += Math.sin(e.angle) * chargeSpeed;
 
-          // 1. Violent glowing ram prow sparks
+          // Glowing ram sparks & soot particles
           const prowX = e.x + Math.cos(e.angle) * (e.radius + 8);
           const prowY = e.y + Math.sin(e.angle) * (e.radius + 8);
           for (let sp = 0; sp < 2; sp++) {
@@ -1014,7 +1504,6 @@ function updateGame(dt) {
             });
           }
 
-          // 2. Heavy twin boiler exhaust: black coal soot & glowing embers
           const aftX = e.x - Math.cos(e.angle) * (e.radius * 0.75);
           const aftY = e.y - Math.sin(e.angle) * (e.radius * 0.75);
           entities.particles.push({
@@ -1028,47 +1517,34 @@ function updateGame(dt) {
             size: 6 + Math.random() * 6
           });
 
-          // 3. Dense frothing charge wake
-          if (Math.random() < 0.85) {
-            entities.seaRipples.push({
-              x: aftX,
-              y: aftY,
-              radius: 8,
-              maxRadius: 32,
-              alpha: 0.7,
-              decay: 1.3,
-              color: 'rgba(255, 255, 255, '
-            });
-          }
-
-          // 4. Violent bow wave foaming spray on port & starboard
-          [-1, 1].forEach(side => {
-            const sideAng = e.angle + (Math.PI / 2) * side;
-            entities.particles.push({
-              x: e.x + Math.cos(sideAng) * (e.radius * 0.8),
-              y: e.y + Math.sin(sideAng) * (e.radius * 0.8),
-              vx: Math.cos(sideAng) * 2.5 + Math.cos(e.angle) * 1.2,
-              vy: Math.sin(sideAng) * 2.5 + Math.sin(e.angle) * 1.2,
-              life: 0.3,
-              maxLife: 0.3,
-              color: 'rgba(255, 255, 255, 0.8)',
-              size: 3 + Math.random() * 3
-            });
-          });
-
-          // 5. Screen rumble when charging near player
           if (targetDist < 350) {
             screenShake = Math.max(screenShake, 5);
           }
 
-          if (e.chargeTimer <= 0 || targetDist > 380) {
+          if (e.chargeTimer <= 0) {
+            // Charging selesai -> masuki recovery drift turnaround
+            e.chargeState = 'recovering';
+            e.recoveryTimer = 1.3;
+            e.specialCooldown = 4.0 + Math.random() * 2.5;
+          }
+        } else if (e.chargeState === 'recovering') {
+          e.recoveryTimer -= dt;
+          // Drift turnaround rudder: manuver putar balik cepat agar tidak kehilangan jejak!
+          let angleDiff = targetAngle - e.angle;
+          while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+          while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+          e.angle += Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), e.turnRate * 2.4 * dt);
+          e.x += Math.cos(e.angle) * (cruiseSpeed * 0.75);
+          e.y += Math.sin(e.angle) * (cruiseSpeed * 0.75);
+
+          if (e.recoveryTimer <= 0 || Math.abs(angleDiff) < 0.35) {
             e.chargeState = 'idle';
-            e.specialCooldown = 4.5 + Math.random() * 2.5;
           }
         }
 
-        if (e.chargeState !== 'charging') {
+        if (e.chargeState === 'idle') {
           let targetCourseAngle = (targetDist > e.preferredDist + 40 || isSearching) ? targetAngle : (targetAngle + (Math.PI / 2) * e.orbitDir);
+          targetCourseAngle = avoidIslandObstacles(e, targetCourseAngle, 175);
           let angleDiff = targetCourseAngle - e.angle;
           while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
           while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
@@ -1085,40 +1561,59 @@ function updateGame(dt) {
           }
         }
       } else if (e.clan === 'mist') {
-        let targetCourseAngle = (!isSearching && targetDist < e.preferredDist - 40) ? (targetAngle + Math.PI) : (targetAngle + (Math.PI / 2) * e.orbitDir);
-        if (isSearching) targetCourseAngle = targetAngle;
+        // Mist tactical spellcasting: shadow and kite dynamically
+        let targetCourseAngle = targetAngle;
+        if (!isSearching) {
+          if (targetDist < 180) {
+            targetCourseAngle = targetAngle + Math.PI; // Kite backward
+          } else if (targetDist > 300) {
+            targetCourseAngle = targetAngle; // Shadow / cut off
+          } else {
+            targetCourseAngle = targetAngle + (Math.PI / 2) * e.orbitDir; // Broadside orbit
+          }
+        }
+        targetCourseAngle = avoidIslandObstacles(e, targetCourseAngle, 175);
 
         let angleDiff = targetCourseAngle - e.angle;
         while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
         while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-        e.angle += Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), e.turnRate * dt);
-        e.x += Math.cos(e.angle) * cruiseSpeed;
-        e.y += Math.sin(e.angle) * cruiseSpeed;
+        e.angle += Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), e.turnRate * 1.3 * dt);
+        const mSpeed = (!isSearching && targetDist > 300) ? cruiseSpeed * 1.35 : cruiseSpeed;
+        e.x += Math.cos(e.angle) * mSpeed;
+        e.y += Math.sin(e.angle) * mSpeed;
 
         if (!isSearching) {
           e.specialCooldown -= dt;
-          if (e.specialCooldown <= 0 && targetDist < 380) {
-            e.specialCooldown = 3.2 + Math.random() * 2.0;
-            fireSpiritWisps(e);
+          if (e.specialCooldown <= 0 && targetDist < 420) {
+            e.specialCooldown = 3.0 + Math.random() * 1.8;
+            fireSpiritWisps(e, target);
           }
         }
       } else if (e.clan === 'blood') {
         e.specialCooldown -= dt;
-        let angleDiff = targetAngle - e.angle;
+        let monsterHeading = avoidIslandObstacles(e, targetAngle, 160);
+        let angleDiff = monsterHeading - e.angle;
         while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
         while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
         e.angle += Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), e.turnRate * dt);
-        const surge = (!isSearching && targetDist < 140) ? 1.6 : 1.0;
+        const surge = (!isSearching && targetDist < 160) ? 1.7 : 1.0;
         e.x += Math.cos(e.angle) * (cruiseSpeed * surge);
         e.y += Math.sin(e.angle) * (cruiseSpeed * surge);
 
-        if (!isSearching && e.specialCooldown <= 0 && targetDist < 300) {
+        if (!isSearching && surge > 1.0) {
+          sound.playMonsterCharge(e.x, e.y);
+        } else if (targetDist < 450) {
+          sound.playMonsterMove(e.x, e.y);
+        }
+
+        if (!isSearching && e.specialCooldown <= 0 && targetDist < 340) {
           e.specialCooldown = 2.8 + Math.random() * 1.5;
           fireChitinSpikes(e, e.tier >= 3);
         }
       } else {
         // Batavia
         let targetCourseAngle = (targetDist > e.preferredDist + 40 || isSearching) ? targetAngle : (targetAngle + (Math.PI / 2) * e.orbitDir);
+        targetCourseAngle = avoidIslandObstacles(e, targetCourseAngle, 175);
         let angleDiff = targetCourseAngle - e.angle;
         while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
         while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
@@ -1128,14 +1623,14 @@ function updateGame(dt) {
 
         if (!isSearching) {
           e.shootCooldown -= dt;
-          if (e.shootCooldown <= 0 && targetDist < 320) {
-            e.shootCooldown = 2.0 + Math.random() * 1.4;
+          if (e.shootCooldown <= 0 && targetDist < 350) {
+            e.shootCooldown = 1.8 + Math.random() * 1.3;
             fireCannons(e, target, false);
           }
         }
       }
     } else {
-      // Passive Patrol Route circling dock
+      // Passive Navigation: Convoys, Rituals, Monster Pairs, Island Guards, and Solitary Ships
       if (e.homeIslandId) {
         const homeIsl = WORLD_ISLANDS.find(i => i.id === e.homeIslandId);
         if (homeIsl) {
@@ -1152,6 +1647,151 @@ function updateGame(dt) {
           e.angle += Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), e.turnRate * dt);
           e.x += Math.cos(e.angle) * (e.speed * 0.7);
           e.y += Math.sin(e.angle) * (e.speed * 0.7);
+          if (e.clan === 'blood' && Math.hypot(e.x - playerState.x, e.y - playerState.y) < 420) {
+            sound.playMonsterMove(e.x, e.y);
+          }
+        }
+      } else if (e.formationType === 'mist_ritual' && e.ritualCenter) {
+        // Mist Cultists orbiting in sacred circle
+        if (e.formationRole === 'leader') {
+          e.ritualCenter.angle += 0.28 * dt;
+        }
+        const ang = e.ritualCenter.angle + (e.formationIndex / e.formationTotal) * Math.PI * 2;
+        const targetX = e.ritualCenter.x + Math.cos(ang) * 85;
+        const targetY = e.ritualCenter.y + Math.sin(ang) * 85;
+        const desiredHeading = ang + Math.PI / 2;
+
+        const dToPos = Math.hypot(targetX - e.x, targetY - e.y);
+        const steerAngle = dToPos > 25 ? Math.atan2(targetY - e.y, targetX - e.x) : desiredHeading;
+
+        let angleDiff = steerAngle - e.angle;
+        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        e.angle += Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), e.turnRate * 1.5 * dt);
+        e.x += Math.cos(e.angle) * (e.speed * 0.55);
+        e.y += Math.sin(e.angle) * (e.speed * 0.55);
+
+        // Ritual center particle wisps
+        if (e.formationRole === 'leader' && Math.random() < 0.25) {
+          entities.particles.push({
+            x: e.ritualCenter.x + (Math.random() - 0.5) * 45,
+            y: e.ritualCenter.y + (Math.random() - 0.5) * 45,
+            vx: (Math.random() - 0.5) * 0.8,
+            vy: -0.9 - Math.random() * 0.9,
+            life: 0.7,
+            color: '#22d3ee',
+            size: 2.8
+          });
+        }
+      } else if (e.formationType === 'monster_pair' && e.convoyId) {
+        const alpha = entities.enemies.find(m => m.convoyId === e.convoyId && m.formationRole === 'monster_alpha');
+        if (e.formationRole === 'monster_alpha' || !alpha || alpha === e) {
+          // Alpha cruises open waters smoothly
+          e.patrolAngle = (e.patrolAngle || e.angle) + (Math.random() - 0.5) * 0.03;
+          let angleDiff = e.patrolAngle - e.angle;
+          while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+          while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+          e.angle += Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), e.turnRate * dt);
+          e.x += Math.cos(e.angle) * (e.speed * 0.65);
+          e.y += Math.sin(e.angle) * (e.speed * 0.65);
+        } else {
+          // Juvenile accompanies Alpha, weaving alongside
+          const weave = Math.sin(Date.now() * 0.0025) * 0.35;
+          const targetX = alpha.x + Math.cos(alpha.angle + 2.2 + weave) * 52;
+          const targetY = alpha.y + Math.sin(alpha.angle + 2.2 + weave) * 52;
+          const headingToLead = Math.atan2(targetY - e.y, targetX - e.x);
+          let angleDiff = headingToLead - e.angle;
+          while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+          while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+          e.angle += Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), e.turnRate * 1.5 * dt);
+          const dToSlot = Math.hypot(targetX - e.x, targetY - e.y);
+          const spd = dToSlot > 80 ? e.speed * 1.2 : e.speed * 0.75;
+          e.x += Math.cos(e.angle) * spd;
+          e.y += Math.sin(e.angle) * spd;
+        }
+        if (Math.hypot(e.x - playerState.x, e.y - playerState.y) < 420) {
+          sound.playMonsterMove(e.x, e.y);
+        }
+      } else if (e.convoyId) {
+        // Convoy fleet navigation (Batavia column & Iron wedge)
+        const leader = entities.enemies.find(c => c.convoyId === e.convoyId && c.formationRole === 'leader') || e;
+        if (e === leader || leader === e) {
+          // Leader conducts purposeful human voyage between island ports
+          updateHumanVoyage(e, dt);
+        } else {
+          // Escort / Wing maintains assigned slot relative to leader
+          let slotX = leader.x;
+          let slotY = leader.y;
+
+          if (e.formationType === 'batavia_column') {
+            const distBehind = (e.formationIndex || 1) * 75;
+            slotX = leader.x + Math.cos(leader.angle + Math.PI) * distBehind;
+            slotY = leader.y + Math.sin(leader.angle + Math.PI) * distBehind;
+          } else if (e.formationType === 'iron_wedge') {
+            const side = e.formationRole === 'wing_left' ? 2.4 : (e.formationRole === 'wing_right' ? -2.4 : Math.PI);
+            const distFromLead = e.formationRole === 'escort_rear' ? 115 : 78;
+            slotX = leader.x + Math.cos(leader.angle + side) * distFromLead;
+            slotY = leader.y + Math.sin(leader.angle + side) * distFromLead;
+          }
+
+          const distToSlot = Math.hypot(slotX - e.x, slotY - e.y);
+
+          if (leader.isAnchored || leader.voyageState === 'docked') {
+            // Convoy flagship is docked at harbor! Escorts anchor in their slots
+            e.isAnchored = true;
+            if (distToSlot > 12) {
+              const angleToSlot = Math.atan2(slotY - e.y, slotX - e.x);
+              let angleDiff = angleToSlot - e.angle;
+              while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+              while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+              e.angle += Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), e.turnRate * dt);
+              const dockSpeed = Math.min(e.speed * 0.45, distToSlot * 0.08);
+              e.x += Math.cos(e.angle) * dockSpeed;
+              e.y += Math.sin(e.angle) * dockSpeed;
+            } else {
+              e.angle += Math.sin(Date.now() * 0.0012 + (e.id || 0)) * 0.002;
+            }
+          } else {
+            // Voyaging fleet: smoothly blend heading and throttle speed
+            e.isAnchored = false;
+            const angleToSlot = Math.atan2(slotY - e.y, slotX - e.x);
+            const slotWeight = Math.min(1, distToSlot / 35);
+            let desiredAngle = leader.angle;
+            if (slotWeight > 0.05) {
+              let diff = angleToSlot - leader.angle;
+              while (diff < -Math.PI) diff += Math.PI * 2;
+              while (diff > Math.PI) diff -= Math.PI * 2;
+              desiredAngle = leader.angle + diff * slotWeight;
+            }
+
+            let angleDiff = desiredAngle - e.angle;
+            while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+            e.angle += Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), e.turnRate * 1.8 * dt);
+
+            let speedMult = 0.65;
+            if (distToSlot > 75) speedMult = 1.15;
+            else if (distToSlot > 30) speedMult = 0.85;
+            else if (distToSlot < 14) speedMult = 0.5;
+
+            const moveStep = e.speed * speedMult;
+            e.x += Math.cos(e.angle) * moveStep;
+            e.y += Math.sin(e.angle) * moveStep;
+          }
+        }
+      } else {
+        // Solitary ship: purposeful voyage from island harbor to harbor!
+        if (e.clan !== 'blood') {
+          updateHumanVoyage(e, dt);
+        } else {
+          // Solitary deep monster roaming smoothly
+          e.patrolAngle = (e.patrolAngle || e.angle) + (Math.random() - 0.5) * 0.025;
+          let angleDiff = e.patrolAngle - e.angle;
+          while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+          while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+          e.angle += Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), e.turnRate * 0.8 * dt);
+          e.x += Math.cos(e.angle) * (e.speed * 0.5);
+          e.y += Math.sin(e.angle) * (e.speed * 0.5);
         }
       }
     }
@@ -1192,6 +1832,7 @@ function updateGame(dt) {
       } else {
         showToast(`Harta Karam Diangkat: +${nearWreck.goldReward} Koin!`, "gold");
       }
+      sound.playCoin();
       sound.playLoot();
       salvageProgress = 0;
       entities.sunkenShips = entities.sunkenShips.filter(s => !s.salvaged);
@@ -1212,12 +1853,13 @@ function updateGame(dt) {
         playerState.hp = Math.min(currentMaxHp, playerState.hp + 25);
         addFloatingText("+25 HP", playerState.x, playerState.y, '#34d399');
         showToast("Memungut Kayu Apung (+25 Lambung)", "check");
+        sound.playSplash();
       } else {
         playerState.gold += loot.value;
         addFloatingText(`+${loot.value} Koin`, playerState.x, playerState.y, '#fbbf24');
         showToast(`Peti Terapung: +${loot.value} Koin!`, "gold");
+        sound.playCoin();
       }
-      sound.playSplash();
       entities.floatingLoots.splice(i, 1);
     }
   }
@@ -1270,15 +1912,24 @@ function updateGame(dt) {
     seagullAwayTimer = 25.0 + Math.random() * 30.0;
   }
 
-  // Dynamic Battle Music (Fade in halus saat pertarungan banyak kapal, fade out halus saat selesai/lari)
-  const alertedCombatCount = entities.enemies.filter(e => 
-    e.alertState === 'alerted' && Math.hypot(e.x - playerState.x, e.y - playerState.y) < 700
-  ).length;
-  const isHighThreatNear = entities.enemies.some(e => 
-    e.alertState === 'alerted' && (e.tier >= 3 || e.isMonster) && Math.hypot(e.x - playerState.x, e.y - playerState.y) < 800
+  // Dynamic Battle Music (Mentrigger lagu tempur seketika saat berhadapan dengan konvoi terkoordinasi)
+  const activeConvoyCombat = entities.enemies.some(e => 
+    e.alertState === 'alerted' && e.convoyId && e.clan !== 'blood' && Math.hypot(e.x - playerState.x, e.y - playerState.y) < 950
   );
-  const inHeavyBattle = (alertedCombatCount >= 3) || isHighThreatNear;
+  const alertedCombatCount = entities.enemies.filter(e => 
+    e.alertState === 'alerted' && e.clan !== 'blood' && Math.hypot(e.x - playerState.x, e.y - playerState.y) < 750
+  ).length;
+  const isHighThreatShip = entities.enemies.some(e => 
+    e.alertState === 'alerted' && e.tier >= 3 && e.clan !== 'blood' && Math.hypot(e.x - playerState.x, e.y - playerState.y) < 800
+  );
+  const inHeavyBattle = activeConvoyCombat || (alertedCombatCount >= 2) || isHighThreatShip;
   sound.updateBattleMusic(inHeavyBattle, dt);
+
+  // Dynamic Abyssal Ambiance (Laut Darah atau saat diteror monster abisal di dekat kapal)
+  const nearAlertedMonster = entities.enemies.some(e => 
+    e.isMonster && e.alertState === 'alerted' && Math.hypot(e.x - playerState.x, e.y - playerState.y) < 850
+  );
+  sound.updateAbyssalAmbience(biome.isBloodSea || nearAlertedMonster, dt);
 
   // Particles, Ripples & Combat Text Lifecycle
   for (let i = entities.particles.length - 1; i >= 0; i--) {

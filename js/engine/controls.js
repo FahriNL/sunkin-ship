@@ -39,6 +39,7 @@ function updateJoystickPosition(clientX, clientY) {
 }
 
 function handleTouchStart(e) {
+  if (!isGameStarted || isGamePaused) return;
   sound.init();
   const touch = e.changedTouches ? e.changedTouches[0] : e;
   const rect = joystickZone.getBoundingClientRect();
@@ -121,9 +122,32 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
   }
 
+  // Escape handling: close active modal, otherwise toggle pause
+  if (e.code === 'Escape') {
+    const closed = closeAllModals();
+    if (!closed && isGameStarted) {
+      togglePauseModal();
+    }
+    return;
+  }
+
+  // P Key toggles pause
+  if (e.code === 'KeyP') {
+    if (isGameStarted) {
+      togglePauseModal();
+    }
+    return;
+  }
+
+  // F Key toggles fullscreen
+  if (e.code === 'KeyF') {
+    toggleFullscreen();
+    return;
+  }
+
   // Action Hotkeys
   if (e.code === 'KeyU') {
-    toggleUpgradeModal();
+    if (isGameStarted) toggleUpgradeModal();
     return;
   }
   if (e.code === 'KeyK' || e.code === 'KeyL') {
@@ -139,20 +163,17 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   if (e.code === 'KeyC') {
-    showCoordinates();
+    if (isGameStarted) showCoordinates();
     return;
   }
   if (e.code === 'KeyR') {
-    quickRepairShip();
+    if (isGameStarted && !isGamePaused) quickRepairShip();
     return;
   }
-  if (e.code === 'Escape') {
-    const closed = closeAllModals();
-    if (!closed) {
-      showToast("Game Berjalan (Tekan [H] untuk Bantuan)", "⚓");
-    }
-    return;
-  }
+
+  // Gate ship movement & firing while game is in menu or paused
+  if (!isGameStarted || isGamePaused) return;
+
   if (e.code === 'Space') {
     // Manual combat trigger
     if (playerState.upgrades.rearDefense > 0) {

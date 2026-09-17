@@ -3,6 +3,41 @@
    Shipyard Upgrades, Clan Codex Lore, Game Over Screen, Controls Guide, & SVG Audio
    ========================================================================== */
 
+const topHUD = document.getElementById('topHUD');
+const mainMenuModal = document.getElementById('mainMenuModal');
+const btnMainMenuPlay = document.getElementById('btnMainMenuPlay');
+const btnMainMenuSettings = document.getElementById('btnMainMenuSettings');
+const btnMainMenuCodex = document.getElementById('btnMainMenuCodex');
+const btnMainMenuControls = document.getElementById('btnMainMenuControls');
+
+const pauseModal = document.getElementById('pauseModal');
+const btnPauseGame = document.getElementById('btnPauseGame');
+const btnResumeGame = document.getElementById('btnResumeGame');
+const btnRestartGame = document.getElementById('btnRestartGame');
+const btnPauseSettings = document.getElementById('btnPauseSettings');
+const btnReturnToMainMenu = document.getElementById('btnReturnToMainMenu');
+
+const settingsModal = document.getElementById('settingsModal');
+const btnOpenSettings = document.getElementById('btnOpenSettings');
+const btnCloseSettings = document.getElementById('btnCloseSettings');
+const btnSaveSettings = document.getElementById('btnSaveSettings');
+const sliderMasterVol = document.getElementById('sliderMasterVol');
+const labelMasterVol = document.getElementById('labelMasterVol');
+const sliderAmbienceVol = document.getElementById('sliderAmbienceVol');
+const labelAmbienceVol = document.getElementById('labelAmbienceVol');
+const sliderSfxVol = document.getElementById('sliderSfxVol');
+const labelSfxVol = document.getElementById('labelSfxVol');
+const sliderBattleVol = document.getElementById('sliderBattleVol');
+const labelBattleVol = document.getElementById('labelBattleVol');
+const btnActionFullscreen = document.getElementById('btnActionFullscreen');
+const txtBtnFullscreen = document.getElementById('txtBtnFullscreen');
+const btnToggleFullscreen = document.getElementById('btnToggleFullscreen');
+const chkAutoFullscreen = document.getElementById('chkAutoFullscreen');
+const chkScreenShake = document.getElementById('chkScreenShake');
+const chkMuteAll = document.getElementById('chkMuteAll');
+
+let settingsReturnTarget = 'mainMenu'; // 'mainMenu' | 'pause' | 'game'
+
 const upgradeModal = document.getElementById('upgradeModal');
 const upgradeList = document.getElementById('upgradeList');
 const btnOpenUpgrade = document.getElementById('btnOpenUpgrade');
@@ -266,6 +301,277 @@ function quickRepairShip() {
 
 if (btnRepairShip) btnRepairShip.addEventListener('click', quickRepairShip);
 
+// Fullscreen Management API
+function toggleFullscreen(force) {
+  const isFs = Boolean(document.fullscreenElement || document.webkitFullscreenElement);
+  const shouldEnter = (typeof force === 'boolean') ? force : !isFs;
+  
+  if (shouldEnter) {
+    const docEl = document.documentElement;
+    if (docEl.requestFullscreen) {
+      docEl.requestFullscreen().catch(() => {});
+    } else if (docEl.webkitRequestFullscreen) {
+      docEl.webkitRequestFullscreen();
+    }
+  } else if (isFs) {
+    if (document.exitFullscreen) {
+      document.exitFullscreen().catch(() => {});
+    } else if (document.webkitExitFullscreen) {
+      document.webkitExitFullscreen();
+    }
+  }
+  updateFullscreenUI();
+}
+
+function updateFullscreenUI() {
+  const isFs = Boolean(document.fullscreenElement || document.webkitFullscreenElement);
+  if (txtBtnFullscreen) {
+    txtBtnFullscreen.innerText = isFs ? "Keluar" : "Aktifkan";
+  }
+}
+document.addEventListener('fullscreenchange', updateFullscreenUI);
+document.addEventListener('webkitfullscreenchange', updateFullscreenUI);
+
+if (btnActionFullscreen) btnActionFullscreen.addEventListener('click', () => toggleFullscreen());
+if (btnToggleFullscreen) btnToggleFullscreen.addEventListener('click', () => toggleFullscreen());
+
+// Settings Modal Management
+function openSettingsModal(fromTarget = 'game') {
+  sound.init();
+  settingsReturnTarget = fromTarget;
+  if (settingsModal) {
+    settingsModal.classList.remove('modal-enter');
+    settingsModal.classList.add('modal-active');
+  }
+  updateFullscreenUI();
+  if (isGameStarted) {
+    isGamePaused = true;
+  }
+}
+
+function closeSettingsModal() {
+  if (!settingsModal) return;
+  settingsModal.classList.remove('modal-active');
+  settingsModal.classList.add('modal-enter');
+
+  if (settingsReturnTarget === 'pause') {
+    if (pauseModal) {
+      pauseModal.classList.remove('modal-enter');
+      pauseModal.classList.add('modal-active');
+    }
+  } else if (settingsReturnTarget === 'mainMenu') {
+    // Keep main menu active
+  } else {
+    // Return to game
+    if (isGameStarted) {
+      isGamePaused = false;
+      lastTime = performance.now();
+    }
+  }
+}
+
+if (btnOpenSettings) btnOpenSettings.addEventListener('click', () => openSettingsModal(isGameStarted ? 'game' : 'mainMenu'));
+if (btnCloseSettings) btnCloseSettings.addEventListener('click', closeSettingsModal);
+if (btnSaveSettings) btnSaveSettings.addEventListener('click', closeSettingsModal);
+if (settingsModal) {
+  settingsModal.addEventListener('click', (e) => {
+    if (e.target === settingsModal) closeSettingsModal();
+  });
+}
+
+function initSettingsUI() {
+  if (sliderMasterVol) {
+    sliderMasterVol.value = Math.round(sound.masterVolume * 100);
+    labelMasterVol.innerText = `${sliderMasterVol.value}%`;
+    sliderMasterVol.addEventListener('input', (e) => {
+      const val = parseInt(e.target.value, 10);
+      labelMasterVol.innerText = `${val}%`;
+      sound.setMasterVolume(val / 100);
+    });
+  }
+  if (sliderAmbienceVol) {
+    sliderAmbienceVol.value = Math.round(sound.ambienceVolume * 100);
+    labelAmbienceVol.innerText = `${sliderAmbienceVol.value}%`;
+    sliderAmbienceVol.addEventListener('input', (e) => {
+      const val = parseInt(e.target.value, 10);
+      labelAmbienceVol.innerText = `${val}%`;
+      sound.setAmbienceVolume(val / 100);
+    });
+  }
+  if (sliderSfxVol) {
+    sliderSfxVol.value = Math.round(sound.sfxVolume * 100);
+    labelSfxVol.innerText = `${sliderSfxVol.value}%`;
+    sliderSfxVol.addEventListener('input', (e) => {
+      const val = parseInt(e.target.value, 10);
+      labelSfxVol.innerText = `${val}%`;
+      sound.setSfxVolume(val / 100);
+    });
+  }
+  if (sliderBattleVol) {
+    sliderBattleVol.value = Math.round(sound.battleVolume * 100);
+    labelBattleVol.innerText = `${sliderBattleVol.value}%`;
+    sliderBattleVol.addEventListener('input', (e) => {
+      const val = parseInt(e.target.value, 10);
+      labelBattleVol.innerText = `${val}%`;
+      sound.setBattleVolume(val / 100);
+    });
+  }
+  if (chkAutoFullscreen) {
+    chkAutoFullscreen.checked = sound.autoFullscreen;
+    chkAutoFullscreen.addEventListener('change', (e) => {
+      sound.autoFullscreen = e.target.checked;
+      sound.saveSettings();
+    });
+  }
+  if (chkScreenShake) {
+    chkScreenShake.checked = sound.screenShakeEnabled;
+    chkScreenShake.addEventListener('change', (e) => {
+      sound.screenShakeEnabled = e.target.checked;
+      sound.saveSettings();
+    });
+  }
+  if (chkMuteAll) {
+    chkMuteAll.checked = sound.muted;
+    chkMuteAll.addEventListener('change', (e) => {
+      sound.muted = e.target.checked;
+      if (soundIcon) {
+        soundIcon.innerHTML = sound.muted ? SVG_ICONS.soundOff : SVG_ICONS.soundOn;
+      }
+    });
+  }
+}
+initSettingsUI();
+
+// Main Menu Handlers
+function startGameFromMenu() {
+  sound.init();
+  sound.startAmbience();
+
+  if (sound.autoFullscreen) {
+    toggleFullscreen(true);
+  }
+
+  isGameStarted = true;
+  isGamePaused = false;
+  lastTime = performance.now();
+
+  // Hide Main Menu
+  if (mainMenuModal) {
+    mainMenuModal.classList.add('opacity-0', 'pointer-events-none');
+    mainMenuModal.classList.remove('opacity-100', 'pointer-events-auto');
+  }
+
+  // Reveal Top HUD, joystick & PC controls
+  if (topHUD) {
+    topHUD.classList.remove('opacity-0', 'pointer-events-none');
+    topHUD.classList.add('opacity-100');
+  }
+  const pcControlsBar = document.getElementById('pcControlsBar');
+  if (pcControlsBar) pcControlsBar.classList.remove('hidden');
+  const joystickWrapper = document.getElementById('joystickWrapper');
+  if (joystickWrapper) joystickWrapper.classList.remove('pointer-events-none');
+
+  showToast("Ekspedisi Dimulai! Berlayar menembus batas lautan.", "anchor");
+  updateHUD();
+}
+
+function returnToMainMenu() {
+  closePauseModal();
+  closeAllModals();
+
+  isGameStarted = false;
+  isGamePaused = true;
+
+  // Show Main Menu
+  if (mainMenuModal) {
+    mainMenuModal.classList.remove('opacity-0', 'pointer-events-none');
+    mainMenuModal.classList.add('opacity-100', 'pointer-events-auto');
+  }
+
+  // Hide Top HUD & controls
+  if (topHUD) {
+    topHUD.classList.add('opacity-0', 'pointer-events-none');
+    topHUD.classList.remove('opacity-100');
+  }
+  const pcControlsBar = document.getElementById('pcControlsBar');
+  if (pcControlsBar) pcControlsBar.classList.add('hidden');
+  const joystickWrapper = document.getElementById('joystickWrapper');
+  if (joystickWrapper) joystickWrapper.classList.add('pointer-events-none');
+}
+
+if (btnMainMenuPlay) btnMainMenuPlay.addEventListener('click', startGameFromMenu);
+if (btnMainMenuSettings) btnMainMenuSettings.addEventListener('click', () => openSettingsModal('mainMenu'));
+if (btnMainMenuCodex) btnMainMenuCodex.addEventListener('click', openLoreModal);
+if (btnMainMenuControls) btnMainMenuControls.addEventListener('click', openHelpModal);
+
+// Pause Menu Handlers
+function openPauseModal() {
+  if (!isGameStarted || (gameOverModal && gameOverModal.classList.contains('modal-active'))) return;
+  sound.init();
+  closeUpgradeModal();
+  closeLoreModal();
+  closeHelpModal();
+  if (settingsModal && settingsModal.classList.contains('modal-active')) {
+    settingsModal.classList.remove('modal-active');
+    settingsModal.classList.add('modal-enter');
+  }
+
+  if (pauseModal) {
+    pauseModal.classList.remove('modal-enter');
+    pauseModal.classList.add('modal-active');
+  }
+  isGamePaused = true;
+}
+
+function closePauseModal() {
+  if (!pauseModal) return;
+  pauseModal.classList.remove('modal-active');
+  pauseModal.classList.add('modal-enter');
+  if (isGameStarted) {
+    isGamePaused = false;
+    lastTime = performance.now();
+  }
+}
+
+function togglePauseModal() {
+  if (!isGameStarted) return;
+  if (pauseModal && pauseModal.classList.contains('modal-active')) {
+    closePauseModal();
+  } else {
+    openPauseModal();
+  }
+}
+
+function restartExpedition() {
+  resetRoguelikeRun();
+  closePauseModal();
+  closeAllModals();
+  isGamePaused = false;
+  lastTime = performance.now();
+  showToast("Ekspedisi baru dimulai! Map dan kapal telah direset.", "anchor");
+}
+
+if (btnPauseGame) btnPauseGame.addEventListener('click', openPauseModal);
+if (btnResumeGame) btnResumeGame.addEventListener('click', closePauseModal);
+if (btnRestartGame) btnRestartGame.addEventListener('click', restartExpedition);
+if (btnPauseSettings) btnPauseSettings.addEventListener('click', () => {
+  closePauseModal();
+  openSettingsModal('pause');
+});
+if (btnReturnToMainMenu) btnReturnToMainMenu.addEventListener('click', returnToMainMenu);
+if (pauseModal) {
+  pauseModal.addEventListener('click', (e) => {
+    if (e.target === pauseModal) closePauseModal();
+  });
+}
+
+// Auto-pause when window loses focus (blur) or tab switches
+window.addEventListener('blur', () => {
+  if (isGameStarted && !isGamePaused && gameOverModal && !gameOverModal.classList.contains('modal-active') && mainMenuModal && mainMenuModal.classList.contains('opacity-0')) {
+    openPauseModal();
+  }
+});
+
 // Close all active modals
 function closeAllModals() {
   let closedAny = false;
@@ -281,13 +587,26 @@ function closeAllModals() {
     closeHelpModal();
     closedAny = true;
   }
+  if (settingsModal && settingsModal.classList.contains('modal-active')) {
+    closeSettingsModal();
+    closedAny = true;
+  }
+  if (pauseModal && pauseModal.classList.contains('modal-active')) {
+    closePauseModal();
+    closedAny = true;
+  }
   return closedAny;
 }
 
-// Game Over Modal & Respawn
+// Game Over Modal & Hardcore Roguelike Respawn
 function triggerGameOver(reason) {
   isGamePaused = true;
   closeAllModals();
+  if (pauseModal) {
+    pauseModal.classList.remove('modal-active');
+    pauseModal.classList.add('modal-enter');
+  }
+
   const reasonEl = document.getElementById('gameOverReason');
   const statDistEl = document.getElementById('statMaxDist');
   const statKillsEl = document.getElementById('statKills');
@@ -298,6 +617,11 @@ function triggerGameOver(reason) {
   if (statKillsEl) statKillsEl.innerText = playerState.kills;
   if (statSalvagesEl) statSalvagesEl.innerText = playerState.salvages;
 
+  // Immediately wipe save data from localStorage on perma-death
+  try {
+    localStorage.removeItem(SAVE_KEY);
+  } catch (e) {}
+
   if (gameOverModal) {
     gameOverModal.classList.remove('modal-enter');
     gameOverModal.classList.add('modal-active');
@@ -306,15 +630,8 @@ function triggerGameOver(reason) {
 
 if (btnRespawn) {
   btnRespawn.addEventListener('click', () => {
-    playerState.x = PLAYER_SPAWN.x;
-    playerState.y = PLAYER_SPAWN.y;
-    playerState.angle = PLAYER_SPAWN.angle;
-    playerState.hp = getStatValue('hull', playerState.upgrades.hull);
-    entities.enemies = [];
-    entities.sinkingShips = [];
-    entities.projectiles = [];
-    entities.mines = [];
-    saveGame();
+    // Perform full roguelike reset: upgrades, stats, currencies, procedural island seeds
+    resetRoguelikeRun();
 
     if (gameOverModal) {
       gameOverModal.classList.remove('modal-active');
@@ -322,7 +639,7 @@ if (btnRespawn) {
     }
     isGamePaused = false;
     lastTime = performance.now();
-    showToast("Berlabuh kembali di Dermaga Nusa Damai.", "anchor");
+    showToast("Ekspedisi baru dimulai di Pelabuhan Nusa Damai!", "anchor");
   });
 }
 
@@ -332,6 +649,9 @@ function toggleSound() {
   sound.muted = !sound.muted;
   if (soundIcon) {
     soundIcon.innerHTML = sound.muted ? SVG_ICONS.soundOff : SVG_ICONS.soundOn;
+  }
+  if (chkMuteAll) {
+    chkMuteAll.checked = sound.muted;
   }
   showToast(sound.muted ? "Suara Dimatikan (Mute)" : "Suara Diaktifkan", sound.muted ? "alert" : "check");
 }
@@ -345,3 +665,4 @@ function showCoordinates() {
 }
 
 if (btnCenterCamera) btnCenterCamera.addEventListener('click', showCoordinates);
+
