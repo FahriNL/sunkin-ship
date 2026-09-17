@@ -3,9 +3,16 @@
    Broadside Cannons, Stern Chasers, Gunpowder Mines, Occult Wisps, & Chitin Spikes
    ========================================================================== */
 
-function fireCannons(source, target = null, isPlayer = false) {
+function normAngle(a) {
+  a = a % (Math.PI * 2);
+  if (a > Math.PI) a -= Math.PI * 2;
+  else if (a < -Math.PI) a += Math.PI * 2;
+  return a;
+}
+
+function fireCannons(source, target = null, isPlayer = false, customAimAngle = null) {
   const now = Date.now() / 1000;
-  const reloadDelay = isPlayer ? Math.max(0.4, 1.3 - (playerState.upgrades.speed - 1) * 0.1) : 2.2;
+  const reloadDelay = isPlayer ? Math.max(0.35, 1.3 - (playerState.upgrades.speed - 1) * 0.1) : 2.2;
 
   if (isPlayer && now - lastFireTime < reloadDelay) return;
   if (isPlayer) lastFireTime = now;
@@ -18,9 +25,31 @@ function fireCannons(source, target = null, isPlayer = false) {
   if (!isPlayer && target) {
     const targetAngle = Math.atan2(target.y - source.y, target.x - source.x);
     angles = [targetAngle];
+  } else if (isPlayer && customAimAngle !== null) {
+    // Dynamic Gun Carriage Traverse for Player Cannons:
+    // Accurately aims the broadside cannons towards targeted enemy ship or island tower
+    const portAngle = source.angle - Math.PI / 2;
+    const stbdAngle = source.angle + Math.PI / 2;
+
+    const diffPort = Math.abs(normAngle(customAimAngle - portAngle));
+    const diffStbd = Math.abs(normAngle(customAimAngle - stbdAngle));
+
+    const chosenSide = (diffPort < diffStbd) ? portAngle : stbdAngle;
+    const diffChosen = normAngle(customAimAngle - chosenSide);
+
+    // Dynamic gunport traverse clamped to +/- 32 degrees (0.56 rad)
+    const traverse = Math.max(-0.56, Math.min(0.56, diffChosen));
+    const aimedAngle = chosenSide + traverse;
+
+    // The engaged broadside fires directly at the target; the opposite side fires perpendicular
+    angles = [aimedAngle, (diffPort < diffStbd) ? stbdAngle : portAngle];
   }
 
-  const damage = isPlayer ? getStatValue('cannons', playerState.upgrades.cannons) : source.damage;
+  const diffCfg = (typeof getDifficultyConfig === 'function') ? getDifficultyConfig() : { playerDamageDealtMult: 1 };
+  let damage = isPlayer ? getStatValue('cannons', playerState.upgrades.cannons) : source.damage;
+  if (isPlayer && diffCfg.playerDamageDealtMult) {
+    damage *= diffCfg.playerDamageDealtMult;
+  }
   const count = isPlayer ? Math.min(4, 1 + Math.floor(playerState.upgrades.cannons / 2)) : Math.max(1, source.tier || 1);
 
   angles.forEach(sideAngle => {
@@ -47,12 +76,12 @@ function fireCannons(source, target = null, isPlayer = false) {
         sourceClan: isPlayer ? 'player' : source.clan,
         x: muzzleX,
         y: muzzleY,
-        vx: Math.cos(fireDir) * (isPlayer ? 7.2 : 6.4),
-        vy: Math.sin(fireDir) * (isPlayer ? 7.2 : 6.4),
-        radius: isPlayer ? 4.5 : 4,
+        vx: Math.cos(fireDir) * (isPlayer ? 7.6 : 6.4),
+        vy: Math.sin(fireDir) * (isPlayer ? 7.6 : 6.4),
+        radius: isPlayer ? 4.8 : 4,
         damage,
         isPlayer,
-        life: 1.25
+        life: 1.35
       });
     }
   });

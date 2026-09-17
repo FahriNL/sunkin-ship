@@ -61,6 +61,10 @@ let lastShipRank = -1;
 let lastStealthPercent = -1;
 let lastStealthState = '';
 let lastNeedleDeg = -999;
+let lastWindDeg = -999;
+let lastTreasureDeg = -999;
+let elWindNeedle = null;
+let elTreasureNeedle = null;
 
 const STEALTH_ICONS = {
   detected: `<svg class="w-4 h-4 text-rose-500 animate-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/><line x1="1" y1="1" x2="23" y2="23" stroke="#ef4444" stroke-width="2.5"/></svg>`,
@@ -75,6 +79,8 @@ function initHUDElements() {
   elBloodText = document.getElementById('bloodEssenceText');
   elDistText = document.getElementById('distanceText');
   elNeedle = document.getElementById('compassNeedle');
+  elWindNeedle = document.getElementById('windNeedle');
+  elTreasureNeedle = document.getElementById('treasureNeedle');
   elZoneInd = document.getElementById('zoneIndicator');
   elShipTitle = document.getElementById('shipTitle');
   elShipRankBadge = document.getElementById('shipRankBadge');
@@ -118,6 +124,28 @@ function updateHUD() {
     if (deg !== lastNeedleDeg) {
       lastNeedleDeg = deg;
       elNeedle.style.transform = `rotate(${deg}deg)`;
+    }
+  }
+
+  if (elWindNeedle && typeof windAngle !== 'undefined') {
+    const windDeg = Math.round((windAngle * 180 / Math.PI) + 90);
+    if (windDeg !== lastWindDeg) {
+      lastWindDeg = windDeg;
+      elWindNeedle.style.transform = `rotate(${windDeg}deg)`;
+    }
+  }
+
+  if (elTreasureNeedle) {
+    if (typeof activeTreasureHint !== 'undefined' && activeTreasureHint) {
+      elTreasureNeedle.classList.remove('hidden');
+      const tAngle = Math.atan2(activeTreasureHint.y - playerState.y, activeTreasureHint.x - playerState.x);
+      const tDeg = Math.round((tAngle * 180 / Math.PI) + 90);
+      if (tDeg !== lastTreasureDeg) {
+        lastTreasureDeg = tDeg;
+        elTreasureNeedle.style.transform = `rotate(${tDeg}deg)`;
+      }
+    } else {
+      elTreasureNeedle.classList.add('hidden');
     }
   }
 

@@ -6,6 +6,19 @@
 let _cachedSalvageContainer = null;
 let _cachedSalvageCircle = null;
 let _lastSpawnCheck = 0;
+let peacefulSailTimer = 0;
+let subsurfaceShadow = {
+  active: false,
+  x: 0,
+  y: 0,
+  heading: 0,
+  speed: 45,
+  timer: 0,
+  progress: 0,
+  maxDuration: 8.0,
+  length: 190,
+  width: 52
+};
 
 function normAngle(a) {
   a = a % (Math.PI * 2);
@@ -23,6 +36,10 @@ function hasLineOfSight(x1, y1, x2, y2) {
 
   const steps = Math.ceil(dist / 35);
   for (let s = 1; s < steps; s++) {
+    const distFromStart = (s / steps) * dist;
+    const distFromEnd = dist - distFromStart;
+    if (distFromStart < 35 || distFromEnd < 35) continue; // Avoid coastal self-shadowing
+
     const tx = x1 + (dx / steps) * s;
     const ty = y1 + (dy / steps) * s;
     for (let i = 0; i < WORLD_ISLANDS.length; i++) {
@@ -109,6 +126,27 @@ function avoidIslandObstacles(ship, desiredHeading, lookahead = 175) {
 }
 
 function updateHumanVoyage(e, dt) {
+  // Scavenger guarding a sunken shipwreck
+  if (e.guardWreckId) {
+    const wreck = entities.sunkenShips.find(s => s.id === e.guardWreckId && !s.salvaged);
+    if (wreck) {
+      const wdx = wreck.x - e.x, wdy = wreck.y - e.y;
+      const wdist = Math.sqrt(wdx * wdx + wdy * wdy);
+      // Orbit around the guarded shipwreck
+      const orbitAng = Math.atan2(wdy, wdx) + Math.PI * 0.5;
+      const heading = wdist > 150 ? Math.atan2(wdy, wdx) : orbitAng;
+      const safeHeading = avoidIslandObstacles(e, heading, 85);
+      let diff = normAngle(safeHeading - e.angle);
+      e.angle += Math.sign(diff) * Math.min(Math.abs(diff), e.turnRate * 1.1 * dt);
+      const cruiseSpeed = e.speed * 0.6;
+      e.x += Math.cos(e.angle) * cruiseSpeed;
+      e.y += Math.sin(e.angle) * cruiseSpeed;
+      return;
+    } else {
+      e.guardWreckId = null; // Wreck salvaged or gone, convert to regular voyager
+    }
+  }
+
   if (e.isAnchored || e.voyageState === 'docked') {
     e.dockTimer = (e.dockTimer || 20) - dt;
     // Gentle bobbing at harbor anchor with ocean swell
@@ -159,23 +197,48 @@ function updateHumanVoyage(e, dt) {
   e.y += Math.sin(e.angle) * cruiseSpeed;
 }
 
-let encounterSpawnCooldown = 3.0;
+let encounterSpawnCooldown = 2.0;
+let sunkenShipCooldown = 0;
+
+// Spawn floating combat spoils when ships sink in battle
+function createCombatDebris(x, y, tier) {
+  if (entities.floatingLoots.length < 4 && Math.random() < 0.75) {
+    entities.floatingLoots.push({
+      id: Math.random(),
+      x: x + (Math.random() - 0.5) * 26,
+      y: y + (Math.random() - 0.5) * 26,
+      type: Math.random() > 0.4 ? 'gold' : 'repair',
+      value: Math.floor(16 + Math.random() * 24 * (tier || 1)),
+      bobOffset: Math.random() * 10
+    });
+  }
+}
 
 function spawnWorldEntities() {
+  const isMobile = isMobileDevice();
+  // Adaptive Draw Distance & Density parameters (PC vs Mobile)
+  const maxEnemies = isMobile ? 14 : 16;
+  const minLocalEnemies = isMobile ? 3 : 4;
+  const localRadius = isMobile ? 1350 : 1750;
+  const recycleDist = isMobile ? 1900 : 2500;
+  const spawnDistMin = isMobile ? 720 : 950;
+  const spawnDistMax = isMobile ? 980 : 1300;
+
   const playerDist = Math.sqrt((playerState.x) * (playerState.x) + (playerState.y) * (playerState.y));
   const biome = getBiomeInfo(playerDist);
 
-  // Distance-Based Entity Recycling: Only despawn unaware enemies when far away (> 3400px)
-  const maxEnemyDist = 3400;
+  // 1. Distance-Based Entity Recycling: Only despawn unaware enemies when beyond recycleDist
   for (let i = entities.enemies.length - 1; i >= 0; i--) {
     const e = entities.enemies[i];
     const dx = e.x - playerState.x, dy = e.y - playerState.y;
-    if (dx * dx + dy * dy >= maxEnemyDist * maxEnemyDist && e.alertState !== 'alerted') {
+    // Keep ships that are currently fighting the player
+    if (dx * dx + dy * dy >= recycleDist * recycleDist && e.alertState !== 'alerted') {
       entities.enemies.splice(i, 1);
     }
   }
 
-  const maxPropDist = 2600;
+  // Despawn props when beyond maxPropDist
+  const maxPropDist = isMobile ? 1900 : 2500;
   for (let i = entities.sunkenShips.length - 1; i >= 0; i--) {
     const s = entities.sunkenShips[i];
     const dx = s.x - playerState.x, dy = s.y - playerState.y;
@@ -198,12 +261,22 @@ function spawnWorldEntities() {
     }
   }
 
+  // 2. Count active enemies in the player's immediate cruising sector
+  let localEnemiesCount = 0;
+  for (let i = 0; i < entities.enemies.length; i++) {
+    const e = entities.enemies[i];
+    const dx = e.x - playerState.x, dy = e.y - playerState.y;
+    if (dx * dx + dy * dy < localRadius * localRadius) {
+      localEnemiesCount++;
+    }
+  }
+
   // Maintain docked clan guards / island patrols (Max 1 guard per outpost)
   WORLD_ISLANDS.forEach(isl => {
-    const distToPlayer = Math.sqrt((isl.x - playerState.x) * (isl.x - playerState.x) + (isl.y - playerState.y) * (isl.y - playerState.y));
-    if (distToPlayer < 1400 && isl.clan !== 'neutral') {
+    const distToPlayerSq = (isl.x - playerState.x) * (isl.x - playerState.x) + (isl.y - playerState.y) * (isl.y - playerState.y);
+    if (distToPlayerSq < 1400 * 1400 && isl.clan !== 'neutral') {
       const islandGuards = entities.enemies.filter(e => e.homeIslandId === isl.id);
-      if (islandGuards.length < 1) {
+      if (islandGuards.length < 1 && entities.enemies.length < maxEnemies) {
         const spawnAngle = (isl.dockAngle !== undefined ? isl.dockAngle : 0) + (Math.random() - 0.5) * 0.9;
         const rAtAng = getIslandRadiusAt(isl, spawnAngle);
         const spawnDist = rAtAng + 45 + Math.random() * 55;
@@ -220,14 +293,21 @@ function spawnWorldEntities() {
     }
   });
 
-  // Open Ocean Structured Encounters (Cap: 16 enemies total)
-  encounterSpawnCooldown -= 0.016;
-  const maxEnemies = 16;
-  if (entities.enemies.length < maxEnemies && encounterSpawnCooldown <= 0) {
-    encounterSpawnCooldown = 3.5 + Math.random() * 4.0; // Responsive 3.5-7.5s interval
-    const spawnAngle = Math.random() * Math.PI * 2;
-    // Spawn off-screen (1150 - 1550px away from player)
-    const spawnDist = 1150 + Math.random() * 400;
+  // 3. Open Ocean Forward Intercept Encounters
+  const shouldSpawnEncounter = entities.enemies.length < maxEnemies && 
+    (encounterSpawnCooldown <= 0 || (localEnemiesCount < minLocalEnemies && encounterSpawnCooldown <= 1.0));
+
+  if (shouldSpawnEncounter) {
+    encounterSpawnCooldown = localEnemiesCount < minLocalEnemies 
+      ? (1.8 + Math.random() * 1.5) 
+      : (3.2 + Math.random() * 2.2);
+
+    // Forward Intercept Arc: Spawn ahead of the player's heading (+/- 45 to 65 degrees)
+    const isMoving = (typeof joystickState !== 'undefined' && joystickState.active) || 
+                     (typeof keys !== 'undefined' && (keys['KeyW'] || keys['ArrowUp'] || keys['KeyS'] || keys['ArrowDown']));
+    const playerHeading = isMoving ? playerState.angle : (Math.random() * Math.PI * 2);
+    const spawnAngle = playerHeading + (Math.random() - 0.5) * 1.5;
+    const spawnDist = spawnDistMin + Math.random() * (spawnDistMax - spawnDistMin);
     const ex = playerState.x + Math.cos(spawnAngle) * spawnDist;
     const ey = playerState.y + Math.sin(spawnAngle) * spawnDist;
 
@@ -243,50 +323,79 @@ function spawnWorldEntities() {
 
     if (!insideIsland) {
       const distFromCenter = Math.sqrt((ex) * (ex) + (ey) * (ey));
-      // Safe Zone: No hostile armadas patrol inside Home Harbor waters (within 750px of center)
-      if (distFromCenter >= 750) {
-        const encounterAngle = Math.random() * Math.PI * 2;
+      // Safe Zone: No hostile armadas patrol inside Home Harbor waters (within 650px of center)
+      if (distFromCenter >= 650) {
+        // Course: Intersect or cross the player's path across shipping lanes
+        const angleToPlayer = Math.atan2(playerState.y - ey, playerState.x - ex);
+        const encounterAngle = angleToPlayer + (Math.random() - 0.5) * 1.2;
 
-        if (distFromCenter >= 4200) {
-          // BLOOD SEA / ABYSS: 45% Monster Pairs (Mother + Juvenile), 30% Solo Apex, 25% Mist Ritual
+        if (distFromCenter >= 5500) {
+          // 100% BLOOD SEA MONSTERS: Depth scaling with increasing ferocity & frequency
+          const depth = Math.min(1.0, (distFromCenter - 5500) / 2500);
+          encounterSpawnCooldown = Math.max(1.4, 3.8 - depth * 2.2 + Math.random() * 1.2);
           const roll = Math.random();
-          if (roll < 0.45) {
-            spawnMonsterPair(ex, ey, encounterAngle);
-          } else if (roll < 0.75) {
-            entities.enemies.push(createEnemyEntity('blood', 2, ex, ey, encounterAngle, {
-              formationType: 'solitary',
-              formationRole: 'solitary',
-              name: 'Leviathan Raksasa Purba'
-            }));
+
+          if (depth < 0.35) {
+            // Shallows of Blood Sea: Immediate Larva or Hydra encounters
+            if (roll < 0.55) {
+              entities.enemies.push(createEnemyEntity('blood', 0, ex, ey, encounterAngle, {
+                formationType: 'solitary',
+                formationRole: 'solitary'
+              }));
+            } else {
+              entities.enemies.push(createEnemyEntity('blood', 1, ex, ey, encounterAngle, {
+                formationType: 'solitary',
+                formationRole: 'solitary'
+              }));
+            }
+          } else if (depth < 0.75) {
+            // Mid Blood Sea: Monster Pairs or Hydra
+            if (roll < 0.50 && entities.enemies.length <= maxEnemies - 2) {
+              spawnMonsterPair(ex, ey, encounterAngle);
+            } else {
+              entities.enemies.push(createEnemyEntity('blood', 1, ex, ey, encounterAngle, {
+                formationType: 'solitary',
+                formationRole: 'solitary'
+              }));
+            }
           } else {
-            spawnMistRitual(ex, ey);
+            // Abyssal Core: Apex Leviathans & Aggressive Monster Packs
+            if (roll < 0.45 && entities.enemies.length <= maxEnemies - 2) {
+              spawnMonsterPair(ex, ey, encounterAngle);
+            } else {
+              entities.enemies.push(createEnemyEntity('blood', 2, ex, ey, encounterAngle, {
+                formationType: 'solitary',
+                formationRole: 'solitary',
+                name: 'Leviathan Raksasa Purba'
+              }));
+            }
           }
-        } else if (distFromCenter >= 2600) {
-          // MIST WATERS / SELAT KUTUKAN: 45% Mist Ritual Circle, 25% Iron Wedge, 30% Solitary Occult
+        } else if (distFromCenter >= 3800) {
+          // MIST WATERS: 35% Mist Ritual, 30% Iron Wedge, 35% Solitary Occult
           const roll = Math.random();
-          if (roll < 0.45) {
+          if (roll < 0.35 && entities.enemies.length <= maxEnemies - 3) {
             spawnMistRitual(ex, ey);
-          } else if (roll < 0.70) {
+          } else if (roll < 0.65 && entities.enemies.length <= maxEnemies - 3) {
             spawnIronWedge(ex, ey, encounterAngle);
           } else {
             spawnSolitaryShip(ex, ey, encounterAngle, 'mist', distFromCenter);
           }
-        } else if (distFromCenter >= 1600) {
-          // IRON SEAS / SELAT BESI: 40% Iron Wedge Armada, 25% Batavia Convoy, 35% Solitary
+        } else if (distFromCenter >= 2000) {
+          // IRON SEAS: 35% Iron Wedge, 30% Batavia Convoy, 35% Solitary Iron
           const roll = Math.random();
-          if (roll < 0.40) {
+          if (roll < 0.35 && entities.enemies.length <= maxEnemies - 3) {
             spawnIronWedge(ex, ey, encounterAngle);
-          } else if (roll < 0.65) {
+          } else if (roll < 0.65 && entities.enemies.length <= maxEnemies - 3) {
             spawnBataviaConvoy(ex, ey, encounterAngle);
           } else {
             spawnSolitaryShip(ex, ey, encounterAngle, 'iron', distFromCenter);
           }
         } else {
-          // BATAVIA SEAS: 40% Batavia Column Convoy, 25% Iron Wedge, 35% Solitary Merchant
+          // BATAVIA SEAS: 35% Batavia Convoy, 25% Iron Wedge, 40% Solitary Merchant
           const roll = Math.random();
-          if (roll < 0.40) {
+          if (roll < 0.35 && entities.enemies.length <= maxEnemies - 3) {
             spawnBataviaConvoy(ex, ey, encounterAngle);
-          } else if (roll < 0.65) {
+          } else if (roll < 0.60 && entities.enemies.length <= maxEnemies - 3) {
             spawnIronWedge(ex, ey, encounterAngle);
           } else {
             spawnSolitaryShip(ex, ey, encounterAngle, 'gold', distFromCenter);
@@ -296,46 +405,89 @@ function spawnWorldEntities() {
     }
   }
 
-  // Spawn Sunken Ships
-  if (entities.sunkenShips.length < 5) {
+  // 4. Guarded Sunken Ships (Contested Salvage POI, max 3)
+  sunkenShipCooldown -= 0.016;
+  if (entities.sunkenShips.length < 3 && sunkenShipCooldown <= 0) {
+    sunkenShipCooldown = 18.0 + Math.random() * 12.0; // 18-30s cooldown between spawns
     const sAngle = Math.random() * Math.PI * 2;
-    const sDist = 450 + Math.random() * 700;
+    const sDist = 650 + Math.random() * 650;
     const sx = playerState.x + Math.cos(sAngle) * sDist;
     const sy = playerState.y + Math.sin(sAngle) * sDist;
     const sDistCenter = Math.sqrt((sx) * (sx) + (sy) * (sy));
 
     let onLand = false;
-    WORLD_ISLANDS.forEach(isl => {
+    for (let i = 0; i < WORLD_ISLANDS.length; i++) {
+      const isl = WORLD_ISLANDS[i];
       const ang = Math.atan2(sy - isl.y, sx - isl.x);
-      if (Math.sqrt((sx - isl.x) * (sx - isl.x) + (sy - isl.y) * (sy - isl.y)) < getIslandRadiusAt(isl, ang) + 30) onLand = true;
-    });
+      if (Math.sqrt((sx - isl.x) * (sx - isl.x) + (sy - isl.y) * (sy - isl.y)) < getIslandRadiusAt(isl, ang) + 35) {
+        onLand = true;
+        break;
+      }
+    }
 
-    if (!onLand) {
+    if (!onLand && sDistCenter > 400) {
+      const wreckId = Math.random();
+      const isGuarded = Math.random() < 0.75;
+      const isAbyssal = sDistCenter >= 4200;
+
       entities.sunkenShips.push({
-        id: Math.random(),
+        id: wreckId,
         x: sx,
         y: sy,
         angle: Math.random() * Math.PI * 2,
         radius: 38,
-        salvageTime: 3.5,
+        salvageTime: 4.5,
         salvaged: false,
-        isAbyssal: sDistCenter >= 6800,
-        goldReward: Math.floor(25 + (sDistCenter / 150)),
-        bloodReward: sDistCenter >= 6800 ? Math.floor(8 + (sDistCenter - 6800) / 250) : 0
+        isAbyssal: isAbyssal,
+        isGuarded: isGuarded,
+        goldReward: Math.floor(45 + (sDistCenter / 120)),
+        bloodReward: isAbyssal ? Math.floor(5 + (sDistCenter - 4200) / 300) : 0
       });
+
+      // Spawn Scavenger / Guard Ship around the wreck
+      if (isGuarded && entities.enemies.length < maxEnemies) {
+        let guardClan = 'gold';
+        let tierIdx = 0;
+        if (sDistCenter >= 4200) {
+          guardClan = 'blood';
+          tierIdx = Math.random() < 0.5 ? 0 : 1;
+        } else if (sDistCenter >= 2600) {
+          guardClan = 'mist';
+          tierIdx = Math.random() < 0.6 ? 0 : 1;
+        } else if (sDistCenter >= 1600) {
+          guardClan = 'iron';
+          tierIdx = Math.random() < 0.6 ? 0 : 1;
+        } else {
+          guardClan = 'gold';
+          tierIdx = Math.random() < 0.7 ? 0 : 1;
+        }
+
+        const gAng = Math.random() * Math.PI * 2;
+        const gDist = 120 + Math.random() * 50;
+        const gx = sx + Math.cos(gAng) * gDist;
+        const gy = sy + Math.sin(gAng) * gDist;
+
+        entities.enemies.push(createEnemyEntity(guardClan, tierIdx, gx, gy, gAng + Math.PI / 2, {
+          formationType: 'solitary',
+          formationRole: 'scavenger',
+          guardWreckId: wreckId,
+          name: guardClan === 'blood' ? 'Pemakan Bangkai Palung' : `Pemburu Harta ${CLAN_LORE[guardClan].name}`
+        }));
+      }
     }
   }
 
-  // Spawn Floating Loot crates
-  if (entities.floatingLoots.length < 7) {
+  // 5. Floating Loot crates (capped at 3, spawned primarily from battle debris)
+  if (entities.floatingLoots.length < 3 && Math.random() < 0.006) {
     const fAngle = Math.random() * Math.PI * 2;
-    const fDist = 300 + Math.random() * 600;
+    const fDist = 450 + Math.random() * 450;
+    const rollBottle = (!activeTreasureHint && Math.random() < 0.28);
     entities.floatingLoots.push({
       id: Math.random(),
       x: playerState.x + Math.cos(fAngle) * fDist,
       y: playerState.y + Math.sin(fAngle) * fDist,
-      type: Math.random() > 0.3 ? 'gold' : 'repair',
-      value: Math.floor(10 + Math.random() * 20),
+      type: rollBottle ? 'bottle' : (Math.random() > 0.4 ? 'gold' : 'repair'),
+      value: rollBottle ? 50 : Math.floor(12 + Math.random() * 18),
       bobOffset: Math.random() * 10
     });
   }
@@ -344,6 +496,17 @@ function spawnWorldEntities() {
 function updateGame(dt) {
   const currentMaxHp = getStatValue('hull', playerState.upgrades.hull);
   const moveSpeed = getStatValue('speed', playerState.upgrades.speed);
+
+  // Dynamic Ocean Wind & Sailing Tailwind Bonus
+  windAngle += 0.0012 * dt;
+  const windAlignment = Math.cos(playerState.angle - windAngle);
+  const tailwindBonus = 1 + Math.max(0, windAlignment) * 0.15; // Up to +15% speed boost when running with wind!
+
+  // Iron Harpoon Snare Debuff
+  if (playerState.speedSnareTimer > 0) {
+    playerState.speedSnareTimer -= dt;
+  }
+  const snareMultiplier = (playerState.speedSnareTimer > 0) ? 0.65 : 1.0;
 
   // Joystick / Keyboard Steering & Movement
   let isPlayerMoving = false;
@@ -357,7 +520,7 @@ function updateGame(dt) {
     const turnSpeed = 3.2 * dt;
     playerState.angle += Math.sign(diff) * Math.min(Math.abs(diff), turnSpeed);
 
-    const currentSpeed = moveSpeed * joystickState.magnitude;
+    const currentSpeed = moveSpeed * joystickState.magnitude * tailwindBonus * snareMultiplier;
     playerState.x += Math.cos(playerState.angle) * currentSpeed;
     playerState.y += Math.sin(playerState.angle) * currentSpeed;
 
@@ -397,9 +560,86 @@ function updateGame(dt) {
     playerState.maxDistanceReached = distFromStart;
   }
 
-  // Biome & Blood Sea roar ambient
+  // Active Treasure Map proximity check
+  if (activeTreasureHint) {
+    const distToTreasure = Math.hypot(playerState.x - activeTreasureHint.x, playerState.y - activeTreasureHint.y);
+    if (distToTreasure < 140) {
+      showToast(`Harta Karun Terungkap: ${activeTreasureHint.name}!`, "compass");
+      playerState.gold += 80;
+      sound.playLoot();
+      activeTreasureHint = null;
+    }
+  }
+
+  // Subsurface Leviathan Shadow update
+  if (distFromStart >= 3200 && battleIntensityLevel === 0) {
+    subsurfaceShadow.timer += dt;
+    if (subsurfaceShadow.timer > 70 && !subsurfaceShadow.active) {
+      subsurfaceShadow.timer = 0;
+      subsurfaceShadow.active = true;
+      subsurfaceShadow.progress = 0;
+      subsurfaceShadow.heading = playerState.angle + (Math.random() > 0.5 ? 0.65 : -0.65);
+      subsurfaceShadow.x = playerState.x - Math.cos(subsurfaceShadow.heading) * 350;
+      subsurfaceShadow.y = playerState.y - Math.sin(subsurfaceShadow.heading) * 350;
+    }
+  }
+  if (subsurfaceShadow.active) {
+    subsurfaceShadow.progress += dt;
+    subsurfaceShadow.x += Math.cos(subsurfaceShadow.heading) * subsurfaceShadow.speed * dt;
+    subsurfaceShadow.y += Math.sin(subsurfaceShadow.heading) * subsurfaceShadow.speed * dt;
+    if (subsurfaceShadow.progress >= subsurfaceShadow.maxDuration) {
+      subsurfaceShadow.active = false;
+    }
+  }
+
+  // Peaceful Sailing Crew Whistle
+  if (isPlayerMoving && battleIntensityLevel === 0 && !getBiomeInfo(distFromStart).isBloodSea) {
+    peacefulSailTimer += dt;
+    if (peacefulSailTimer > 36) {
+      peacefulSailTimer = 0;
+      sound.playSeaShantyWhistle();
+    }
+  } else {
+    peacefulSailTimer = 0;
+  }
+
+  // Biome & Blood Sea roar ambient & First Encounter Ambush
   const biome = getBiomeInfo(distFromStart);
-  if (biome.isBloodSea) {
+  if (biome.bloodRatio > 0.05 || biome.isBloodSea) {
+    // Immediate Dramatic Ambush on first crossing into the Blood Sea!
+    if (!hasEnteredBloodSeaThisRun) {
+      hasEnteredBloodSeaThisRun = true;
+      screenShake = 16;
+      sound.playMonsterRoar(playerState.x, playerState.y);
+      sound.playEerieRoar();
+      showToast("PERINGATAN: Lautan memerah darah! Monster purba bangkit!", "skull");
+
+      // Instantly surface an abyssal monster hunter directly in front of the player's path
+      const ambushAngle = playerState.angle + (Math.random() - 0.5) * 0.4;
+      const ambushDist = 460;
+      const ax = playerState.x + Math.cos(ambushAngle) * ambushDist;
+      const ay = playerState.y + Math.sin(ambushAngle) * ambushDist;
+      entities.enemies.push(createEnemyEntity('blood', 1, ax, ay, ambushAngle + Math.PI, {
+        formationType: 'solitary',
+        formationRole: 'solitary',
+        name: 'Kraken Pemburu Pertama'
+      }));
+
+      // Surface water burst particles
+      for (let p = 0; p < 12; p++) {
+        entities.particles.push({
+          x: ax + (Math.random() - 0.5) * 30,
+          y: ay + (Math.random() - 0.5) * 30,
+          vx: (Math.random() - 0.5) * 3,
+          vy: (Math.random() - 0.5) * 3,
+          life: 1.2,
+          maxLife: 1.2,
+          size: 6 + Math.random() * 6,
+          color: '#e11d48'
+        });
+      }
+    }
+
     bloodSeaRoarTimer += dt;
     if (bloodSeaRoarTimer > 18) {
       bloodSeaRoarTimer = 0;
@@ -408,39 +648,73 @@ function updateGame(dt) {
     }
   }
 
-  // Broadside Cannons Auto-Fire
-  const fireDelay = Math.max(0.4, 1.3 - (playerState.upgrades.speed - 1) * 0.1);
+  // Broadside & Naval Battery Auto-Fire with Dynamic Traverse Aiming
+  const fireDelay = Math.max(0.35, 1.3 - (playerState.upgrades.speed - 1) * 0.1);
   const currentTimeSec = Date.now() / 1000;
 
   if (currentTimeSec - lastFireTime >= fireDelay) {
-    const targetInBroadside = entities.enemies.some(e => {
-      const dx = e.x - playerState.x, dy = e.y - playerState.y;
-      if (dx * dx + dy * dy > 260 * 260) return false;
-      const d = Math.sqrt(dx * dx + dy * dy);
-      if (!hasLineOfSight(playerState.x, playerState.y, e.x, e.y)) return false;
-      const angleToEnemy = Math.atan2(e.y - playerState.y, e.x - playerState.x);
-      let relativeAngle = Math.abs(angleToEnemy - playerState.angle);
-      while (relativeAngle > Math.PI) relativeAngle = Math.abs(relativeAngle - Math.PI * 2);
-      return relativeAngle > 0.65 && relativeAngle < 2.35;
-    });
+    let primaryTarget = null;
+    let targetAimAngle = null;
 
-    if (targetInBroadside) {
-      fireCannons(playerState, null, true);
+    // 1. Scan for nearby hostile island defenses (generous 450px range!)
+    for (let t = 0; t < entities.towers.length; t++) {
+      const tw = entities.towers[t];
+      if (tw.clan === 'neutral' || tw.defenseType === 'haven_bastion') continue;
+
+      const dx = tw.x - playerState.x, dy = tw.y - playerState.y;
+      const dSq = dx * dx + dy * dy;
+      if (dSq > 450 * 450) continue;
+      if (!hasLineOfSight(playerState.x, playerState.y, tw.x, tw.y)) continue;
+
+      const angToTw = Math.atan2(dy, dx);
+      let relAng = Math.abs(normAngle(angToTw - playerState.angle));
+
+      // Wide broadside arc + forward engagement (25 deg to 155 deg)
+      if (relAng > 0.35 && relAng < 2.8) {
+        primaryTarget = tw;
+        targetAimAngle = angToTw;
+        break;
+      }
+    }
+
+    // 2. Scan for enemy ships (range up to 330px)
+    if (!primaryTarget) {
+      for (let e = 0; e < entities.enemies.length; e++) {
+        const en = entities.enemies[e];
+        const dx = en.x - playerState.x, dy = en.y - playerState.y;
+        const dSq = dx * dx + dy * dy;
+        if (dSq > 330 * 330) continue;
+        if (!hasLineOfSight(playerState.x, playerState.y, en.x, en.y)) continue;
+
+        const angToEn = Math.atan2(dy, dx);
+        let relAng = Math.abs(normAngle(angToEn - playerState.angle));
+        if (relAng > 0.55 && relAng < 2.55) {
+          primaryTarget = en;
+          targetAimAngle = angToEn;
+          break;
+        }
+      }
+    }
+
+    if (primaryTarget) {
+      fireCannons(playerState, primaryTarget, true, targetAimAngle);
     }
   }
 
   // Rear Defense / Stern Chaser check
   if (playerState.upgrades.rearDefense > 0) {
-    const targetInRear = entities.enemies.some(e => {
+    const checkRear = (e) => {
       const dx = e.x - playerState.x, dy = e.y - playerState.y;
-      if (dx * dx + dy * dy > 220 * 220) return false;
-      const d = Math.sqrt(dx * dx + dy * dy);
+      if (dx * dx + dy * dy > 240 * 240) return false;
       if (!hasLineOfSight(playerState.x, playerState.y, e.x, e.y)) return false;
       const angleToEnemy = Math.atan2(e.y - playerState.y, e.x - playerState.x);
       let relativeAngle = Math.abs(angleToEnemy - playerState.angle);
       while (relativeAngle > Math.PI) relativeAngle = Math.abs(relativeAngle - Math.PI * 2);
       return relativeAngle >= 2.35;
-    });
+    };
+
+    const isHostileTowerRear = (tw) => tw.clan !== 'neutral' && tw.defenseType !== 'haven_bastion' && checkRear(tw);
+    const targetInRear = entities.enemies.some(checkRear) || entities.towers.some(isHostileTowerRear);
 
     if (targetInRear) {
       triggerPlayerRearDefense();
@@ -498,6 +772,7 @@ function updateGame(dt) {
     // Check proximity to Enemies
     for (let j = 0; j < entities.enemies.length; j++) {
       const e = entities.enemies[j];
+      if (e.clan === 'iron') continue; // Iron clan ships completely ignore spiked sea mines!
       const dx = e.x - sm.x, dy = e.y - sm.y;
       if (dx * dx + dy * dy < (e.radius + 25) * (e.radius + 25)) {
         sm.detonating = true;
@@ -513,10 +788,13 @@ function updateGame(dt) {
         sound.playMineExplosion(sm.x, sm.y);
         screenShake = Math.max(screenShake, 10);
 
+        const diffCfg = (typeof getDifficultyConfig === 'function') ? getDifficultyConfig() : { playerDamageReceivedMult: 1 };
+
         // Damage Player if in blast radius
         if (distToPlayer < 90) {
-          playerState.hp -= sm.damage;
-          addFloatingText(`LEDAKAN RANJAU! -${sm.damage}`, playerState.x, playerState.y, '#ef4444', true);
+          const dmg = Math.round(sm.damage * (diffCfg.playerDamageReceivedMult || 1.0));
+          playerState.hp -= dmg;
+          addFloatingText(`LEDAKAN RANJAU! -${dmg}`, playerState.x, playerState.y, '#ef4444', true);
           if (playerState.hp <= 0) {
             triggerGameOver("Kapal Anda hancur terkena ladang ranjau bertaji besi!");
           }
@@ -524,6 +802,7 @@ function updateGame(dt) {
 
         // Damage Enemies in blast radius
         entities.enemies.forEach(e => {
+          if (e.clan === 'iron') return; // Iron clan ships immune to spiked mine explosions!
           const dx = e.x - sm.x, dy = e.y - sm.y;
           if (dx * dx + dy * dy < 110 * 110) {
             e.hp -= sm.damage * 1.3;
@@ -550,63 +829,264 @@ function updateGame(dt) {
     }
   }
 
-  // Occult Watchtowers (Mist Atoll Spires)
+  // Active Island Defenses for all Island Clans (Cannon Bastions, Harpoon Turrets, Mist Spires, Tentacles)
   entities.towers.forEach(tw => {
-    tw.orbAngle += dt * 1.6;
-    tw.glowPulse = Math.sin(Date.now() * 0.003) * 0.5 + 0.5;
+    // 0. Proximity Sleep Culling: Skip heavy targeting and LOS math if beyond active combat radius
+    const dxP = playerState.x - tw.x, dyP = playerState.y - tw.y;
+    const distSqP = dxP * dxP + dyP * dyP;
+    if (distSqP > 1050 * 1050) {
+      tw.shootCooldown = Math.max(0, tw.shootCooldown - dt);
+      if (tw.slamCooldown > 0) tw.slamCooldown -= dt;
+      return;
+    }
 
     tw.shootCooldown -= dt;
-    if (tw.shootCooldown <= 0) {
-      // Find targets: Player or non-Mist ships within 440px range
-      const dx = playerState.x - tw.x, dy = playerState.y - tw.y;
-      const distToPlayer = Math.sqrt(dx * dx + dy * dy);
-      let target = null;
-      if (dx * dx + dy * dy < 440 * 440 && hasLineOfSight(tw.x, tw.y, playerState.x, playerState.y)) {
+    if (tw.slamCooldown > 0) tw.slamCooldown -= dt;
+
+    // Type-specific state updates
+    if (tw.defenseType === 'mist_spire') {
+      tw.orbAngle += dt * 1.6;
+      tw.glowPulse = Math.sin(Date.now() * 0.003) * 0.5 + 0.5;
+    } else if (tw.defenseType === 'steam_harpoon') {
+      tw.steamPuffTimer += dt;
+      if (tw.steamPuffTimer > 1.6) {
+        tw.steamPuffTimer = 0;
+        if (Math.random() < 0.7) {
+          entities.particles.push({
+            x: tw.x + Math.cos(tw.aimAngle + Math.PI * 0.5) * 12,
+            y: tw.y + Math.sin(tw.aimAngle + Math.PI * 0.5) * 12 - 14,
+            vx: (Math.random() - 0.5) * 1.2,
+            vy: -1.5 - Math.random() * 1.5,
+            life: 0.6,
+            maxLife: 0.6,
+            size: 4 + Math.random() * 4,
+            color: 'rgba(226, 232, 240, 0.7)'
+          });
+        }
+      }
+    } else if (tw.defenseType === 'tentacle') {
+      tw.wrigglePhase += dt * 3.2;
+    }
+
+    // 1. Target Selection
+    let target = null;
+    const maxRange = (tw.defenseType === 'mist_spire') ? 580 : (tw.defenseType === 'tentacle' ? 520 : 540);
+
+    if (tw.defenseType === 'haven_bastion') {
+      // Haven peacekeeper: ONLY targets hostile enemies that attack or approach Haven
+      const hostile = entities.enemies.find(e => e.clan !== 'neutral' && e.clan !== 'player' && ((e.x - tw.x) * (e.x - tw.x) + (e.y - tw.y) * (e.y - tw.y) < maxRange * maxRange));
+      if (hostile && hasLineOfSight(tw.x, tw.y, hostile.x, hostile.y)) {
+        target = hostile;
+      }
+    } else if (tw.defenseType === 'tentacle') {
+      // Abyssal Tentacle: attacks player or any ship near the fleshy island
+      if (distSqP < maxRange * maxRange && hasLineOfSight(tw.x, tw.y, playerState.x, playerState.y)) {
         target = playerState;
       } else {
-        // Target rival ships
-        const rival = entities.enemies.find(e => e.clan !== 'mist' && ((e.x - tw.x) * (e.x - tw.x) + (e.y - tw.y) * (e.y - tw.y) < 440 * 440));
+        const victim = entities.enemies.find(e => e.clan !== 'blood' && ((e.x - tw.x) * (e.x - tw.x) + (e.y - tw.y) * (e.y - tw.y) < maxRange * maxRange));
+        if (victim) target = victim;
+      }
+    } else {
+      // Clan Bastions & Turrets (Gold, Iron, Mist)
+      if (distSqP < maxRange * maxRange && hasLineOfSight(tw.x, tw.y, playerState.x, playerState.y)) {
+        target = playerState;
+      } else {
+        const rival = entities.enemies.find(e => e.clan !== tw.clan && ((e.x - tw.x) * (e.x - tw.x) + (e.y - tw.y) * (e.y - tw.y) < (maxRange - 20) * (maxRange - 20)));
         if (rival) target = rival;
       }
+    }
 
-      if (target) {
-        tw.shootCooldown = 3.0;
-        sound.playMistCast(tw.x, tw.y);
+    // 2. Attack Execution
+    if (tw.defenseType === 'tentacle') {
+      // Tentacle Dual-Mode Attack: Melee Slam (<210px) vs Ranged Blood Bile (210-520px)
+      if (tw.isSlamming) {
+        tw.slamProgress += dt * 2.2;
+        if (tw.slamProgress >= 1.0) {
+          const diffCfg = (typeof getDifficultyConfig === 'function') ? getDifficultyConfig() : { enemyReloadMultiplier: 1, playerDamageReceivedMult: 1 };
+          tw.isSlamming = false;
+          tw.slamCooldown = 2.6 * (diffCfg.enemyReloadMultiplier || 1.0);
+          sound.playMonsterAttack(tw.slamTargetX, tw.slamTargetY);
 
-        let tgtVx = 0;
-        let tgtVy = 0;
-        if (target === playerState) {
-          tgtVx = Math.cos(playerState.angle) * (playerState.speed || 0);
-          tgtVy = Math.sin(playerState.angle) * (playerState.speed || 0);
-        } else {
-          tgtVx = Math.cos(target.angle || 0) * (target.speed || 1.4);
-          tgtVy = Math.sin(target.angle || 0) * (target.speed || 1.4);
+          // Shockwave ripple and blood splashes
+          entities.seaRipples.push({
+            x: tw.slamTargetX,
+            y: tw.slamTargetY,
+            radius: 6,
+            maxRadius: 42,
+            alpha: 0.75,
+            color: 'rgba(225, 29, 72, '
+          });
+
+          for (let p = 0; p < 14; p++) {
+            const pang = (p / 14) * Math.PI * 2;
+            entities.particles.push({
+              x: tw.slamTargetX,
+              y: tw.slamTargetY,
+              vx: Math.cos(pang) * (2.5 + Math.random() * 3),
+              vy: Math.sin(pang) * (2.5 + Math.random() * 3),
+              life: 0.5,
+              maxLife: 0.5,
+              size: 4 + Math.random() * 4,
+              color: '#e11d48'
+            });
+          }
+
+          // Damage check within slam impact radius (85px)
+          const slamDx = playerState.x - tw.slamTargetX, slamDy = playerState.y - tw.slamTargetY;
+          if (slamDx * slamDx + slamDy * slamDy < 85 * 85) {
+            const dmg = Math.round(tw.damage * (diffCfg.playerDamageReceivedMult || 1.0));
+            playerState.hp -= dmg;
+            screenShake = 14;
+            sound.playHit(playerState.x, playerState.y);
+            addFloatingText(`-${dmg} Hantaman Tentakel!`, playerState.x, playerState.y, '#ef4444', true);
+            if (playerState.hp <= 0) triggerGameOver("Kapal Anda hancur lebur dihantam tentakel abisal!");
+          }
+
+          // Also check rival enemies in slam impact
+          entities.enemies.forEach(e => {
+            if (e.clan !== 'blood') {
+              const edx = e.x - tw.slamTargetX, edy = e.y - tw.slamTargetY;
+              if (edx * edx + edy * edy < 85 * 85) {
+                e.hp -= tw.damage;
+                addFloatingText(`-${Math.round(tw.damage)}`, e.x, e.y, '#f43f5e', true);
+              }
+            }
+          });
         }
+      } else if (target) {
+        const dToTgt = Math.hypot(target.x - tw.x, target.y - tw.y);
+        if (dToTgt < 210 && tw.slamCooldown <= 0) {
+          // Initiate slam towards target's current position
+          tw.isSlamming = true;
+          tw.slamProgress = 0;
+          tw.slamTargetX = target.x;
+          tw.slamTargetY = target.y;
+        } else if (dToTgt >= 210 && tw.shootCooldown <= 0) {
+          // Ranged Blood Bile Volley
+          const diffCfg = (typeof getDifficultyConfig === 'function') ? getDifficultyConfig() : { enemyReloadMultiplier: 1 };
+          tw.shootCooldown = (2.4 + Math.random() * 0.5) * (diffCfg.enemyReloadMultiplier || 1.0);
+          sound.playMonsterAttack(tw.x, tw.y);
+          const fireAngle = Math.atan2(target.y - tw.y, target.x - tw.x);
+          [-0.12, 0.12].forEach(spr => {
+            entities.projectiles.push({
+              type: 'blood_bile',
+              sourceClan: 'blood',
+              x: tw.x,
+              y: tw.y,
+              vx: Math.cos(fireAngle + spr) * 7.2,
+              vy: Math.sin(fireAngle + spr) * 7.2,
+              radius: 5.5,
+              damage: tw.damage * 0.65,
+              isPlayer: false,
+              life: 1.4
+            });
+          });
+        }
+      }
+    } else if (target) {
+      // Calculate smooth predictive aim
+      let tgtVx = 0;
+      let tgtVy = 0;
+      if (target === playerState) {
+        tgtVx = Math.cos(playerState.angle) * (playerState.speed || 0);
+        tgtVy = Math.sin(playerState.angle) * (playerState.speed || 0);
+      } else {
+        tgtVx = Math.cos(target.angle || 0) * (target.speed || 1.4);
+        tgtVy = Math.sin(target.angle || 0) * (target.speed || 1.4);
+      }
 
-        const dToTgt = Math.sqrt((target.x - tw.x) * (target.x - tw.x) + (target.y - tw.y) * (target.y - tw.y));
-        const pSpeed = 4.8;
-        const timeToHit = Math.min(1.4, dToTgt / pSpeed);
-        const aimX = target.x + tgtVx * timeToHit * 0.85;
-        const aimY = target.y + tgtVy * timeToHit * 0.85;
-        const fireAngle = Math.atan2(aimY - tw.y, aimX - tw.x);
+      const dToTgt = Math.hypot(target.x - tw.x, target.y - tw.y);
+      const projSpeed = (tw.defenseType === 'steam_harpoon') ? 9.2 : ((tw.defenseType === 'mist_spire') ? 4.8 : 6.8);
+      const timeToHit = Math.min(1.4, dToTgt / projSpeed);
+      const aimX = target.x + tgtVx * timeToHit * 0.85;
+      const aimY = target.y + tgtVy * timeToHit * 0.85;
+      const fireAngle = Math.atan2(aimY - tw.y, aimX - tw.x);
 
-        entities.projectiles.push({
-          type: 'spirit',
-          sourceClan: 'mist',
-          target: target,
-          x: tw.x,
-          y: tw.y - 15,
-          vx: Math.cos(fireAngle) * pSpeed,
-          vy: Math.sin(fireAngle) * pSpeed,
-          angle: fireAngle,
-          speed: pSpeed,
-          turnRate: 3.4,
-          radius: 7,
-          damage: 28,
-          isPlayer: false,
-          life: 3.8,
-          clan: 'mist'
-        });
+      // Rotate turret aim smoothly
+      tw.aimAngle = fireAngle;
+
+      if (tw.shootCooldown <= 0) {
+        const diffCfg = (typeof getDifficultyConfig === 'function') ? getDifficultyConfig() : { enemyReloadMultiplier: 1 };
+        const reloadMult = diffCfg.enemyReloadMultiplier || 1.0;
+        if (tw.defenseType === 'mist_spire') {
+          tw.shootCooldown = 2.2 * reloadMult;
+          sound.playMistCast(tw.x, tw.y);
+          entities.projectiles.push({
+            type: 'spirit',
+            sourceClan: 'mist',
+            target: target,
+            x: tw.x,
+            y: tw.y - 15,
+            vx: Math.cos(fireAngle) * projSpeed,
+            vy: Math.sin(fireAngle) * projSpeed,
+            angle: fireAngle,
+            speed: projSpeed,
+            turnRate: 3.4,
+            radius: 7,
+            damage: tw.damage,
+            isPlayer: false,
+            life: 3.8,
+            clan: 'mist'
+          });
+        } else if (tw.defenseType === 'steam_harpoon') {
+          tw.shootCooldown = (2.6 + Math.random() * 0.4) * reloadMult;
+          sound.playIronHit(tw.x, tw.y);
+          // Steam burst from muzzle
+          for (let p = 0; p < 6; p++) {
+            entities.particles.push({
+              x: tw.x + Math.cos(fireAngle) * 26,
+              y: tw.y + Math.sin(fireAngle) * 26,
+              vx: Math.cos(fireAngle) * (2.5 + Math.random() * 2) + (Math.random() - 0.5) * 1.5,
+              vy: Math.sin(fireAngle) * (2.5 + Math.random() * 2) + (Math.random() - 0.5) * 1.5,
+              life: 0.32,
+              maxLife: 0.32,
+              size: 3 + Math.random() * 3,
+              color: p < 3 ? '#e2e8f0' : '#f59e0b'
+            });
+          }
+          entities.projectiles.push({
+            type: 'iron_harpoon',
+            sourceClan: 'iron',
+            x: tw.x + Math.cos(fireAngle) * 26,
+            y: tw.y + Math.sin(fireAngle) * 26,
+            vx: Math.cos(fireAngle) * projSpeed,
+            vy: Math.sin(fireAngle) * projSpeed,
+            angle: fireAngle,
+            radius: 5,
+            damage: tw.damage,
+            isPlayer: false,
+            life: 1.3
+          });
+        } else {
+          // Cannon Bastion & Haven Bastion
+          tw.shootCooldown = (2.3 + Math.random() * 0.4) * reloadMult;
+          sound.playCannon(tw.x, tw.y);
+          // Muzzle flash & smoke
+          for (let p = 0; p < 6; p++) {
+            entities.particles.push({
+              x: tw.x + Math.cos(fireAngle) * 26,
+              y: tw.y + Math.sin(fireAngle) * 26,
+              vx: Math.cos(fireAngle) * (3 + Math.random() * 2) + (Math.random() - 0.5) * 1.5,
+              vy: Math.sin(fireAngle) * (3 + Math.random() * 2) + (Math.random() - 0.5) * 1.5,
+              life: 0.35,
+              maxLife: 0.35,
+              size: 4 + Math.random() * 3,
+              color: p < 2 ? '#f59e0b' : '#94a3b8'
+            });
+          }
+          entities.projectiles.push({
+            type: 'cannonball',
+            sourceClan: tw.clan,
+            x: tw.x + Math.cos(fireAngle) * 26,
+            y: tw.y + Math.sin(fireAngle) * 26,
+            vx: Math.cos(fireAngle) * projSpeed,
+            vy: Math.sin(fireAngle) * projSpeed,
+            radius: 5.5,
+            damage: tw.damage,
+            isPlayer: false,
+            life: 1.35
+          });
+        }
       }
     }
   });
@@ -658,7 +1138,157 @@ function updateGame(dt) {
     p.y += p.vy;
     p.life -= dt;
 
-    // Collision with Organic Islands
+    // 1. Check hit against Occult Towers & Spiked Sea Mines (Checked BEFORE island terrain clipping)
+    let hitObstacle = false;
+    if (p.isPlayer) {
+      // Check hit against Active Island Defenses
+      for (let t = entities.towers.length - 1; t >= 0; t--) {
+        const tw = entities.towers[t];
+        // Friendly fire check: Player cannot attack Haven's friendly peacekeepers
+        if (tw.clan === 'neutral' || tw.defenseType === 'haven_bastion') continue;
+
+        const hitRadius = tw.radius + 32;
+        if (((p.x - tw.x) * (p.x - tw.x) + (p.y - tw.y) * (p.y - tw.y) < hitRadius * hitRadius)) {
+          tw.hp -= p.damage;
+          p.life = 0;
+
+          let hitColor = '#22d3ee';
+          if (tw.defenseType === 'tentacle') {
+            hitColor = '#f43f5e';
+            sound.playMonsterHit(tw.x, tw.y);
+          } else if (tw.defenseType === 'steam_harpoon') {
+            hitColor = '#94a3b8';
+            sound.playIronHit(tw.x, tw.y);
+          } else if (tw.defenseType === 'cannon_bastion') {
+            hitColor = '#f59e0b';
+            sound.playIronHit(tw.x, tw.y);
+          } else {
+            sound.playMistCast(tw.x, tw.y);
+          }
+
+          addFloatingText(`-${Math.round(p.damage)}`, tw.x, tw.y - 20, hitColor, true);
+
+          for (let sp = 0; sp < 8; sp++) {
+            entities.particles.push({
+              x: p.x,
+              y: p.y,
+              vx: (Math.random() - 0.5) * 3,
+              vy: (Math.random() - 0.5) * 3,
+              life: 0.35,
+              color: hitColor,
+              size: 2.5
+            });
+          }
+
+          if (tw.hp <= 0) {
+            const diffCfg = (typeof getDifficultyConfig === 'function') ? getDifficultyConfig() : { rewardMultiplier: 1.0 };
+            const rMult = diffCfg.rewardMultiplier || 1.0;
+
+            if (tw.defenseType === 'tentacle') {
+              sound.playMonsterRoar(tw.x, tw.y);
+              screenShake = 14;
+              const gRew = Math.round(25 * rMult);
+              const bRew = Math.round(5 * rMult);
+              playerState.gold += gRew;
+              playerState.bloodEssence += bRew;
+              showToast(`Tentakel Abisal Ditumbangkan! +${gRew} Koin +${bRew} Darah`, "skull");
+              for (let b = 0; b < 24; b++) {
+                const bang = (b / 24) * Math.PI * 2;
+                entities.particles.push({
+                  x: tw.x,
+                  y: tw.y,
+                  vx: Math.cos(bang) * (2.5 + Math.random() * 4),
+                  vy: Math.sin(bang) * (2.5 + Math.random() * 4),
+                  life: 0.8,
+                  color: '#e11d48',
+                  size: 5 + Math.random() * 4
+                });
+              }
+            } else if (tw.defenseType === 'cannon_bastion') {
+              sound.playCannon(tw.x, tw.y);
+              screenShake = 11;
+              const gRew = Math.round(45 * rMult);
+              playerState.gold += gRew;
+              showToast(`Benteng Meriam Pesisir Diratakan! +${gRew} Koin`, "gold");
+              for (let b = 0; b < 24; b++) {
+                const bang = (b / 24) * Math.PI * 2;
+                entities.particles.push({
+                  x: tw.x,
+                  y: tw.y,
+                  vx: Math.cos(bang) * (3 + Math.random() * 3),
+                  vy: Math.sin(bang) * (3 + Math.random() * 3),
+                  life: 0.75,
+                  color: b % 2 === 0 ? '#f59e0b' : '#78716c',
+                  size: 4 + Math.random() * 3
+                });
+              }
+            } else if (tw.defenseType === 'steam_harpoon') {
+              sound.playExplosion(tw.x, tw.y);
+              screenShake = 12;
+              const gRew = Math.round(35 * rMult);
+              playerState.gold += gRew;
+              showToast(`Menara Harpoon Uap Baja Meledak! +${gRew} Koin`, "iron");
+              for (let b = 0; b < 24; b++) {
+                const bang = (b / 24) * Math.PI * 2;
+                entities.particles.push({
+                  x: tw.x,
+                  y: tw.y,
+                  vx: Math.cos(bang) * (3 + Math.random() * 4),
+                  vy: Math.sin(bang) * (3 + Math.random() * 4),
+                  life: 0.8,
+                  color: b % 2 === 0 ? '#94a3b8' : '#f59e0b',
+                  size: 4 + Math.random() * 3
+                });
+              }
+            } else {
+              sound.playEerieRoar();
+              screenShake = 12;
+              const gRew = Math.round(70 * rMult);
+              const bRew = Math.round(15 * rMult);
+              playerState.gold += gRew;
+              playerState.bloodEssence += bRew;
+              showToast(`Menara Okultis Diruntuhkan! +${gRew} Koin +${bRew} Darah`, "scroll");
+              for (let b = 0; b < 30; b++) {
+                const bang = (b / 30) * Math.PI * 2;
+                entities.particles.push({
+                  x: tw.x,
+                  y: tw.y,
+                  vx: Math.cos(bang) * (3 + Math.random() * 4),
+                  vy: Math.sin(bang) * (3 + Math.random() * 4),
+                  life: 0.8,
+                  color: '#22d3ee',
+                  size: 4 + Math.random() * 3
+                });
+              }
+            }
+            entities.towers.splice(t, 1);
+          }
+          hitObstacle = true;
+          break;
+        }
+      }
+
+      if (!hitObstacle) {
+        for (let k = 0; k < entities.spikedMines.length; k++) {
+          const sm = entities.spikedMines[k];
+          const dx = p.x - sm.x, dy = p.y - sm.y;
+          if (dx * dx + dy * dy < (sm.radius + 10) * (sm.radius + 10)) {
+            sm.detonating = true;
+            sm.detonateTimer = 0.05; // Detonate immediately!
+            p.life = 0;
+            hitObstacle = true;
+            break;
+          }
+        }
+      }
+    }
+
+    if (hitObstacle) {
+      entities.projectiles.splice(i, 1);
+      continue;
+    }
+
+    // 2. Collision with Organic Islands
     let hitIsland = false;
     for (let k = 0; k < WORLD_ISLANDS.length; k++) {
       const isl = WORLD_ISLANDS[k];
@@ -687,55 +1317,6 @@ function updateGame(dt) {
       p.life = 0;
       entities.projectiles.splice(i, 1);
       continue;
-    }
-
-    // Check hit against Spiked Sea Mines (Can be detonated by player cannons!)
-    if (p.isPlayer) {
-      for (let k = 0; k < entities.spikedMines.length; k++) {
-        const sm = entities.spikedMines[k];
-        const dx = p.x - sm.x, dy = p.y - sm.y;
-        if (dx * dx + dy * dy < (sm.radius + 8) * (sm.radius + 8)) {
-          sm.detonating = true;
-          sm.detonateTimer = 0.05; // Detonate immediately!
-          p.life = 0;
-          break;
-        }
-      }
-
-      // Check hit against Occult Towers
-      for (let t = entities.towers.length - 1; t >= 0; t--) {
-        const tw = entities.towers[t];
-        if (((p.x - tw.x) * (p.x - tw.x) + (p.y - tw.y) * (p.y - tw.y) < (tw.radius + 10) * (tw.radius + 10))) {
-          tw.hp -= p.damage;
-          p.life = 0;
-          sound.playMistCast(tw.x, tw.y);
-          addFloatingText(`-${Math.round(p.damage)}`, tw.x, tw.y - 20, '#22d3ee', true);
-
-          if (tw.hp <= 0) {
-            sound.playEerieRoar();
-            screenShake = 12;
-            playerState.gold += 70;
-            playerState.bloodEssence += 15;
-            showToast(`Menara Okultis Diruntuhkan! +70 Koin +15 Darah`, "scroll");
-
-            // Massive Occult Burst
-            for (let b = 0; b < 30; b++) {
-              const bang = (b / 30) * Math.PI * 2;
-              entities.particles.push({
-                x: tw.x,
-                y: tw.y,
-                vx: Math.cos(bang) * (3 + Math.random() * 4),
-                vy: Math.sin(bang) * (3 + Math.random() * 4),
-                life: 0.8,
-                color: '#22d3ee',
-                size: 4 + Math.random() * 3
-              });
-            }
-            entities.towers.splice(t, 1);
-          }
-          break;
-        }
-      }
     }
 
     // Damage resolution for ships
@@ -786,17 +1367,35 @@ function updateGame(dt) {
           if (e.hp <= 0) {
             playerState.kills++;
             screenShake = Math.max(screenShake, e.tier >= 3 ? 10 : 4);
-            const goldGained = e.isMonster ? Math.floor(45 + Math.random() * 55) : Math.floor(18 + Math.random() * 25 * e.tier);
+            const diffCfg = (typeof getDifficultyConfig === 'function') ? getDifficultyConfig() : { rewardMultiplier: 1.0 };
+            const rMult = diffCfg.rewardMultiplier || 1.0;
+            let goldGained = 0;
+            let bloodGained = 0;
+
+            if (e.isMonster) {
+              goldGained = Math.floor((65 * e.tier + Math.random() * 45) * rMult);
+              bloodGained = Math.floor((6 * e.tier + Math.random() * 6) * rMult);
+            } else if (e.tier >= 3) {
+              goldGained = Math.floor((200 + Math.random() * 80) * rMult);
+              bloodGained = Math.floor((12 + Math.random() * 8) * rMult);
+            } else if (e.tier === 2) {
+              goldGained = Math.floor((85 + Math.random() * 40) * rMult);
+              bloodGained = Math.floor((4 + Math.random() * 4) * rMult);
+            } else {
+              goldGained = Math.floor((35 + Math.random() * 25) * rMult);
+              bloodGained = biome.isBloodSea ? Math.floor((2 + Math.random() * 3) * rMult) : 0;
+            }
+
             playerState.gold += goldGained;
-            
-            if (e.isMonster || biome.isBloodSea) {
-              const bloodGained = Math.floor(4 * e.tier + Math.random() * 6);
-              playerState.bloodEssence += bloodGained;
+            if (bloodGained > 0) playerState.bloodEssence += bloodGained;
+
+            if (bloodGained > 0) {
               showToast(`+${goldGained} Koin +${bloodGained} Darah: Menumpas ${e.name}!`, "blood");
             } else {
               showToast(`+${goldGained} Koin: Menenggelamkan ${e.name}!`, "gold");
             }
             sound.playCoin();
+            createCombatDebris(e.x, e.y, e.tier);
 
             // Transition to Sinking Sequence
             entities.sinkingShips.push({
@@ -822,11 +1421,23 @@ function updateGame(dt) {
       // Enemy projectile hitting player OR rival clan ship
       const dx = p.x - playerState.x, dy = p.y - playerState.y;
       if (dx * dx + dy * dy < 22 * 22) {
-        playerState.hp -= p.damage;
+        const diffCfg = (typeof getDifficultyConfig === 'function') ? getDifficultyConfig() : { playerDamageReceivedMult: 1.0 };
+        const pDmg = Math.round(p.damage * (diffCfg.playerDamageReceivedMult || 1.0));
+        playerState.hp -= pDmg;
         p.life = 0;
-        sound.playHit(playerState.x, playerState.y);
         screenShake = 7;
-        addFloatingText(`-${Math.round(p.damage)}`, playerState.x, playerState.y, '#ef4444', true);
+        addFloatingText(`-${pDmg}`, playerState.x, playerState.y, '#ef4444', true);
+
+        // Special on-hit effects
+        if (p.type === 'iron_harpoon') {
+          sound.playIronHit(playerState.x, playerState.y);
+          playerState.speedSnareTimer = 1.4;
+          showToast("Terkait Harpoon Besi Baja! Laju Kapal Melambat!", "alert");
+        } else if (p.type === 'blood_bile') {
+          sound.playMonsterHit(playerState.x, playerState.y);
+        } else {
+          sound.playHit(playerState.x, playerState.y);
+        }
 
         for (let sp = 0; sp < 6; sp++) {
           entities.particles.push({
@@ -835,7 +1446,7 @@ function updateGame(dt) {
             vx: (Math.random() - 0.5) * 4,
             vy: (Math.random() - 0.5) * 4,
             life: 0.35,
-            color: '#78350f',
+            color: p.type === 'blood_bile' ? '#e11d48' : (p.type === 'iron_harpoon' ? '#94a3b8' : '#78350f'),
             size: 2.5
           });
         }
@@ -876,6 +1487,7 @@ function updateGame(dt) {
                 life: 1.8
               });
               entities.enemies.splice(j, 1);
+              createCombatDebris(rival.x, rival.y, rival.tier);
             }
             break;
           }
@@ -997,10 +1609,12 @@ function updateGame(dt) {
     const distMoved = Math.sqrt(dxMoved * dxMoved + dyMoved * dyMoved);
     e.isMoving = distMoved > 0.22;
     e.prevX = e.x;
-    e.prevY = e.y;
+    const distToPlayer = Math.sqrt((playerState.x - e.x) * (playerState.x - e.x) + (playerState.y - e.y) * (playerState.y - e.y));
+    const targetAngle = Math.atan2(playerState.y - e.y, playerState.x - e.x);
+    const highLodDist = isMobileDevice() ? 850 : 1200;
 
-    // Enemy Water Trail: ONLY when actually translating across the ocean!
-    if (e.isMoving && Math.random() < 0.55) {
+    // Enemy Water Trail: ONLY when actually translating across the ocean and within LOD range!
+    if (distToPlayer < highLodDist && e.isMoving && Math.random() < 0.55) {
       const sternX = e.x - Math.cos(e.angle) * (e.radius * 0.85);
       const sternY = e.y - Math.sin(e.angle) * (e.radius * 0.85);
       
@@ -1033,8 +1647,6 @@ function updateGame(dt) {
       }
     }
 
-    const distToPlayer = Math.sqrt((playerState.x - e.x) * (playerState.x - e.x) + (playerState.y - e.y) * (playerState.y - e.y));
-    const targetAngle = Math.atan2(playerState.y - e.y, playerState.x - e.x);
     // STATE 1: UNAWARE / SUSPICIOUS
     let _canSeeVal = false;
     let _canSeeComputed = false;
@@ -1050,20 +1662,33 @@ function updateGame(dt) {
     if (e.alertState === 'unaware' || e.alertState === 'suspicious') {
       let detected = false;
 
-      if (e.isMonster) {
-        // Sea Monster 360-degree circular underwater vibration sonar!
-        const monsterAuraDist = 420 * (isPlayerMovingFast ? 1.25 : 0.95) * stealthMult;
-        detected = (distToPlayer <= monsterAuraDist) && checkLOS();
-      } else {
-        // Ship visual lookout cone
-        let headingDiff = Math.abs(targetAngle - e.angle);
-        headingDiff = normAngle(headingDiff);
-        headingDiff = Math.abs(headingDiff);
+      // Scavenger guarding a sunken shipwreck: alerts if player approaches wreck or guard
+      if (e.guardWreckId) {
+        const wreck = entities.sunkenShips.find(s => s.id === e.guardWreckId && !s.salvaged);
+        if (wreck) {
+          const wdx = playerState.x - wreck.x, wdy = playerState.y - wreck.y;
+          if (wdx * wdx + wdy * wdy < 360 * 360 || distToPlayer < 360) {
+            detected = true;
+          }
+        }
+      }
 
-        // Convoys have wider coordinated lookouts
-        const visionAngle = e.convoyId ? 0.85 : 0.65;
-        const visionConeDist = (e.convoyId ? 340 : 270) * (isPlayerMovingFast ? 1.15 : 0.85) * stealthMult;
-        detected = ((headingDiff <= visionAngle && distToPlayer <= visionConeDist) || distToPlayer < 60) && checkLOS();
+      if (!detected) {
+        if (e.isMonster) {
+          // Sea Monster 360-degree circular underwater vibration sonar!
+          const monsterAuraDist = 420 * (isPlayerMovingFast ? 1.25 : 0.95) * stealthMult;
+          detected = (distToPlayer <= monsterAuraDist) && checkLOS();
+        } else {
+          // Ship visual lookout cone
+          let headingDiff = Math.abs(targetAngle - e.angle);
+          headingDiff = normAngle(headingDiff);
+          headingDiff = Math.abs(headingDiff);
+
+          // Convoys have wider coordinated lookouts
+          const visionAngle = e.convoyId ? 0.85 : 0.65;
+          const visionConeDist = (e.convoyId ? 340 : 270) * (isPlayerMovingFast ? 1.15 : 0.85) * stealthMult;
+          detected = ((headingDiff <= visionAngle && distToPlayer <= visionConeDist) || distToPlayer < 60) && checkLOS();
+        }
       }
 
       if (detected) {
@@ -1275,7 +1900,11 @@ function updateGame(dt) {
 
           if (e.chargeState === 'charging' || e.clan === 'iron' || e.isMonster || (target !== playerState && target.clan !== e.clan)) {
             const mult = e.chargeState === 'charging' ? 1.4 : (e.clan === 'iron' || e.isMonster ? 0.85 : 0.6);
-            const ramDmg = Math.max(8, Math.round(e.damage * mult));
+            let ramDmg = Math.max(8, Math.round(e.damage * mult));
+            if (target === playerState) {
+              const diffCfg = (typeof getDifficultyConfig === 'function') ? getDifficultyConfig() : { playerDamageReceivedMult: 1.0 };
+              ramDmg = Math.max(8, Math.round(ramDmg * (diffCfg.playerDamageReceivedMult || 1.0)));
+            }
             target.hp -= ramDmg;
             if (e.clan === 'iron') {
               sound.playIronHit(target.x, target.y);
@@ -1330,6 +1959,7 @@ function updateGame(dt) {
               const tIdx = entities.enemies.indexOf(target);
               if (tIdx !== -1) {
                 entities.enemies.splice(tIdx, 1);
+                createCombatDebris(target.x, target.y, target.tier);
               }
               e.targetEntity = null;
               e.alertState = 'unaware';
@@ -1472,7 +2102,8 @@ function updateGame(dt) {
           if (!isSearching) {
             e.shootCooldown -= dt;
             if (e.shootCooldown <= 0 && targetDist < 280) {
-              e.shootCooldown = 2.4 + Math.random() * 1.5;
+              const diffCfg = (typeof getDifficultyConfig === 'function') ? getDifficultyConfig() : { enemyReloadMultiplier: 1.0 };
+              e.shootCooldown = (2.4 + Math.random() * 1.5) * (diffCfg.enemyReloadMultiplier || 1.0);
               fireCannons(e, target, false);
             }
           }
@@ -1501,7 +2132,8 @@ function updateGame(dt) {
         if (!isSearching) {
           e.specialCooldown -= dt;
           if (e.specialCooldown <= 0 && targetDist < 420) {
-            e.specialCooldown = 3.0 + Math.random() * 1.8;
+            const diffCfg = (typeof getDifficultyConfig === 'function') ? getDifficultyConfig() : { enemyReloadMultiplier: 1.0 };
+            e.specialCooldown = (3.0 + Math.random() * 1.8) * (diffCfg.enemyReloadMultiplier || 1.0);
             fireSpiritWisps(e, target);
           }
         }
@@ -1522,7 +2154,8 @@ function updateGame(dt) {
         }
 
         if (!isSearching && e.specialCooldown <= 0 && targetDist < 340) {
-          e.specialCooldown = 2.8 + Math.random() * 1.5;
+          const diffCfg = (typeof getDifficultyConfig === 'function') ? getDifficultyConfig() : { enemyReloadMultiplier: 1.0 };
+          e.specialCooldown = (2.8 + Math.random() * 1.5) * (diffCfg.enemyReloadMultiplier || 1.0);
           fireChitinSpikes(e, e.tier >= 3);
         }
       } else {
@@ -1538,7 +2171,8 @@ function updateGame(dt) {
         if (!isSearching) {
           e.shootCooldown -= dt;
           if (e.shootCooldown <= 0 && targetDist < 350) {
-            e.shootCooldown = 1.8 + Math.random() * 1.3;
+            const diffCfg = (typeof getDifficultyConfig === 'function') ? getDifficultyConfig() : { enemyReloadMultiplier: 1.0 };
+            e.shootCooldown = (1.8 + Math.random() * 1.3) * (diffCfg.enemyReloadMultiplier || 1.0);
             fireCannons(e, target, false);
           }
         }
@@ -1728,21 +2362,54 @@ function updateGame(dt) {
       salvageCircle.setAttribute('stroke-dasharray', `${percent}, 100`);
     }
 
+    // Salvage noise & water disturbance: alerts nearby enemies within 460px
+    if (Math.random() < 0.35) {
+      entities.particles.push({
+        x: playerState.x + (Math.random() - 0.5) * 35,
+        y: playerState.y + (Math.random() - 0.5) * 35,
+        vx: (Math.random() - 0.5) * 1.5,
+        vy: -0.6 - Math.random() * 1.2,
+        life: 0.55,
+        color: '#e0f2fe',
+        size: 2.5 + Math.random() * 2
+      });
+    }
+
+    for (let eIdx = 0; eIdx < entities.enemies.length; eIdx++) {
+      const e = entities.enemies[eIdx];
+      const edx = e.x - playerState.x, edy = e.y - playerState.y;
+      if (edx * edx + edy * edy < 460 * 460 && e.alertState === 'unaware') {
+        e.alertState = 'suspicious';
+        e.detectionMeter = Math.min(100, e.detectionMeter + 50 * dt);
+        if (e.detectionMeter >= 100) {
+          e.alertState = 'alerted';
+          e.targetEntity = playerState;
+          sound.playAlertHorn();
+          showToast(`${e.name} Mendengar Suara Derek Harta!`, "alert");
+        }
+      }
+    }
+
     if (salvageProgress >= 1) {
       nearWreck.salvaged = true;
       playerState.salvages++;
-      playerState.gold += nearWreck.goldReward;
-      addFloatingText(`+${nearWreck.goldReward} Koin`, playerState.x, playerState.y - 20, '#fbbf24', true);
-      if (nearWreck.bloodReward > 0) {
-        playerState.bloodEssence += nearWreck.bloodReward;
-        addFloatingText(`+${nearWreck.bloodReward} Darah`, playerState.x, playerState.y - 35, '#ef4444', true);
-        showToast(`Relik Kuno: +${nearWreck.goldReward} Koin +${nearWreck.bloodReward} Darah!`, "anchor");
+      const diffCfg = (typeof getDifficultyConfig === 'function') ? getDifficultyConfig() : { rewardMultiplier: 1.0 };
+      const rMult = diffCfg.rewardMultiplier || 1.0;
+      const gReward = Math.round(nearWreck.goldReward * rMult);
+      const bReward = Math.round(nearWreck.bloodReward * rMult);
+      playerState.gold += gReward;
+      addFloatingText(`+${gReward} Koin`, playerState.x, playerState.y - 20, '#fbbf24', true);
+      if (bReward > 0) {
+        playerState.bloodEssence += bReward;
+        addFloatingText(`+${bReward} Darah`, playerState.x, playerState.y - 35, '#ef4444', true);
+        showToast(`Relik Kuno: +${gReward} Koin +${bReward} Darah!`, "anchor");
       } else {
-        showToast(`Harta Karam Diangkat: +${nearWreck.goldReward} Koin!`, "gold");
+        showToast(`Harta Karam Diangkat: +${gReward} Koin!`, "gold");
       }
       sound.playCoin();
       sound.playLoot();
       salvageProgress = 0;
+      sunkenShipCooldown = 25.0; // Cooldown before next wreck can spawn
       entities.sunkenShips = entities.sunkenShips.filter(s => !s.salvaged);
     }
   } else {
@@ -1753,7 +2420,7 @@ function updateGame(dt) {
     }
   }
 
-  // Collect Floating Cargo
+  // Collect Floating Cargo & Message in a Bottle
   for (let i = entities.floatingLoots.length - 1; i >= 0; i--) {
     const loot = entities.floatingLoots[i];
     if (((playerState.x - loot.x) * (playerState.x - loot.x) + (playerState.y - loot.y) * (playerState.y - loot.y) < 36 * 36)) {
@@ -1762,6 +2429,21 @@ function updateGame(dt) {
         addFloatingText("+25 HP", playerState.x, playerState.y, '#34d399');
         showToast("Memungut Kayu Apung (+25 Lambung)", "check");
         sound.playSplash();
+      } else if (loot.type === 'bottle') {
+        playerState.gold += loot.value;
+        sound.playLoot();
+        // Target nearest unsalvaged ship or Skull Island
+        const unsalvaged = entities.sunkenShips.find(s => !s.salvaged);
+        if (unsalvaged) {
+          activeTreasureHint = { x: unsalvaged.x, y: unsalvaged.y, name: unsalvaged.name || "Bangkai Harta Karun" };
+        } else {
+          const skullIsl = WORLD_ISLANDS.find(isl => isl.isSkullIsland || isl.id === 'skull_island');
+          if (skullIsl) {
+            activeTreasureHint = { x: skullIsl.x, y: skullIsl.y, name: skullIsl.name };
+          }
+        }
+        addFloatingText(`+${loot.value} Koin & Peta Kuno!`, playerState.x, playerState.y, '#38bdf8');
+        showToast("Pesan Dalam Botol: Jarum kompas menunjukkan lokasi harta karun!", "scroll");
       } else {
         playerState.gold += loot.value;
         addFloatingText(`+${loot.value} Koin`, playerState.x, playerState.y, '#fbbf24');
@@ -1782,7 +2464,8 @@ function updateGame(dt) {
     }
   });
 
-  // Oceanic Seagulls (Burung Camar Laut) flight, banking & sounds
+  // Oceanic Seagulls & Carrion Crows flight, banking & sounds
+  const skullIslandRef = WORLD_ISLANDS.find(i => i.isSkullIsland || i.id === 'skull_island');
   if (entities.seagulls) {
     entities.seagulls.forEach(s => {
       s.heading += s.turnRate;
@@ -1795,6 +2478,17 @@ function updateGame(dt) {
         s.turnRate = (Math.random() - 0.5) * 0.025;
       }
 
+      // Identify if bird is in the Blood Sea or circling Skull Island
+      const sDistFromCenter = Math.hypot(s.x, s.y);
+      const isNearSkull = skullIslandRef && Math.hypot(s.x - skullIslandRef.x, s.y - skullIslandRef.y) < (skullIslandRef.radius + 500);
+      s.isCarrion = sDistFromCenter >= 5500 || isNearSkull;
+
+      // Orbit Skull Island if near it
+      if (isNearSkull) {
+        const angToSkull = Math.atan2(s.y - skullIslandRef.y, s.x - skullIslandRef.x);
+        s.heading = angToSkull + Math.PI / 2 + 0.05;
+      }
+
       // Reposition seagulls if they drift too far from the player
       const distToPlayer = Math.sqrt((s.x - playerState.x) * (s.x - playerState.x) + (s.y - playerState.y) * (s.y - playerState.y));
       if (distToPlayer > 1500) {
@@ -1804,20 +2498,30 @@ function updateGame(dt) {
         s.heading = wrapAng + Math.PI + (Math.random() - 0.5) * 0.8;
       }
 
-      // Play seagull sound when passing near player
+      // Play seagull sound (cheerful seagull or dark carrion caw) when passing near player
       s.chirpCooldown -= dt;
       if (distToPlayer < 380 && s.chirpCooldown <= 0) {
-        sound.playSeagullNear(s.x, s.y);
-        s.chirpCooldown = 12.0 + Math.random() * 18.0;
+        if (s.isCarrion) {
+          sound.playCrowCaw(s.x, s.y);
+          s.chirpCooldown = 14.0 + Math.random() * 18.0;
+        } else {
+          sound.playSeagullNear(s.x, s.y);
+          s.chirpCooldown = 12.0 + Math.random() * 18.0;
+        }
       }
     });
   }
 
-  // Rare ambient seagull away calls in the background
+  // Rare ambient bird away calls in the background (Crows in Blood Sea, Seagulls in normal seas)
   seagullAwayTimer -= dt;
   if (seagullAwayTimer <= 0) {
-    sound.playSeagullAway();
-    seagullAwayTimer = 25.0 + Math.random() * 30.0;
+    const currentBiome = getBiomeInfo(distFromStart);
+    if (currentBiome.isBloodSea) {
+      sound.playCrowAway();
+    } else {
+      sound.playSeagullAway();
+    }
+    seagullAwayTimer = 20.0 + Math.random() * 25.0;
   }
 
   // Dynamic Battle Music (Mentrigger lagu tempur seketika saat berhadapan dengan konvoi terkoordinasi)
@@ -1879,7 +2583,10 @@ function updateGame(dt) {
     screenShake = Math.max(0, screenShake - dt * 25);
   }
 
-  if (Date.now() - _lastSpawnCheck > 1500) {
+  // Real-time encounter spawn cooldown
+  encounterSpawnCooldown -= dt;
+
+  if (Date.now() - _lastSpawnCheck > 750) {
     _lastSpawnCheck = Date.now();
     spawnWorldEntities();
   }

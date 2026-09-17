@@ -36,6 +36,15 @@ const chkAutoFullscreen = document.getElementById('chkAutoFullscreen');
 const chkScreenShake = document.getElementById('chkScreenShake');
 const chkMuteAll = document.getElementById('chkMuteAll');
 
+const labelDifficultyBadge = document.getElementById('labelDifficultyBadge');
+const labelDifficultyDesc = document.getElementById('labelDifficultyDesc');
+const btnDiffEasy = document.getElementById('btnDiffEasy');
+const btnDiffMedium = document.getElementById('btnDiffMedium');
+const btnDiffHard = document.getElementById('btnDiffHard');
+const btnMainMenuDiffCycle = document.getElementById('btnMainMenuDiffCycle');
+const mainMenuDiffText = document.getElementById('mainMenuDiffText');
+const pauseDiffBadge = document.getElementById('pauseDiffBadge');
+
 let settingsReturnTarget = 'mainMenu'; // 'mainMenu' | 'pause' | 'game'
 
 const upgradeModal = document.getElementById('upgradeModal');
@@ -339,10 +348,54 @@ document.addEventListener('webkitfullscreenchange', updateFullscreenUI);
 if (btnActionFullscreen) btnActionFullscreen.addEventListener('click', () => toggleFullscreen());
 if (btnToggleFullscreen) btnToggleFullscreen.addEventListener('click', () => toggleFullscreen());
 
+// Difficulty UI Synchronizer
+function updateDifficultyUI() {
+  const diffKey = currentDifficulty || 'medium';
+  const cfg = (typeof DIFFICULTY_SETTINGS !== 'undefined' && DIFFICULTY_SETTINGS[diffKey]) ? DIFFICULTY_SETTINGS[diffKey] : {
+    id: 'medium', name: 'Normal (Medium)', badge: 'NORMAL',
+    badgeColor: 'text-amber-300 bg-amber-950 border-amber-500/40',
+    desc: 'Keseimbangan standar ekspedisi Laut Darah saat ini.'
+  };
+
+  // 1. Settings Modal Badge & Description
+  if (labelDifficultyBadge) {
+    labelDifficultyBadge.innerText = cfg.badge;
+    labelDifficultyBadge.className = `text-[10px] font-bold px-2.5 py-0.5 rounded-full border font-cinzel ${cfg.badgeColor}`;
+  }
+  if (labelDifficultyDesc) {
+    labelDifficultyDesc.innerText = cfg.desc;
+  }
+
+  // 2. Settings Modal Selection Buttons
+  const buttons = [
+    { el: btnDiffEasy, key: 'easy', activeClass: 'bg-emerald-950/70 text-emerald-300 border-emerald-500 shadow-sm', inactiveClass: 'bg-slate-800 text-slate-400 border-white/10 hover:border-emerald-500/40' },
+    { el: btnDiffMedium, key: 'medium', activeClass: 'bg-amber-950/70 text-amber-300 border-amber-500 shadow-sm', inactiveClass: 'bg-slate-800 text-slate-400 border-white/10 hover:border-amber-500/40' },
+    { el: btnDiffHard, key: 'hard', activeClass: 'bg-rose-950/70 text-rose-300 border-rose-500 shadow-sm', inactiveClass: 'bg-slate-800 text-slate-400 border-white/10 hover:border-rose-500/40' }
+  ];
+
+  buttons.forEach(({ el, key, activeClass, inactiveClass }) => {
+    if (!el) return;
+    el.className = `py-2 px-1 rounded-xl text-xs font-cinzel font-bold border transition cursor-pointer text-center ${diffKey === key ? activeClass : inactiveClass}`;
+  });
+
+  // 3. Main Menu Pill
+  if (btnMainMenuDiffCycle && mainMenuDiffText) {
+    mainMenuDiffText.innerText = cfg.badge;
+    btnMainMenuDiffCycle.className = `font-cinzel font-black text-[11px] px-2.5 py-0.5 rounded-lg border transition cursor-pointer flex items-center gap-1 ${cfg.badgeColor}`;
+  }
+
+  // 4. Pause Menu Badge
+  if (pauseDiffBadge) {
+    pauseDiffBadge.innerText = cfg.badge;
+    pauseDiffBadge.className = `text-[10px] font-bold font-cinzel px-2 py-0.5 rounded-lg border ${cfg.badgeColor}`;
+  }
+}
+
 // Settings Modal Management
 function openSettingsModal(fromTarget = 'game') {
   sound.init();
   settingsReturnTarget = fromTarget;
+  updateDifficultyUI();
   if (settingsModal) {
     settingsModal.classList.remove('modal-enter', 'hidden');
     settingsModal.classList.add('modal-active');
@@ -384,6 +437,44 @@ if (settingsModal) {
 }
 
 function initSettingsUI() {
+  // Difficulty Selection Handlers
+  if (btnDiffEasy) {
+    btnDiffEasy.addEventListener('click', () => {
+      setGameDifficulty('easy');
+      updateDifficultyUI();
+      sound.playCoin();
+      showToast("Tingkat Kesulitan Diubah: MUDAH", "check");
+    });
+  }
+  if (btnDiffMedium) {
+    btnDiffMedium.addEventListener('click', () => {
+      setGameDifficulty('medium');
+      updateDifficultyUI();
+      sound.playCoin();
+      showToast("Tingkat Kesulitan Diubah: NORMAL (MEDIUM)", "anchor");
+    });
+  }
+  if (btnDiffHard) {
+    btnDiffHard.addEventListener('click', () => {
+      setGameDifficulty('hard');
+      updateDifficultyUI();
+      sound.playCoin();
+      showToast("Tingkat Kesulitan Diubah: SULIT (EKSTREM)", "skull");
+    });
+  }
+  if (btnMainMenuDiffCycle) {
+    btnMainMenuDiffCycle.addEventListener('click', () => {
+      const cycleMap = { easy: 'medium', medium: 'hard', hard: 'easy' };
+      const nextDiff = cycleMap[currentDifficulty] || 'medium';
+      setGameDifficulty(nextDiff);
+      updateDifficultyUI();
+      sound.playCoin();
+      const cfg = DIFFICULTY_SETTINGS[nextDiff];
+      showToast(`Tingkat Kesulitan: ${cfg ? cfg.badge : nextDiff.toUpperCase()}`, "anchor");
+    });
+  }
+  updateDifficultyUI();
+
   if (sliderMasterVol) {
     sliderMasterVol.value = Math.round(sound.masterVolume * 100);
     labelMasterVol.innerText = `${sliderMasterVol.value}%`;
@@ -521,6 +612,7 @@ function openPauseModal() {
   }
 
   if (pauseModal) {
+    updateDifficultyUI();
     const elPauseGen = document.getElementById('pauseWorldGenLabel');
     if (elPauseGen) {
       elPauseGen.innerText = `Peta Samudra: Generasi #${currentWorldGenNumber || 1} (Seed: ${currentWorldGenSeed || 'Default'})`;

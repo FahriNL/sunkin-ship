@@ -53,7 +53,7 @@ function getIslandCachedData(isl) {
   const dx = Math.cos(isl.dockAngle) * dockR;
   const dy = Math.sin(isl.dockAngle) * dockR;
 
-  // Cache interior foliage / flesh node positions
+  // Cache interior foliage / flesh node positions / skull mounds
   const foliage = [];
   const count = isl.isFlesh ? 9 : 8;
   const offset = isl.isFlesh ? 0.3 : 0.25;
@@ -66,6 +66,34 @@ function getIslandCachedData(isl) {
       y: Math.sin(ang) * r,
       baseRadius: isl.isFlesh ? 15 : 20
     });
+  }
+
+  // Pre-cache giant skull mounds and leviathan ribcage pier for Skull Island
+  if (isl.isSkullIsland) {
+    const skullCount = 14;
+    const skulls = [];
+    for (let k = 0; k < skullCount; k++) {
+      const skAng = (k / skullCount) * Math.PI * 2 + 0.35;
+      const skR = (getIslandRadiusAt(isl, skAng) - 65) * (0.35 + (k % 3) * 0.18);
+      skulls.push({
+        x: Math.cos(skAng) * skR,
+        y: Math.sin(skAng) * skR,
+        r: 15 + (k % 4) * 4,
+        rot: skAng
+      });
+    }
+    isl._cachedSkulls = skulls;
+
+    // Ribcage arches extending from the dock
+    const ribCount = 6;
+    const ribs = [];
+    for (let r = 0; r < ribCount; r++) {
+      ribs.push({
+        dist: 12 + r * 11,
+        span: 17 + (r % 2) * 4
+      });
+    }
+    isl._cachedRibs = ribs;
   }
 
   isl._cachedOuter = outerPoints;
@@ -99,7 +127,7 @@ function drawWorldIsland(ctx, isl) {
   ctx.closePath();
   ctx.fill();
 
-  // 2. Interior Lush Landmass / Volcanic Rocks
+  // 2. Interior Lush Landmass / Volcanic Rocks / Dark Ossuary Stone
   ctx.fillStyle = isl.color || '#166534';
   ctx.beginPath();
   ctx.moveTo(innerPoints[0].x, innerPoints[0].y);
@@ -113,8 +141,44 @@ function drawWorldIsland(ctx, isl) {
   ctx.closePath();
   ctx.fill();
 
-  // 3. Island Interior Features (Foliage / Eldritch Flesh nodes)
-  if (isl.isFlesh) {
+  // 3. Island Interior Features (Foliage / Eldritch Flesh nodes / Giant Skull Mounds)
+  if (isl.isSkullIsland && isl._cachedSkulls) {
+    // Render Giant Ossuary & Skulls Mounds
+    for (let i = 0; i < isl._cachedSkulls.length; i++) {
+      const sk = isl._cachedSkulls[i];
+      ctx.save();
+      ctx.translate(sk.x, sk.y);
+      ctx.rotate(sk.rot);
+
+      // Bone-white skull cranium
+      ctx.fillStyle = '#f1f5f9';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, sk.r, sk.r * 0.85, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Lower maxilla / jaw shelf
+      ctx.fillStyle = '#e2e8f0';
+      ctx.fillRect(-sk.r * 0.45, sk.r * 0.45, sk.r * 0.9, sk.r * 0.4);
+
+      // Hollow dark eye sockets
+      ctx.fillStyle = '#0f172a';
+      const eyeR = Math.max(2.2, sk.r * 0.22);
+      ctx.beginPath();
+      ctx.ellipse(-sk.r * 0.35, -sk.r * 0.1, eyeR, eyeR * 1.25, -0.2, 0, Math.PI * 2);
+      ctx.ellipse(sk.r * 0.35, -sk.r * 0.1, eyeR, eyeR * 1.25, 0.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Nasal cavity
+      ctx.beginPath();
+      ctx.moveTo(0, sk.r * 0.05);
+      ctx.lineTo(-eyeR * 0.5, sk.r * 0.35);
+      ctx.lineTo(eyeR * 0.5, sk.r * 0.35);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.restore();
+    }
+  } else if (isl.isFlesh) {
     ctx.fillStyle = '#ef4444';
     const time = _now * 0.002;
     for (let i = 0; i < isl._cachedFoliage.length; i++) {
@@ -133,7 +197,7 @@ function drawWorldIsland(ctx, isl) {
     }
   }
 
-  // 4. Wooden Pier extending from shoreline
+  // 4. Pier extending from shoreline (Wooden Pier or Leviathan Ribcage Pier)
   const pier = isl._cachedPier;
   const pLen = 65;
   const pAngle = pier.pAngle;
@@ -141,55 +205,105 @@ function drawWorldIsland(ctx, isl) {
   ctx.save();
   ctx.translate(pier.dx, pier.dy);
   ctx.rotate(pAngle);
-  ctx.fillStyle = '#78350f';
-  ctx.strokeStyle = '#451a03';
-  ctx.lineWidth = 2;
-  ctx.fillRect(0, -9, pLen, 18);
-  ctx.strokeRect(0, -9, pLen, 18);
 
-  // Pier planks
-  ctx.strokeStyle = '#291102';
-  for (let pl = 8; pl < pLen; pl += 9) {
+  if (isl.isSkullIsland && isl._cachedRibs) {
+    // Leviathan Ribcage Pier (Arched Ivory Ribs over Dock Water)
+    ctx.fillStyle = '#cbd5e1';
+    ctx.strokeStyle = '#475569';
+    ctx.lineWidth = 1.5;
+    ctx.fillRect(0, -9, pLen, 18);
+    ctx.strokeRect(0, -9, pLen, 18);
+
+    // Bone planks
+    ctx.strokeStyle = '#94a3b8';
+    for (let pl = 8; pl < pLen; pl += 9) {
+      ctx.beginPath();
+      ctx.moveTo(pl, -9);
+      ctx.lineTo(pl, 9);
+      ctx.stroke();
+    }
+
+    // Arching Leviathan Ribs Tunnel
+    ctx.strokeStyle = '#f8fafc';
+    ctx.lineWidth = 3.2;
+    ctx.lineCap = 'round';
+    isl._cachedRibs.forEach(rib => {
+      ctx.beginPath();
+      ctx.moveTo(rib.dist, -10);
+      ctx.quadraticCurveTo(rib.dist - 3, -rib.span, rib.dist + 3, -rib.span * 0.65);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(rib.dist, 10);
+      ctx.quadraticCurveTo(rib.dist - 3, rib.span, rib.dist + 3, rib.span * 0.65);
+      ctx.stroke();
+    });
+
+    // Crimson Blood Lantern on Rib Pier Tip
+    ctx.fillStyle = '#ef4444';
     ctx.beginPath();
-    ctx.moveTo(pl, -9);
-    ctx.lineTo(pl, 9);
-    ctx.stroke();
-  }
+    ctx.arc(pLen - 4, 0, 4.5, 0, Math.PI * 2);
+    ctx.fill();
 
-  // Dock mooring bollards (Patok tambatan tali kapal di tepi dermaga)
-  ctx.fillStyle = '#1e293b';
-  ctx.fillRect(pLen * 0.3 - 2, -11, 4, 3);
-  ctx.fillRect(pLen * 0.7 - 2, -11, 4, 3);
-  ctx.fillRect(pLen * 0.3 - 2, 8, 4, 3);
-  ctx.fillRect(pLen * 0.7 - 2, 8, 4, 3);
-
-  // Home Port welcome pennant flag
-  if (isl.id === 'haven') {
-    ctx.fillStyle = '#38bdf8';
+    const ribGlow = ctx.createRadialGradient(pLen - 4, 0, 3, pLen - 4, 0, 36);
+    ribGlow.addColorStop(0, 'rgba(239, 68, 68, 0.45)');
+    ribGlow.addColorStop(1, 'rgba(239, 68, 68, 0)');
+    ctx.fillStyle = ribGlow;
     ctx.beginPath();
-    ctx.moveTo(pLen - 2, 0);
-    ctx.lineTo(pLen + 14, -6);
-    ctx.lineTo(pLen - 2, -12);
-    ctx.closePath();
+    ctx.arc(pLen - 4, 0, 36, 0, Math.PI * 2);
+    ctx.fill();
+
+  } else {
+    ctx.fillStyle = '#78350f';
+    ctx.strokeStyle = '#451a03';
+    ctx.lineWidth = 2;
+    ctx.fillRect(0, -9, pLen, 18);
+    ctx.strokeRect(0, -9, pLen, 18);
+
+    // Pier planks
+    ctx.strokeStyle = '#291102';
+    for (let pl = 8; pl < pLen; pl += 9) {
+      ctx.beginPath();
+      ctx.moveTo(pl, -9);
+      ctx.lineTo(pl, 9);
+      ctx.stroke();
+    }
+
+    // Dock mooring bollards (Patok tambatan tali kapal di tepi dermaga)
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(pLen * 0.3 - 2, -11, 4, 3);
+    ctx.fillRect(pLen * 0.7 - 2, -11, 4, 3);
+    ctx.fillRect(pLen * 0.3 - 2, 8, 4, 3);
+    ctx.fillRect(pLen * 0.7 - 2, 8, 4, 3);
+
+    // Home Port welcome pennant flag
+    if (isl.id === 'haven') {
+      ctx.fillStyle = '#38bdf8';
+      ctx.beginPath();
+      ctx.moveTo(pLen - 2, 0);
+      ctx.lineTo(pLen + 14, -6);
+      ctx.lineTo(pLen - 2, -12);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Dock lanterns & ambient glow
+    ctx.fillStyle = '#fbbf24';
+    ctx.beginPath();
+    ctx.arc(pLen - 4, -7, 3.5, 0, Math.PI * 2);
+    ctx.arc(pLen - 4, 7, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    const pierGlow = ctx.createRadialGradient(pLen - 4, 0, 4, pLen - 4, 0, 34);
+    pierGlow.addColorStop(0, 'rgba(251, 191, 36, 0.35)');
+    pierGlow.addColorStop(1, 'rgba(251, 191, 36, 0)');
+    ctx.fillStyle = pierGlow;
+    ctx.beginPath();
+    ctx.arc(pLen - 4, 0, 34, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  // Dock lanterns & ambient glow
-  ctx.fillStyle = '#fbbf24';
-  ctx.beginPath();
-  ctx.arc(pLen - 4, -7, 3.5, 0, Math.PI * 2);
-  ctx.arc(pLen - 4, 7, 3.5, 0, Math.PI * 2);
-  ctx.fill();
-
-  const pierGlow = ctx.createRadialGradient(pLen - 4, 0, 4, pLen - 4, 0, 34);
-  pierGlow.addColorStop(0, 'rgba(251, 191, 36, 0.35)');
-  pierGlow.addColorStop(1, 'rgba(251, 191, 36, 0)');
-  ctx.fillStyle = pierGlow;
-  ctx.beginPath();
-  ctx.arc(pLen - 4, 0, 34, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.restore(); // Finish wooden pier
+  ctx.restore(); // Finish pier
 
   // Island Name Plaque & Clan Crest
   ctx.font = 'bold 12px "Cinzel", serif';
@@ -960,6 +1074,307 @@ function drawOccultTower(ctx, tw) {
   ctx.restore();
 }
 
+// Coastal Cannon Bastion (Gold & Haven)
+function drawCannonBastion(ctx, tw) {
+  ctx.save();
+  ctx.translate(tw.x, tw.y);
+
+  const isHaven = tw.defenseType === 'haven_bastion';
+  const baseColor = isHaven ? '#1e3a8a' : '#292524';
+  const stoneColor = isHaven ? '#3b82f6' : '#78716c';
+  const trimColor = isHaven ? '#60a5fa' : '#ca8a04';
+
+  // Circular / Octagonal Stone Foundation Platform
+  ctx.fillStyle = baseColor;
+  ctx.strokeStyle = stoneColor;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  for (let h = 0; h < 8; h++) {
+    const hang = (h / 8) * Math.PI * 2;
+    const hx = Math.cos(hang) * tw.radius;
+    const hy = Math.sin(hang) * tw.radius;
+    if (h === 0) ctx.moveTo(hx, hy);
+    else ctx.lineTo(hx, hy);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Inner Battlement Tier
+  ctx.fillStyle = '#1c1917';
+  ctx.strokeStyle = trimColor;
+  ctx.lineWidth = 1.8;
+  ctx.beginPath();
+  ctx.arc(0, 0, tw.radius * 0.68, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Rotating Heavy Cannon Carriage & Barrel
+  ctx.save();
+  ctx.rotate(tw.aimAngle || 0);
+
+  // Cast-iron Gun Turret Mount
+  ctx.fillStyle = '#0f172a';
+  ctx.strokeStyle = '#334155';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(0, 0, 10, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Heavy Cannon Barrel
+  ctx.fillStyle = '#020617';
+  ctx.strokeStyle = '#475569';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(4, -4);
+  ctx.lineTo(24, -3);
+  ctx.lineTo(25, -4.5);
+  ctx.lineTo(26, 4.5);
+  ctx.lineTo(24, 3);
+  ctx.lineTo(4, 4);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Cannon Muzzle Ring
+  ctx.fillStyle = trimColor;
+  ctx.fillRect(23, -3.5, 2.5, 7);
+
+  ctx.restore();
+
+  // Structure HP Bar & Title
+  const barW = 46;
+  const barH = 4;
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+  ctx.fillRect(-barW / 2 - 2, -38, barW + 4, barH + 11);
+
+  ctx.font = 'bold 8px "Cinzel", serif';
+  ctx.fillStyle = isHaven ? '#60a5fa' : '#f59e0b';
+  ctx.textAlign = 'center';
+  ctx.fillText(isHaven ? "MERIAM DAMAI" : "BENTENG MERIAM", 0, -30);
+
+  ctx.fillStyle = '#1e293b';
+  ctx.fillRect(-barW / 2, -28, barW, barH);
+
+  ctx.fillStyle = isHaven ? '#3b82f6' : '#eab308';
+  const hpRatio = Math.max(0, tw.hp / tw.maxHp);
+  ctx.fillRect(-barW / 2, -28, barW * hpRatio, barH);
+
+  ctx.restore();
+}
+
+// Steam Harpoon Turret (Iron Clan)
+function drawSteamHarpoonTurret(ctx, tw) {
+  ctx.save();
+  ctx.translate(tw.x, tw.y);
+
+  // Heavy Iron Plated Square Bunker Platform
+  const bunkerSize = tw.radius * 1.6;
+  ctx.fillStyle = '#0f172a';
+  ctx.strokeStyle = '#334155';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.rect(-bunkerSize * 0.5, -bunkerSize * 0.5, bunkerSize, bunkerSize);
+  ctx.fill();
+  ctx.stroke();
+
+  // Corner Brass Rivets
+  ctx.fillStyle = '#f59e0b';
+  const rOff = bunkerSize * 0.42;
+  [[-rOff, -rOff], [rOff, -rOff], [rOff, rOff], [-rOff, rOff]].forEach(([rx, ry]) => {
+    ctx.beginPath();
+    ctx.arc(rx, ry, 2, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // Iron Turret Rotating Mount
+  ctx.save();
+  ctx.rotate(tw.aimAngle || 0);
+
+  // Turret Housing
+  ctx.fillStyle = '#1e293b';
+  ctx.strokeStyle = '#64748b';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 14, 12, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Twin Harpoon Ballista Rails
+  ctx.fillStyle = '#020617';
+  ctx.strokeStyle = '#94a3b8';
+  ctx.lineWidth = 1.2;
+  ctx.fillRect(4, -7, 22, 3);
+  ctx.fillRect(4, 4, 22, 3);
+  ctx.strokeRect(4, -7, 22, 3);
+  ctx.strokeRect(4, 4, 22, 3);
+
+  // Loaded Steel Harpoon Spike
+  ctx.fillStyle = '#cbd5e1';
+  ctx.beginPath();
+  ctx.moveTo(28, -5.5);
+  ctx.lineTo(23, -8);
+  ctx.lineTo(25, -5.5);
+  ctx.lineTo(10, -5.5);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(28, 5.5);
+  ctx.lineTo(23, 3);
+  ctx.lineTo(25, 5.5);
+  ctx.lineTo(10, 5.5);
+  ctx.closePath();
+  ctx.fill();
+
+  // Steam Smokestack Pipe on rear of turret
+  ctx.fillStyle = '#475569';
+  ctx.strokeStyle = '#0f172a';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(-8, 0, 4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#f97316';
+  ctx.beginPath();
+  ctx.arc(-8, 0, 1.8, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+
+  // Structure HP Bar & Title
+  const barW = 46;
+  const barH = 4;
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+  ctx.fillRect(-barW / 2 - 2, -38, barW + 4, barH + 11);
+
+  ctx.font = 'bold 8px "Cinzel", serif';
+  ctx.fillStyle = '#94a3b8';
+  ctx.textAlign = 'center';
+  ctx.fillText("HARPOON BAJA", 0, -30);
+
+  ctx.fillStyle = '#1e293b';
+  ctx.fillRect(-barW / 2, -28, barW, barH);
+
+  ctx.fillStyle = '#64748b';
+  const hpRatio = Math.max(0, tw.hp / tw.maxHp);
+  ctx.fillRect(-barW / 2, -28, barW * hpRatio, barH);
+
+  ctx.restore();
+}
+
+// Abyssal Living Tentacle (Blood/Meat Islands)
+function drawAbyssalTentacle(ctx, tw) {
+  ctx.save();
+  ctx.translate(tw.x, tw.y);
+
+  // Sea water churn & bubbling blood whirlpool around base
+  const churn = Math.sin(_now * 0.004 + tw.id) * 3;
+  ctx.fillStyle = 'rgba(153, 27, 27, 0.45)';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, tw.radius + 6 + churn, (tw.radius + 4) * 0.65, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Spurt bubbles around base
+  ctx.fillStyle = '#f43f5e';
+  for (let b = 0; b < 3; b++) {
+    const bAng = (b / 3) * Math.PI * 2 + _now * 0.002;
+    const bx = Math.cos(bAng) * (tw.radius * 0.7);
+    const by = Math.sin(bAng) * (tw.radius * 0.4);
+    ctx.beginPath();
+    ctx.arc(bx, by, 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Calculate 6 segment inverse kinematics / procedural sway
+  const segments = 6;
+  const segLength = 9;
+  const phase = tw.wrigglePhase || 0;
+  
+  let curX = 0;
+  let curY = 0;
+  let angle = tw.baseAngle !== undefined ? tw.baseAngle : 0;
+
+  if (tw.isSlamming) {
+    const slamTargetAngle = Math.atan2(tw.slamTargetY - tw.y, tw.slamTargetX - tw.x);
+    angle = slamTargetAngle;
+  }
+
+  // Draw 6 connected fleshy tentacle segments
+  for (let s = 0; s < segments; s++) {
+    const segT = s / segments;
+    const segWidth = (1.0 - segT * 0.68) * 14;
+    const sway = Math.sin(phase + s * 0.85) * (0.35 + segT * 0.4);
+    const segAngle = angle + sway;
+
+    const nextX = curX + Math.cos(segAngle) * segLength;
+    const nextY = curY + Math.sin(segAngle) * segLength - (s * 3.5);
+
+    // Segment flesh body
+    ctx.fillStyle = s % 2 === 0 ? '#4c0519' : '#881337';
+    ctx.strokeStyle = '#e11d48';
+    ctx.lineWidth = 1.4;
+
+    ctx.beginPath();
+    ctx.ellipse(curX, curY, segWidth * 0.5, segWidth * 0.45, segAngle, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // White suckers along the rim
+    if (s >= 1) {
+      const suckerX = curX + Math.cos(segAngle + Math.PI * 0.5) * (segWidth * 0.45);
+      const suckerY = curY + Math.sin(segAngle + Math.PI * 0.5) * (segWidth * 0.45);
+      ctx.fillStyle = '#fecdd3';
+      ctx.beginPath();
+      ctx.arc(suckerX, suckerY, Math.max(1.2, 3.2 - s * 0.4), 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    curX = nextX;
+    curY = nextY;
+  }
+
+  // Sharp claw / thorn tip
+  ctx.fillStyle = '#f43f5e';
+  ctx.beginPath();
+  ctx.arc(curX, curY, 3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Structure HP Bar & Title
+  const barW = 46;
+  const barH = 4;
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+  ctx.fillRect(-barW / 2 - 2, -44, barW + 4, barH + 11);
+
+  ctx.font = 'bold 8px "Cinzel", serif';
+  ctx.fillStyle = '#f43f5e';
+  ctx.textAlign = 'center';
+  ctx.fillText("TENTAKEL ABISAL", 0, -36);
+
+  ctx.fillStyle = '#1e293b';
+  ctx.fillRect(-barW / 2, -34, barW, barH);
+
+  ctx.fillStyle = '#e11d48';
+  const hpRatio = Math.max(0, tw.hp / tw.maxHp);
+  ctx.fillRect(-barW / 2, -34, barW * hpRatio, barH);
+
+  ctx.restore();
+}
+
+// Master Dispatcher for Island Defenses
+function drawIslandDefense(ctx, tw) {
+  if (tw.defenseType === 'tentacle') {
+    drawAbyssalTentacle(ctx, tw);
+  } else if (tw.defenseType === 'steam_harpoon') {
+    drawSteamHarpoonTurret(ctx, tw);
+  } else if (tw.defenseType === 'cannon_bastion' || tw.defenseType === 'haven_bastion') {
+    drawCannonBastion(ctx, tw);
+  } else {
+    drawOccultTower(ctx, tw);
+  }
+}
+
 // Render Ships Currently Sinking into the Deep
 function drawSinkingShip(ctx, s) {
   ctx.save();
@@ -1014,8 +1429,14 @@ function drawSeagull(ctx, s) {
   ctx.rotate(s.heading);
   const flap = Math.sin(s.wingPhase) * 5.5;
 
-  // Wings (White with Slate Gray Wingtips)
-  ctx.strokeStyle = '#ffffff';
+  const isCarrion = !!s.isCarrion;
+  const wingColor = isCarrion ? '#1e293b' : '#ffffff';
+  const tipColor = isCarrion ? '#020617' : '#64748b';
+  const bodyColor = isCarrion ? '#0f172a' : '#f8fafc';
+  const beakColor = isCarrion ? '#475569' : '#f59e0b';
+
+  // Wings
+  ctx.strokeStyle = wingColor;
   ctx.lineWidth = 2.2;
   ctx.lineCap = 'round';
 
@@ -1031,8 +1452,8 @@ function drawSeagull(ctx, s) {
   ctx.quadraticCurveTo(-2, 6 - flap, -1, 11 - flap * 1.4);
   ctx.stroke();
 
-  // Slate Gray Wingtips
-  ctx.strokeStyle = '#64748b';
+  // Wingtips
+  ctx.strokeStyle = tipColor;
   ctx.lineWidth = 1.8;
   ctx.beginPath();
   ctx.moveTo(-1, -8 + flap * 1.2);
@@ -1041,20 +1462,28 @@ function drawSeagull(ctx, s) {
   ctx.lineTo(-1, 11 - flap * 1.4);
   ctx.stroke();
 
-  // Sleek White Body
-  ctx.fillStyle = '#f8fafc';
+  // Sleek Body
+  ctx.fillStyle = bodyColor;
   ctx.beginPath();
   ctx.ellipse(1, 0, 5.5, 2.2, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Yellow Beak
-  ctx.fillStyle = '#f59e0b';
+  // Beak
+  ctx.fillStyle = beakColor;
   ctx.beginPath();
   ctx.moveTo(5.5, -0.8);
   ctx.lineTo(8.5, 0);
   ctx.lineTo(5.5, 0.8);
   ctx.closePath();
   ctx.fill();
+
+  // Carrion Crow Glowing Crimson Eye
+  if (isCarrion) {
+    ctx.fillStyle = '#ef4444';
+    ctx.beginPath();
+    ctx.arc(3.5, -0.8, 0.9, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
   ctx.restore();
 }
@@ -1173,10 +1602,11 @@ function render() {
 
   ctx.translate(width / 2 - playerState.x + shakeX, height / 2 - playerState.y + shakeY);
 
-  viewLeft = playerState.x - width / 2 - 120;
-  viewRight = playerState.x + width / 2 + 120;
-  viewTop = playerState.y - height / 2 - 120;
-  viewBottom = playerState.y + height / 2 + 120;
+  const drawMargin = isMobileDevice() ? 80 : 180;
+  viewLeft = playerState.x - width / 2 - drawMargin;
+  viewRight = playerState.x + width / 2 + drawMargin;
+  viewTop = playerState.y - height / 2 - drawMargin;
+  viewBottom = playerState.y + height / 2 + drawMargin;
 
   // Ocean Wave Ribbons (Optimized step and spacing to cut trig calls and stroke paths)
   const waveSpacing = 135;
@@ -1239,7 +1669,7 @@ function render() {
   // Render Occult Watchtowers (Mist Atoll)
   entities.towers.forEach(tw => {
     if (!isVisible(tw.x, tw.y, 200)) return;
-    drawOccultTower(ctx, tw)
+    drawIslandDefense(ctx, tw);
   });
 
   // Render Player Mines
@@ -1258,16 +1688,47 @@ function render() {
     ctx.fill();
   });
 
-  // Render Floating Loots
+  // Render Floating Loots & Message Bottles
   entities.floatingLoots.forEach(loot => {
     if (!isVisible(loot.x, loot.y, 50)) return;
-    ctx.fillStyle = loot.type === 'repair' ? '#b45309' : '#fbbf24';
-    ctx.beginPath();
-    ctx.roundRect(loot.x - 7, loot.y - 7, 14, 14, 3);
-    ctx.fill();
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 1.2;
-    ctx.stroke();
+    if (loot.type === 'bottle') {
+      ctx.save();
+      ctx.translate(loot.x, loot.y);
+      ctx.rotate(Math.sin(_now * 0.003 + (loot.bobOffset || 0)) * 0.25);
+
+      // Glass bottle body
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.45)';
+      ctx.strokeStyle = '#0284c7';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.ellipse(0, 2, 6, 9, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Bottle neck & cork
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.45)';
+      ctx.fillRect(-2.5, -9, 5, 5);
+      ctx.strokeRect(-2.5, -9, 5, 5);
+      ctx.fillStyle = '#b45309';
+      ctx.fillRect(-2, -12, 4, 3);
+
+      // Rolled parchment treasure map inside
+      ctx.fillStyle = '#fef08a';
+      ctx.fillRect(-2, 0, 4, 7);
+      ctx.strokeStyle = '#ca8a04';
+      ctx.lineWidth = 0.8;
+      ctx.strokeRect(-2, 0, 4, 7);
+
+      ctx.restore();
+    } else {
+      ctx.fillStyle = loot.type === 'repair' ? '#b45309' : '#fbbf24';
+      ctx.beginPath();
+      ctx.roundRect(loot.x - 7, loot.y - 7, 14, 14, 3);
+      ctx.fill();
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+    }
   });
 
   // Render Sea Ripples & Water Trails
@@ -1280,6 +1741,38 @@ function render() {
     ctx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
     ctx.stroke();
   });
+
+  // Render Subsurface Leviathan Shadow (Bayangan Purba Melintas di Bawah Air)
+  if (typeof subsurfaceShadow !== 'undefined' && subsurfaceShadow.active && isVisible(subsurfaceShadow.x, subsurfaceShadow.y, 250)) {
+    ctx.save();
+    ctx.translate(subsurfaceShadow.x, subsurfaceShadow.y);
+    ctx.rotate(subsurfaceShadow.heading);
+    const lifeRatio = subsurfaceShadow.progress / subsurfaceShadow.maxDuration;
+    const shadowAlpha = Math.sin(lifeRatio * Math.PI) * 0.36;
+    ctx.fillStyle = `rgba(3, 7, 18, ${shadowAlpha})`;
+
+    // Undulating colossal body
+    ctx.beginPath();
+    ctx.ellipse(0, 0, subsurfaceShadow.length * 0.5, subsurfaceShadow.width * 0.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Leviathan flipper fins
+    ctx.beginPath();
+    ctx.ellipse(-12, -subsurfaceShadow.width * 0.52, 28, 14, 0.4, 0, Math.PI * 2);
+    ctx.ellipse(-12, subsurfaceShadow.width * 0.52, 28, 14, -0.4, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Tail fin
+    const tailWiggle = Math.sin(_now * 0.005) * 12;
+    ctx.beginPath();
+    ctx.moveTo(-subsurfaceShadow.length * 0.46, 0);
+    ctx.lineTo(-subsurfaceShadow.length * 0.64, -26 + tailWiggle);
+    ctx.lineTo(-subsurfaceShadow.length * 0.64, 26 + tailWiggle);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.restore();
+  }
 
   // Render Sinking Ships in death sequence
   entities.sinkingShips.forEach(s => {
@@ -1348,6 +1841,46 @@ function render() {
       ctx.lineTo(-6, 3.5);
       ctx.closePath();
       ctx.fill();
+      ctx.stroke();
+
+    } else if (p.type === 'iron_harpoon') {
+      ctx.rotate(p.angle || 0);
+      // Heavy barbed iron bolt
+      ctx.fillStyle = '#475569';
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(10, 0);
+      ctx.lineTo(2, -4);
+      ctx.lineTo(4, -1.5);
+      ctx.lineTo(-8, -1.5);
+      ctx.lineTo(-8, 1.5);
+      ctx.lineTo(4, 1.5);
+      ctx.lineTo(2, 4);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Trailing steam / chain cord
+      ctx.strokeStyle = 'rgba(203, 213, 225, 0.7)';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(-8, 0);
+      ctx.lineTo(-18, 0);
+      ctx.stroke();
+
+    } else if (p.type === 'blood_bile') {
+      // Corrosive blood globule
+      ctx.fillStyle = 'rgba(225, 29, 72, 0.9)';
+      ctx.beginPath();
+      ctx.arc(0, 0, p.radius || 5.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fda4af';
+      ctx.beginPath();
+      ctx.arc(-1.5, -1.5, 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#9f1239';
+      ctx.lineWidth = 1;
       ctx.stroke();
     }
 

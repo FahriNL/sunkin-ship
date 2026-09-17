@@ -5,6 +5,47 @@
 
 const SAVE_KEY = 'BLOOD_SEA_SAVE_DATA_v2';
 const SETTINGS_KEY = 'BLOOD_SEA_SETTINGS_v2';
+const DIFFICULTY_STORAGE_KEY = 'BLOOD_SEA_DIFFICULTY_v2';
+
+// Difficulty System Configuration (Easy, Medium/Default, Hard)
+const DIFFICULTY_SETTINGS = {
+  easy: {
+    id: 'easy',
+    name: 'Mudah (Easy)',
+    badge: 'MUDAH',
+    badgeColor: 'text-emerald-400 bg-emerald-950 border-emerald-500/40',
+    desc: 'Petualangan santai: Kerusakan diterima -25%, damage meriam +20%, hadiah Koin & Darah +25%.',
+    playerDamageReceivedMult: 0.75,
+    playerDamageDealtMult: 1.20,
+    rewardMultiplier: 1.25,
+    enemyReloadMultiplier: 1.25,
+    enemyHpMultiplier: 0.85
+  },
+  medium: {
+    id: 'medium',
+    name: 'Normal (Medium)',
+    badge: 'NORMAL',
+    badgeColor: 'text-amber-300 bg-amber-950 border-amber-500/40',
+    desc: 'Keseimbangan standar ekspedisi Laut Darah saat ini.',
+    playerDamageReceivedMult: 1.0,
+    playerDamageDealtMult: 1.0,
+    rewardMultiplier: 1.0,
+    enemyReloadMultiplier: 1.0,
+    enemyHpMultiplier: 1.0
+  },
+  hard: {
+    id: 'hard',
+    name: 'Sulit (Hard)',
+    badge: 'EKSTREM',
+    badgeColor: 'text-rose-400 bg-rose-950 border-rose-500/40',
+    desc: 'Kutukan Palung: Kerusakan diterima +35%, musuh lebih tangguh & agresif, hadiah Koin & Darah +50%.',
+    playerDamageReceivedMult: 1.35,
+    playerDamageDealtMult: 0.90,
+    rewardMultiplier: 1.50,
+    enemyReloadMultiplier: 0.85,
+    enemyHpMultiplier: 1.25
+  }
+};
 
 // Clean SVG Icon paths for Upgrades & UI elements
 const SVG_ICONS = {
@@ -27,6 +68,12 @@ const SVG_ICONS = {
   skull: `<svg class="w-12 h-12 text-rose-500 mx-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><path d="M8 20v2h8v-2"/><path d="m12.5 17-.5-1-.5 1h1z"/><path d="M16 20a2 2 0 0 0 1.56-3.25 8 8 0 1 0-11.12 0A2 2 0 0 0 8 20"/></svg>`
 };
 
+// Device platform detection for adaptive draw distance and spawning density
+function isMobileDevice() {
+  if (typeof window === 'undefined') return false;
+  return ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth < 1024);
+}
+
 // Ship Upgrades Definition (6 branches, MAX 6 levels each = 36 levels total)
 const UPGRADE_CONFIG = {
   hull: {
@@ -34,8 +81,8 @@ const UPGRADE_CONFIG = {
     iconKey: "hull",
     maxLevel: 6,
     baseCost: 35,
-    costMult: 1.75,
-    bloodCostStart: 3,
+    costMult: 1.85,
+    bloodCostStart: 2, // Lv.3+ requires Blood Essence!
     desc: "Meningkatkan ketahanan maksimum kapal dari tembakan dan tabrakan."
   },
   speed: {
@@ -43,8 +90,8 @@ const UPGRADE_CONFIG = {
     iconKey: "speed",
     maxLevel: 6,
     baseCost: 30,
-    costMult: 1.7,
-    bloodCostStart: 3,
+    costMult: 1.8,
+    bloodCostStart: 3, // Lv.4+ requires Blood Essence
     desc: "Menambah kelincahan putar kemudi dan laju kecepatan layar."
   },
   cannons: {
@@ -52,8 +99,8 @@ const UPGRADE_CONFIG = {
     iconKey: "cannons",
     maxLevel: 6,
     baseCost: 45,
-    costMult: 1.85,
-    bloodCostStart: 4,
+    costMult: 1.9,
+    bloodCostStart: 2, // Lv.3+ requires Blood Essence!
     desc: "Menambah jumlah meriam lambung samping dan daya hancur peluru."
   },
   rearDefense: {
@@ -61,8 +108,8 @@ const UPGRADE_CONFIG = {
     iconKey: "rearDefense",
     maxLevel: 6,
     baseCost: 40,
-    costMult: 1.8,
-    bloodCostStart: 3,
+    costMult: 1.85,
+    bloodCostStart: 2, // Lv.3+ requires Blood Essence!
     desc: "Membuka meriam buritan & melepas ranjau mesiu terapung jika musuh mengekor."
   },
   stealthCamo: {
@@ -70,8 +117,8 @@ const UPGRADE_CONFIG = {
     iconKey: "stealthCamo",
     maxLevel: 6,
     baseCost: 35,
-    costMult: 1.75,
-    bloodCostStart: 3,
+    costMult: 1.8,
+    bloodCostStart: 3, // Lv.4+ requires Blood Essence
     desc: "Mempersempit jarak pandang musuh & memperlambat meteran ketahuan hingga 70%."
   },
   relicSiphon: {
@@ -79,8 +126,8 @@ const UPGRADE_CONFIG = {
     iconKey: "relicSiphon",
     maxLevel: 6,
     baseCost: 55,
-    costMult: 2.0,
-    bloodCostStart: 2,
+    costMult: 2.1,
+    bloodCostStart: 2, // Lv.3+ requires Blood Essence!
     desc: "Menghisap darah kapal atau monster lawan untuk memulihkan lambung."
   }
 };
@@ -255,6 +302,7 @@ function generateGenerationalWorld(seed, genNumber) {
       hasSmokestack: Boolean(template.hasSmokestack),
       hasOccultCircle: Boolean(template.hasOccultCircle),
       isFlesh: Boolean(template.isFlesh),
+      isSkullIsland: Boolean(template.isSkullIsland),
       dockAngle: dockAng,
       desc: template.desc || ""
     };
@@ -266,6 +314,8 @@ function generateGenerationalWorld(seed, genNumber) {
     islandObj._cachedInner = null;
     islandObj._cachedPier = null;
     islandObj._cachedFoliage = null;
+    islandObj._cachedSkulls = null;
+    islandObj._cachedRibs = null;
 
     WORLD_ISLANDS.push(islandObj);
     return islandObj;
@@ -344,6 +394,18 @@ function generateGenerationalWorld(seed, genNumber) {
     desc: "Pos niaga persinggahan kapal dagang di perairan senja."
   }, 1700, 2600, Math.PI * 1.85, Math.PI * 0.8);
 
+  // Additional Ring 1 Island: Batavia Spice Cove
+  placeIsland({
+    id: 'batavia_cove',
+    name: "Teluk Rempah Batavia",
+    clan: 'gold',
+    minRadius: 230,
+    maxRadius: 280,
+    color: '#166534',
+    sandColor: '#d97706',
+    desc: "Dermaga transit rempah dan perbekalan armada niaga emas."
+  }, 1900, 2700, rng() * Math.PI * 2, Math.PI * 0.85);
+
   // 3. RING 2 & 3: Selat Badai & Perairan Kutukan Kabut (3200 - 5500m)
   // Mist Atoll (Mist Clan Occult Sanctuary)
   placeIsland({
@@ -372,7 +434,7 @@ function generateGenerationalWorld(seed, genNumber) {
   }, 3200, 4500, -Math.PI * 0.6, Math.PI * 0.8);
 
   // Pirate Stronghold / Ghost Key
-  const pirateNames = ["Karang Badai Tengkorak", "Teluk Penyamun Gelap", "Atol Arwah Kelabu", "Karang Karang Pembakar Laut"];
+  const pirateNames = ["Karang Badai Tengkorak", "Teluk Penyamun Gelap", "Atol Arwah Kelabu", "Karang Pembakar Laut"];
   placeIsland({
     id: 'pirate_stronghold',
     name: pirateNames[Math.floor(rng() * pirateNames.length)],
@@ -384,19 +446,45 @@ function generateGenerationalWorld(seed, genNumber) {
     desc: "Tempat persembunyian rahasia armada perompak samudra."
   }, 3800, 5200, Math.PI * 1.5, Math.PI * 0.9);
 
-  // 4. RING 4 & 5: Gerbang Palung Abisal & LAUT DARAH (6500 - 9500m)
-  // Cursed Spire (Blood Clan Flesh Island)
+  // Additional Ring 3 Island: Ghost Reef (Atol Arwah Kabut)
   placeIsland({
-    id: 'cursed_spire',
-    name: "Pulau Tengkorak Abisal",
+    id: 'ghost_atoll',
+    name: "Karang Arwah Berkabut",
+    clan: 'mist',
+    minRadius: 240,
+    maxRadius: 290,
+    color: '#0f2926',
+    sandColor: '#334155',
+    desc: "Gugusan karang sunyi di perairan kabut yang sering memikat kapal terdampar."
+  }, 3900, 5100, rng() * Math.PI * 2, Math.PI * 0.85);
+
+  // 4. RING 4 & 5: Gerbang Palung Abisal & LAUT DARAH (5500 - 9000px)
+  // SKULL ISLAND (Pulau Tengkorak) - Formed from giant ossuary mounds and leviathan bones
+  // Positioned right at the entrance threshold of Blood Sea (5600 - 6400px) for quick discovery!
+  placeIsland({
+    id: 'skull_island',
+    name: "Pulau Tengkorak (Skull Island)",
     clan: 'blood',
-    minRadius: 390,
+    minRadius: 380,
     maxRadius: 440,
-    color: '#4c0519',
-    sandColor: '#881337',
-    isFlesh: true,
-    desc: "Gerbang Laut Darah. Daratan berdenyut dengan tumpukan tulang belulang kurban."
-  }, 6600, 7800, rng() * Math.PI * 2, Math.PI * 0.8);
+    color: '#1c1917',
+    sandColor: '#f1f5f9', // Ivory bone-white shoreline!
+    isSkullIsland: true,
+    desc: "Pulau terkutuk yang terbentuk dari jutaan tumpukan tengkorak dan kerangka paus purba di tengah Laut Darah."
+  }, 5600, 6400, rng() * Math.PI * 2, Math.PI * 0.85);
+
+  // Bone Reef (Gugusan Karang Belulang - Ivory bone-white outer shoals)
+  placeIsland({
+    id: 'bone_reef',
+    name: "Gugusan Karang Belulang",
+    clan: 'blood',
+    minRadius: 270,
+    maxRadius: 330,
+    color: '#1c1917',
+    sandColor: '#f1f5f9',
+    isSkullIsland: true,
+    desc: "Gugusan karang tulang gading purba yang menjulang di batas awal Laut Darah."
+  }, 5900, 6900, rng() * Math.PI * 2, Math.PI * 0.85);
 
   // Hive Nest (Blood Clan Leviathan Mothership Spire)
   placeIsland({
@@ -409,7 +497,7 @@ function generateGenerationalWorld(seed, genNumber) {
     sandColor: '#991b1b',
     isFlesh: true,
     desc: "Jantung terdalam Laut Darah tempat bertenggernya para raksasa abisal purba."
-  }, 8300, 9600, rng() * Math.PI * 2, Math.PI * 0.8);
+  }, 7800, 9200, rng() * Math.PI * 2, Math.PI * 0.8);
 
   // Additional Abyssal Monolith
   const abyssalNames = ["Palung Daging Menganga", "Altar Karang Berdarah", "Monolit Purba Abisal"];
@@ -423,7 +511,7 @@ function generateGenerationalWorld(seed, genNumber) {
     sandColor: '#9f1239',
     isFlesh: true,
     desc: "Tonjolan daging karang abisal berdenyut di kedalaman samudra darah."
-  }, 7300, 8900, rng() * Math.PI * 2, Math.PI * 0.8);
+  }, 7100, 8600, rng() * Math.PI * 2, Math.PI * 0.8);
 
   return WORLD_ISLANDS;
 }
@@ -431,13 +519,18 @@ function generateGenerationalWorld(seed, genNumber) {
 // Initial bootstrap generation
 generateGenerationalWorld(currentWorldGenSeed, currentWorldGenNumber);
 
+// Global immersion variables (Zero-overhead navigation & state)
+let windAngle = 0.5; // Dynamic ocean wind vector
+let activeTreasureHint = null; // { x, y, name }
+let hasEnteredBloodSeaThisRun = false;
+
 const BIOME_STOPS = [
   { dist: 0,    name: "Laut Tenang",               waterA: [16, 85, 130], waterB: [10, 48, 90],  isBlood: false },
-  { dist: 1400, name: "Perairan Senja Berombak",   waterA: [14, 62, 105], waterB: [8, 34, 72],   isBlood: false },
-  { dist: 3200, name: "Selat Badai Bajak Laut",   waterA: [12, 38, 75],  waterB: [6, 20, 48],   isBlood: false },
-  { dist: 5200, name: "Perairan Kutukan Kabut",   waterA: [46, 18, 70],  waterB: [22, 8, 42],   isBlood: false },
-  { dist: 7000, name: "Gerbang Palung Abisal",     waterA: [98, 14, 38],  waterB: [42, 6, 22],   isBlood: true  },
-  { dist: 8800, name: "LAUT DARAH (BLOOD SEA)",    waterA: [145, 10, 22], waterB: [65, 4, 15],   isBlood: true  }
+  { dist: 1300, name: "Perairan Senja Berombak",   waterA: [14, 62, 105], waterB: [8, 34, 72],   isBlood: false },
+  { dist: 2800, name: "Selat Badai Bajak Laut",   waterA: [12, 38, 75],  waterB: [6, 20, 48],   isBlood: false },
+  { dist: 4400, name: "Perairan Kutukan Kabut",   waterA: [46, 18, 70],  waterB: [22, 8, 42],   isBlood: false },
+  { dist: 5500, name: "Gerbang Palung Abisal",     waterA: [105, 14, 38], waterB: [45, 6, 22],   isBlood: true  },
+  { dist: 7200, name: "LAUT DARAH (BLOOD SEA)",    waterA: [155, 8, 24],  waterB: [72, 4, 16],   isBlood: true  }
 ];
 
 const _biomeColorA = [0, 0, 0];
@@ -477,8 +570,8 @@ function getBiomeInfo(dist) {
   lerpColorOut(_biomeColorA, curr.waterA, next.waterA, t);
   lerpColorOut(_biomeColorB, curr.waterB, next.waterB, t);
 
-  const isBloodSea = dist >= 6500;
-  const bloodRatio = Math.max(0, Math.min(1, (dist - 6200) / 2400));
+  const isBloodSea = dist >= 5500;
+  const bloodRatio = Math.max(0, Math.min(1, (dist - 5300) / 1900));
 
   let displayName = curr.name;
   if (t > 0.6 && curr !== next) {

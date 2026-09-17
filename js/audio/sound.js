@@ -22,9 +22,12 @@ class SoundFX {
     this.hitBuffers = [];
     this.seagullBuffers = [];
     this.seagullAwayBuffer = null;
+    this.crowBuffers = [];
+    this.crowAwayBuffer = null;
     this.lastCannonTime = 0;
     this.lastHitTime = 0;
     this.lastSeagullTime = 0;
+    this.lastCrowTime = 0;
     this.activeCannonCount = 0;
     this.activeHitCount = 0;
     this.filesLoaded = false;
@@ -313,6 +316,20 @@ class SoundFX {
       if (buf) this.seagullAwayBuffer = buf;
     });
 
+    // Preload Crow / Carrion Seabird Audio Assets
+    const crowFiles = [
+      './sound effect/crow1.mp3',
+      './sound effect/crow2.mp3'
+    ];
+    crowFiles.forEach(async (url) => {
+      const buf = await loadBuffer(url);
+      if (buf) this.crowBuffers.push(buf);
+    });
+
+    loadBuffer('./sound effect/crow_away.mp3').then(buf => {
+      if (buf) this.crowAwayBuffer = buf;
+    });
+
     // Preload New Audio Assets
     loadBuffer('./sound effect/Coin_collect.mp3').then(buf => { if (buf) this.coinBuffer = buf; });
     loadBuffer('./sound effect/mist1.mp3').then(buf => { if (buf) this.mistBuffer = buf; });
@@ -396,6 +413,11 @@ class SoundFX {
 
   playSeagullNear(x, y) {
     if (this._muted) return;
+    // Seagulls do not chirp happily in the Blood Sea
+    if (typeof getBiomeInfo === 'function' && typeof playerState !== 'undefined') {
+      const dist = Math.hypot(playerState.x, playerState.y);
+      if (getBiomeInfo(dist).isBloodSea) return;
+    }
     const now = performance.now() / 1000;
     if (now - this.lastSeagullTime < 5.0) return; // Min 5 seconds between close calls
     const gain = this.getSpatialVolume(x, y, 750, 0.28);
@@ -410,8 +432,54 @@ class SoundFX {
 
   playSeagullAway() {
     if (this._muted) return;
+    if (typeof getBiomeInfo === 'function' && typeof playerState !== 'undefined') {
+      const dist = Math.hypot(playerState.x, playerState.y);
+      if (getBiomeInfo(dist).isBloodSea) return;
+    }
     if (this.seagullAwayBuffer) {
       this._safePlayBuffer(this.seagullAwayBuffer, 0.22, 0.94 + Math.random() * 0.12);
+    }
+  }
+
+  playCrowCaw(x, y) {
+    if (this._muted) return;
+    const now = performance.now() / 1000;
+    if (now - this.lastCrowTime < 4.5) return;
+    const gain = this.getSpatialVolume(x, y, 900, 0.45);
+    if (gain <= 0.02) return;
+    this.lastCrowTime = now;
+
+    if (this.crowBuffers.length > 0) {
+      const chosen = this.crowBuffers[Math.floor(Math.random() * this.crowBuffers.length)];
+      this._safePlayBuffer(chosen, gain, 0.94 + Math.random() * 0.12);
+    } else {
+      this.init();
+      if (!this.ctx) return;
+      const t = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const filter = this.ctx.createBiquadFilter();
+      const gainNode = this.ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(260, t);
+      osc.frequency.exponentialRampToValueAtTime(130, t + 0.32);
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(460, t);
+      filter.Q.setValueAtTime(2.8, t);
+      gainNode.gain.setValueAtTime(gain * 0.45, t);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, t + 0.32);
+      osc.connect(filter);
+      filter.connect(gainNode);
+      gainNode.connect(this.destinationNode);
+      osc.start(t);
+      osc.stop(t + 0.32);
+      osc.onended = () => { try { osc.disconnect(); filter.disconnect(); gainNode.disconnect(); } catch (e) {} };
+    }
+  }
+
+  playCrowAway() {
+    if (this._muted) return;
+    if (this.crowAwayBuffer) {
+      this._safePlayBuffer(this.crowAwayBuffer, 0.32, 0.94 + Math.random() * 0.12);
     }
   }
 
@@ -810,7 +878,45 @@ class SoundFX {
     gain.connect(this.destinationNode);
     osc.start(now);
     osc.stop(now + 1.2);
-      osc.onended = () => { osc.disconnect(); gain.disconnect(); };
+    osc.onended = () => { osc.disconnect(); gain.disconnect(); };
+  }
+
+  playSeaShantyWhistle() {
+    if (this._muted) return;
+    this.init();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    // Sailor whistle pentatonic motif (D5, E5, G5, A5, G5, D5)
+    const melody = [
+      { f: 587.33, d: 0.18, pause: 0.04 },
+      { f: 659.25, d: 0.16, pause: 0.04 },
+      { f: 783.99, d: 0.22, pause: 0.06 },
+      { f: 880.00, d: 0.32, pause: 0.10 },
+      { f: 783.99, d: 0.18, pause: 0.04 },
+      { f: 587.33, d: 0.38, pause: 0.02 }
+    ];
+    let offset = 0;
+    melody.forEach(note => {
+      const osc = this.ctx.createOscillator();
+      const gainNode = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(note.f, now + offset);
+      // Gentle subtle whistle vibrato
+      osc.frequency.linearRampToValueAtTime(note.f * 1.015, now + offset + note.d * 0.5);
+      osc.frequency.linearRampToValueAtTime(note.f, now + offset + note.d);
+
+      gainNode.gain.setValueAtTime(0, now + offset);
+      gainNode.gain.linearRampToValueAtTime(0.065 * (this.masterVolume * this.sfxVolume), now + offset + 0.03);
+      gainNode.gain.setValueAtTime(0.065 * (this.masterVolume * this.sfxVolume), now + offset + note.d - 0.03);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + offset + note.d);
+
+      osc.connect(gainNode);
+      gainNode.connect(this.destinationNode);
+      osc.start(now + offset);
+      osc.stop(now + offset + note.d);
+      osc.onended = () => { try { osc.disconnect(); gainNode.disconnect(); } catch (e) {} };
+      offset += note.d + note.pause;
+    });
   }
 }
 

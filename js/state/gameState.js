@@ -13,6 +13,7 @@ let playerState = {
   kills: 0,
   salvages: 0,
   maxDistanceReached: 0,
+  speedSnareTimer: 0, // Iron harpoon snare debuff timer
   upgrades: {
     hull: 1,
     speed: 1,
@@ -40,12 +41,45 @@ const entities = {
   seagulls: []      // Oceanic seabirds flying and gliding over the sea
 };
 
-// Spawn Spiked Sea Mines around Iron islands & Occult Towers on Mist atolls
+// Game Difficulty State & Persistence (Easy, Medium/Default, Hard)
+let currentDifficulty = 'medium';
+try {
+  const savedDiff = localStorage.getItem(DIFFICULTY_STORAGE_KEY);
+  if (savedDiff && typeof DIFFICULTY_SETTINGS !== 'undefined' && DIFFICULTY_SETTINGS[savedDiff]) {
+    currentDifficulty = savedDiff;
+  }
+} catch (e) {}
+
+function getDifficultyConfig() {
+  if (typeof DIFFICULTY_SETTINGS !== 'undefined' && DIFFICULTY_SETTINGS[currentDifficulty]) {
+    return DIFFICULTY_SETTINGS[currentDifficulty];
+  }
+  return {
+    id: 'medium',
+    name: 'Normal (Medium)',
+    playerDamageReceivedMult: 1.0,
+    playerDamageDealtMult: 1.0,
+    rewardMultiplier: 1.0,
+    enemyReloadMultiplier: 1.0,
+    enemyHpMultiplier: 1.0
+  };
+}
+
+function setGameDifficulty(diffKey) {
+  if (typeof DIFFICULTY_SETTINGS !== 'undefined' && DIFFICULTY_SETTINGS[diffKey]) {
+    currentDifficulty = diffKey;
+    try {
+      localStorage.setItem(DIFFICULTY_STORAGE_KEY, diffKey);
+    } catch (e) {}
+  }
+}
+
+// Spawn Spiked Sea Mines (Iron islands & Open Sea Straits) & Defenses for ALL Islands
 function initTerritorialDefenses() {
   entities.spikedMines = [];
   entities.towers = [];
 
-  // 1. Spiked Mines around all Iron clan islands
+  // 1a. Spiked Mines around all Iron clan islands
   const ironIslands = WORLD_ISLANDS.filter(i => i.clan === 'iron');
   ironIslands.forEach(ironIsland => {
     const mineCount = Math.min(14, Math.max(8, Math.floor(ironIsland.radius / 25)));
@@ -70,27 +104,138 @@ function initTerritorialDefenses() {
     }
   });
 
-  // 2. Mysterious Glowing Occult Towers on Mist atolls
-  const mistIslands = WORLD_ISLANDS.filter(i => i.clan === 'mist' && i.hasOccultCircle);
-  mistIslands.forEach(mistIsland => {
-    [-0.5, 0.5].forEach((offsetAngle, idx) => {
-      const towerAngle = (mistIsland.dockAngle !== undefined ? mistIsland.dockAngle : 0) + Math.PI + offsetAngle;
-      const towerDist = mistIsland.radius - 35;
+  // 1b. Open Sea Minefields in navigable straits and contested waters (1800 - 5200px)
+  const openSeaCount = 14;
+  for (let om = 0; om < openSeaCount; om++) {
+    const omAng = (om / openSeaCount) * Math.PI * 2 + 0.35;
+    const omDist = 1850 + (om % 4) * 780 + Math.sin(om * 2.1) * 200;
+    const mx = Math.cos(omAng) * omDist;
+    const my = Math.sin(omAng) * omDist;
+
+    // Ensure it's not placed inside or too close to any island
+    let insideIsland = false;
+    for (let i = 0; i < WORLD_ISLANDS.length; i++) {
+      const isl = WORLD_ISLANDS[i];
+      if (Math.hypot(mx - isl.x, my - isl.y) < (isl.radius || 200) + 75) {
+        insideIsland = true;
+        break;
+      }
+    }
+    if (!insideIsland) {
+      entities.spikedMines.push({
+        id: Math.random(),
+        islandId: null,
+        isOpenSea: true,
+        x: mx,
+        y: my,
+        baseX: mx,
+        baseY: my,
+        radius: 12,
+        damage: 48,
+        hp: 20,
+        bobPhase: Math.random() * Math.PI * 2,
+        flashTimer: Math.random() * 2,
+        detonating: false,
+        detonateTimer: 0.75
+      });
+    }
+  }
+
+  // 2. Territorial Active Defenses for ALL Islands across the world
+  WORLD_ISLANDS.forEach(isl => {
+    let defenseType = 'cannon_bastion';
+    let count = 2;
+    let baseOffsets = [-0.65, 0.65];
+
+    if (isl.id === 'haven') {
+      defenseType = 'haven_bastion';
+      count = 2;
+      baseOffsets = [-0.45, 0.45];
+    } else if (isl.clan === 'blood' || isl.isFlesh || isl.isSkullIsland) {
+      defenseType = 'tentacle';
+      count = (isl.id === 'hive_nest' || (isl.radius && isl.radius > 400)) ? 3 : 2;
+      baseOffsets = count === 3 ? [-0.85, 0, 0.85] : [-0.65, 0.65];
+    } else if (isl.clan === 'mist') {
+      defenseType = 'mist_spire';
+      count = 2;
+      baseOffsets = [-0.55, 0.55];
+    } else if (isl.clan === 'iron') {
+      defenseType = 'steam_harpoon';
+      count = 2;
+      baseOffsets = [-0.55, 0.55];
+    } else { // gold or neutral merchant
+      defenseType = 'cannon_bastion';
+      count = (isl.id === 'batavia_outpost' || (isl.radius && isl.radius > 350)) ? 3 : 2;
+      baseOffsets = count === 3 ? [-0.75, 0, 0.75] : [-0.6, 0.6];
+    }
+
+    baseOffsets.forEach((offsetAngle, idx) => {
+      const baseFacing = (isl.dockAngle !== undefined ? isl.dockAngle : 0) + Math.PI;
+      const angle = baseFacing + offsetAngle;
+      const rAtAng = typeof getIslandRadiusAt === 'function' ? getIslandRadiusAt(isl, angle) : (isl.radius || 300);
+      const dist = rAtAng + (defenseType === 'tentacle' ? 24 : 18);
+
+      let name = "Pertahanan Karang";
+      let hp = 360;
+      let damage = 24;
+      let radius = 28;
+
+      if (defenseType === 'haven_bastion') {
+        name = idx === 0 ? "Meriam Penjaga Damai Barat" : "Meriam Penjaga Damai Timur";
+        hp = 520;
+        damage = 30;
+        radius = 28;
+      } else if (defenseType === 'cannon_bastion') {
+        name = `${isl.name} - Bastion Meriam ${idx + 1}`;
+        hp = 380;
+        damage = 25;
+        radius = 28;
+      } else if (defenseType === 'steam_harpoon') {
+        name = `${isl.name} - Turret Harpoon Baja ${idx + 1}`;
+        hp = 440;
+        damage = 28;
+        radius = 30;
+      } else if (defenseType === 'mist_spire') {
+        name = idx === 0 ? "Menara Jiwa Abisal Utara" : "Menara Arwah Pualam Selatan";
+        hp = 320;
+        damage = 20;
+        radius = 30;
+      } else if (defenseType === 'tentacle') {
+        name = `Tentakel Abisal Penjaga ${idx + 1}`;
+        hp = 390;
+        damage = 34;
+        radius = 26;
+      }
+
+      // Scale tower HP according to difficulty settings
+      const diffCfg = (typeof getDifficultyConfig === 'function') ? getDifficultyConfig() : { enemyHpMultiplier: 1.0 };
+      const scaledTowerHp = Math.round(hp * (diffCfg.enemyHpMultiplier || 1.0));
+
       entities.towers.push({
         id: Math.random(),
-        islandId: mistIsland.id,
-        name: idx === 0 ? "Menara Jiwa Abisal Utara" : "Menara Arwah Pualam Selatan",
-        x: mistIsland.x + Math.cos(towerAngle) * towerDist,
-        y: mistIsland.y + Math.sin(towerAngle) * towerDist,
-        radius: 28,
-        hp: 320,
-        maxHp: 320,
-        clan: 'mist',
-        damage: 18,
-        bulletColor: '#22d3ee',
-        shootCooldown: 2.2 + idx * 1.2,
+        islandId: isl.id,
+        defenseType: defenseType,
+        name: name,
+        x: isl.x + Math.cos(angle) * dist,
+        y: isl.y + Math.sin(angle) * dist,
+        baseAngle: angle,
+        aimAngle: angle,
+        radius: radius,
+        hp: scaledTowerHp,
+        maxHp: scaledTowerHp,
+        clan: isl.clan || 'neutral',
+        damage: damage,
+        shootCooldown: 1.0 + idx * 0.8,
+        // Specialized states:
         orbAngle: 0,
-        glowPulse: 0
+        glowPulse: 0,
+        steamPuffTimer: Math.random() * 2,
+        wrigglePhase: Math.random() * Math.PI * 2,
+        isSlamming: false,
+        slamProgress: 0,
+        slamCooldown: 0,
+        slamTargetX: 0,
+        slamTargetY: 0
       });
     });
   });
@@ -101,6 +246,9 @@ function createEnemyEntity(clanKey, tierIndex, x, y, angle, options = {}) {
   const clanData = CLAN_LORE[clanKey];
   const tierData = clanData.tiers[Math.max(0, Math.min(2, tierIndex))];
   const isMonster = clanKey === 'blood';
+  const diffCfg = (typeof getDifficultyConfig === 'function') ? getDifficultyConfig() : { enemyHpMultiplier: 1.0 };
+  const baseHp = options.hp || tierData.hp;
+  const scaledHp = Math.round(baseHp * (diffCfg.enemyHpMultiplier || 1.0));
 
   return {
     id: Math.random(),
@@ -111,6 +259,7 @@ function createEnemyEntity(clanKey, tierIndex, x, y, angle, options = {}) {
     formationIndex: options.formationIndex || 0,
     formationTotal: options.formationTotal || 1,
     ritualCenter: options.ritualCenter || null,
+    guardWreckId: options.guardWreckId || null,
     isAnchored: Boolean(options.isAnchored),
     voyageState: options.voyageState || (options.isAnchored ? 'docked' : 'voyaging'),
     destinationIslandId: options.destinationIslandId || null,
@@ -124,8 +273,8 @@ function createEnemyEntity(clanKey, tierIndex, x, y, angle, options = {}) {
     tier: tierData.level,
     name: options.name || tierData.name,
     isMonster: isMonster,
-    hp: options.hp || tierData.hp,
-    maxHp: options.hp || tierData.hp,
+    hp: scaledHp,
+    maxHp: scaledHp,
     speed: options.speed || tierData.speed,
     baseSpeed: options.speed || tierData.speed,
     damage: options.damage || tierData.damage,
@@ -448,6 +597,7 @@ function resetRoguelikeRun() {
     relicSiphon: 1
   };
   playerState.hp = getStatValue('hull', 1);
+  playerState.speedSnareTimer = 0;
 
   // 2. Re-initialize spiked sea mines & occult towers around the new island locations
   initTerritorialDefenses();
@@ -490,6 +640,9 @@ function resetRoguelikeRun() {
   currentSalvagingShip = null;
   salvageProgress = 0;
   screenShake = 0;
+  hasEnteredBloodSeaThisRun = false;
+  activeTreasureHint = null;
+  windAngle = Math.random() * Math.PI * 2;
 
   // 5. Perma-Death Storage Reset
   try {
