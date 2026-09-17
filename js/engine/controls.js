@@ -252,3 +252,38 @@ function updateKeyboardSteering() {
     if (joystickKnob) joystickKnob.style.transform = `translate(0px, 0px)`;
   }
 }
+
+/* ==========================================================================
+   MOBILE TOUCH ACTION BUTTONS (FIRE / MINE & QUICK REPAIR)
+   ========================================================================== */
+const btnMobileFire = document.getElementById('btnMobileFire');
+const btnMobileRepair = document.getElementById('btnMobileRepair');
+
+function handleMobileFire(e) {
+  if (e && e.cancelable) e.preventDefault();
+  if (!isGameStarted || isGamePaused) return;
+  sound.init();
+
+  if (playerState.upgrades.rearDefense > 0) {
+    triggerPlayerRearDefense();
+  } else {
+    fireCannons(playerState, null, true);
+  }
+}
+
+function handleMobileRepair(e) {
+  if (e && e.cancelable) e.preventDefault();
+  if (!isGameStarted || isGamePaused) return;
+  sound.init();
+  quickRepairShip();
+}
+
+if (btnMobileFire) {
+  btnMobileFire.addEventListener('touchstart', handleMobileFire, { passive: false });
+  btnMobileFire.addEventListener('click', handleMobileFire);
+}
+
+if (btnMobileRepair) {
+  btnMobileRepair.addEventListener('touchstart', handleMobileRepair, { passive: false });
+  btnMobileRepair.addEventListener('click', handleMobileRepair);
+}

@@ -21,12 +21,13 @@ function isVisible(x, y, margin) {
 
 function resizeCanvas() {
   const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || window.innerWidth < 1024;
-  dpr = Math.min(window.devicePixelRatio || 1, isMobile ? 1.33 : 1.75);
+  dpr = Math.min(window.devicePixelRatio || 1, isMobile ? 1.5 : 2.0);
   width = window.innerWidth;
   height = window.innerHeight;
   canvas.width = Math.floor(width * dpr);
   canvas.height = Math.floor(height * dpr);
-  ctx.scale(dpr, dpr);
+  canvas.style.width = width + 'px';
+  canvas.style.height = height + 'px';
 }
 
 window.addEventListener('resize', resizeCanvas);
@@ -1576,6 +1577,8 @@ function getMistSprite(isBlood) {
 }
 
 function render() {
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
   _now = Date.now();
   _perfNow = performance.now() * 0.001;
   const playerDist = Math.hypot(playerState.x, playerState.y);
@@ -1600,13 +1603,25 @@ function render() {
     shakeY = (Math.random() - 0.5) * screenShake * 2;
   }
 
-  ctx.translate(width / 2 - playerState.x + shakeX, height / 2 - playerState.y + shakeY);
+  // Adaptive Camera Zoom:
+  // On PC / wide screens, cameraZoom is 1.0.
+  // On mobile portrait (e.g. width 465px), dynamically zooms out so horizontal ocean view is ~680px.
+  const isMobile = isMobileDevice() || width < 1024;
+  const cameraZoom = isMobile ? Math.min(1.0, Math.max(0.68, width / 680)) : 1.0;
 
-  const drawMargin = isMobileDevice() ? 80 : 180;
-  viewLeft = playerState.x - width / 2 - drawMargin;
-  viewRight = playerState.x + width / 2 + drawMargin;
-  viewTop = playerState.y - height / 2 - drawMargin;
-  viewBottom = playerState.y + height / 2 + drawMargin;
+  // True Centering Transform:
+  // Center world coordinates at (width/2, height/2), apply zoom, then translate to player
+  ctx.translate(width / 2, height / 2);
+  ctx.scale(cameraZoom, cameraZoom);
+  ctx.translate(-playerState.x + shakeX, -playerState.y + shakeY);
+
+  const drawMargin = isMobile ? 100 : 180;
+  const halfViewW = (width / 2) / cameraZoom;
+  const halfViewH = (height / 2) / cameraZoom;
+  viewLeft = playerState.x - halfViewW - drawMargin;
+  viewRight = playerState.x + halfViewW + drawMargin;
+  viewTop = playerState.y - halfViewH - drawMargin;
+  viewBottom = playerState.y + halfViewH + drawMargin;
 
   // Ocean Wave Ribbons (Optimized step and spacing to cut trig calls and stroke paths)
   const waveSpacing = 135;
@@ -1934,9 +1949,11 @@ function render() {
   // Blood Sea Vignette
   if (biome.bloodRatio > 0.05) {
     const vignetteAlpha = 0.45 * biome.bloodRatio;
+    const minDim = Math.min(width, height);
+    const maxDim = Math.max(width, height);
     const bloodGrad = ctx.createRadialGradient(
-      width / 2, height / 2, width * (0.55 - biome.bloodRatio * 0.2),
-      width / 2, height / 2, width * 0.72
+      width / 2, height / 2, minDim * (0.55 - biome.bloodRatio * 0.2),
+      width / 2, height / 2, maxDim * 0.65
     );
     bloodGrad.addColorStop(0, 'rgba(180, 0, 0, 0)');
     bloodGrad.addColorStop(1, `rgba(160, 5, 15, ${vignetteAlpha})`);

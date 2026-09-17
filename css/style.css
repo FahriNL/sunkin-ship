@@ -215,16 +215,20 @@ canvas {
   }
 
   #joystickWrapper {
-    left: 0 !important;
-    right: 0 !important;
-    bottom: max(1rem, env(safe-area-inset-bottom, 1rem)) !important;
-    align-items: center !important;
+    left: max(0.85rem, env(safe-area-inset-left, 0.85rem)) !important;
+    right: auto !important;
+    bottom: max(0.85rem, env(safe-area-inset-bottom, 0.85rem)) !important;
+    align-items: flex-start !important;
+  }
+
+  #mobileActionButtons {
+    right: max(0.85rem, env(safe-area-inset-right, 0.85rem)) !important;
+    bottom: max(0.85rem, env(safe-area-inset-bottom, 0.85rem)) !important;
   }
 }
 
 /* PC / Desktop with Fine Pointer & Mouse */
 @media (min-width: 1024px) and (hover: hover) and (pointer: fine) {
-  /* Move virtual helm joystick to bottom-left on desktop to keep sea view clear */
   #joystickWrapper {
     left: 1.5rem !important;
     right: auto !important;
@@ -238,6 +242,10 @@ canvas {
 
   #pcControlsBar {
     display: flex !important;
+  }
+
+  #mobileActionButtons {
+    display: none !important;
   }
 }
 

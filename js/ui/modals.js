@@ -562,7 +562,13 @@ function startGameFromMenu() {
     topHUD.classList.add('opacity-100');
   }
   const pcControlsBar = document.getElementById('pcControlsBar');
-  if (pcControlsBar) pcControlsBar.classList.remove('hidden');
+  if (pcControlsBar) {
+    if (!isMobileDevice() && window.innerWidth >= 1024) {
+      pcControlsBar.classList.remove('hidden');
+    } else {
+      pcControlsBar.classList.add('hidden');
+    }
+  }
   const joystickWrapper = document.getElementById('joystickWrapper');
   if (joystickWrapper) joystickWrapper.classList.remove('pointer-events-none');
 

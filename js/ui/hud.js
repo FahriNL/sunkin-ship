@@ -101,6 +101,17 @@ function updateHUD() {
     const hpPercent = Math.max(0, (playerState.hp / maxHp) * 100);
     if (elHpBar) elHpBar.style.width = `${hpPercent}%`;
     if (elHpNumericText) elHpNumericText.innerText = `${roundedHp}/${maxHp}`;
+
+    const btnRepair = document.getElementById('btnMobileRepair');
+    if (btnRepair) {
+      if (roundedHp < maxHp && playerState.gold >= 15) {
+        btnRepair.classList.add('border-emerald-400', 'animate-pulse');
+        btnRepair.classList.remove('opacity-50');
+      } else {
+        btnRepair.classList.remove('border-emerald-400', 'animate-pulse');
+        if (roundedHp >= maxHp) btnRepair.classList.add('opacity-50');
+      }
+    }
   }
 
   if (playerState.gold !== lastGoldDisplay) {
@@ -154,7 +165,7 @@ function updateHUD() {
     lastZoneName = biome.name;
     if (elZoneInd) {
       elZoneInd.innerText = biome.name;
-      elZoneInd.className = `text-[9px] font-bold px-1.5 py-0.2 rounded border truncate max-w-[85px] text-center ${biome.isBloodSea ? 'bg-red-950 text-red-300 border-red-500 animate-pulse' : 'bg-sky-950/80 text-sky-300 border-sky-600/30'}`;
+      elZoneInd.className = `text-[8px] sm:text-[9px] font-bold px-1.5 py-0.2 rounded border truncate max-w-[80px] sm:max-w-[100px] text-center ${biome.isBloodSea ? 'bg-red-950 text-red-300 border-red-500 animate-pulse' : 'bg-sky-950/80 text-sky-300 border-sky-600/30'}`;
     }
   }
 
