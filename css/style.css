@@ -192,8 +192,37 @@ canvas {
   border-radius: 4px;
 }
 
-/* PC / Desktop Responsive Adjustments */
-@media (min-width: 768px) {
+/* ==========================================================================
+   MOBILE & TOUCH RESPONSIVE LAYOUT (NO OVERLAPS / SAFE AREA)
+   ========================================================================== */
+
+/* Top HUD Safe Area */
+#topHUD {
+  padding-top: max(0.625rem, env(safe-area-inset-top, 0.625rem)) !important;
+  padding-left: max(0.5rem, env(safe-area-inset-left, 0.5rem)) !important;
+  padding-right: max(0.5rem, env(safe-area-inset-right, 0.5rem)) !important;
+}
+
+/* Touch & Mobile Specific Rules: Completely eliminate PC control hints and overlaps */
+@media (hover: none), (pointer: coarse), (max-width: 1023px) {
+  #pcControlsBar {
+    display: none !important;
+  }
+
+  #joystickHint {
+    display: none !important;
+  }
+
+  #joystickWrapper {
+    left: 0 !important;
+    right: 0 !important;
+    bottom: max(1rem, env(safe-area-inset-bottom, 1rem)) !important;
+    align-items: center !important;
+  }
+}
+
+/* PC / Desktop with Fine Pointer & Mouse */
+@media (min-width: 1024px) and (hover: hover) and (pointer: fine) {
   /* Move virtual helm joystick to bottom-left on desktop to keep sea view clear */
   #joystickWrapper {
     left: 1.5rem !important;
@@ -205,4 +234,9 @@ canvas {
   #joystickHint {
     font-size: 9px;
   }
+
+  #pcControlsBar {
+    display: flex !important;
+  }
 }
+

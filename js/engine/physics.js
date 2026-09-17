@@ -16,9 +16,11 @@ function hasLineOfSight(x1, y1, x2, y2) {
     const ty = y1 + (dy / steps) * s;
     for (let i = 0; i < WORLD_ISLANDS.length; i++) {
       const isl = WORLD_ISLANDS[i];
+      const distToIsl = Math.hypot(tx - isl.x, ty - isl.y);
+      if (distToIsl > (isl.radius || 200) + 40) continue; // Skip distant islands without trigonometry
       const ang = Math.atan2(ty - isl.y, tx - isl.x);
       const rAtAng = getIslandRadiusAt(isl, ang);
-      if (Math.hypot(tx - isl.x, ty - isl.y) < rAtAng - 16) {
+      if (distToIsl < rAtAng - 16) {
         return false; // Obstructed by organic island contour
       }
     }
@@ -1939,6 +1941,9 @@ function updateGame(dt) {
     p.life -= dt;
     if (p.life <= 0) entities.particles.splice(i, 1);
   }
+  if (entities.particles.length > 70) {
+    entities.particles.splice(0, entities.particles.length - 70);
+  }
 
   for (let i = entities.seaRipples.length - 1; i >= 0; i--) {
     const r = entities.seaRipples[i];
@@ -1946,12 +1951,18 @@ function updateGame(dt) {
     r.alpha -= dt * 0.45;
     if (r.alpha <= 0) entities.seaRipples.splice(i, 1);
   }
+  if (entities.seaRipples.length > 35) {
+    entities.seaRipples.splice(0, entities.seaRipples.length - 35);
+  }
 
   for (let i = entities.floatingTexts.length - 1; i >= 0; i--) {
     const ft = entities.floatingTexts[i];
     ft.y += ft.vy;
     ft.alpha -= dt * 0.9;
     if (ft.alpha <= 0) entities.floatingTexts.splice(i, 1);
+  }
+  if (entities.floatingTexts.length > 12) {
+    entities.floatingTexts.splice(0, entities.floatingTexts.length - 12);
   }
 
   if (screenShake > 0) {

@@ -10,21 +10,21 @@ let height = 0;
 let dpr = 1;
 
 function resizeCanvas() {
-  dpr = window.devicePixelRatio || 1;
+  const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || window.innerWidth < 1024;
+  dpr = Math.min(window.devicePixelRatio || 1, isMobile ? 1.33 : 1.75);
   width = window.innerWidth;
   height = window.innerHeight;
-  canvas.width = width * dpr;
-  canvas.height = height * dpr;
+  canvas.width = Math.floor(width * dpr);
+  canvas.height = Math.floor(height * dpr);
   ctx.scale(dpr, dpr);
 }
 
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
-// Render Natural Organic Coastlines (Procedural Spline Contour)
-function drawWorldIsland(ctx, isl) {
-  ctx.save();
-  ctx.translate(isl.x, isl.y);
+// Precompute and cache island geometry once to eliminate per-frame trigonometry & GC allocations
+function getIslandCachedData(isl) {
+  if (isl._cachedOuter) return isl;
 
   const steps = 48;
   const outerPoints = [];
@@ -38,6 +38,43 @@ function drawWorldIsland(ctx, isl) {
     innerPoints.push({ x: Math.cos(theta) * rInner, y: Math.sin(theta) * rInner });
   }
 
+  // Cache pier coordinates
+  const dockR = getIslandRadiusAt(isl, isl.dockAngle) - 18;
+  const dx = Math.cos(isl.dockAngle) * dockR;
+  const dy = Math.sin(isl.dockAngle) * dockR;
+
+  // Cache interior foliage / flesh node positions
+  const foliage = [];
+  const count = isl.isFlesh ? 9 : 8;
+  const offset = isl.isFlesh ? 0.3 : 0.25;
+  const factor = isl.isFlesh ? 0.6 : 0.55;
+  for (let i = 0; i < count; i++) {
+    const ang = (i / count) * Math.PI * 2 + offset;
+    const r = (getIslandRadiusAt(isl, ang) - 50) * factor;
+    foliage.push({
+      x: Math.cos(ang) * r,
+      y: Math.sin(ang) * r,
+      baseRadius: isl.isFlesh ? 15 : 20
+    });
+  }
+
+  isl._cachedOuter = outerPoints;
+  isl._cachedInner = innerPoints;
+  isl._cachedPier = { dx, dy, pAngle: isl.dockAngle };
+  isl._cachedFoliage = foliage;
+
+  return isl;
+}
+
+// Render Natural Organic Coastlines (Procedural Spline Contour)
+function drawWorldIsland(ctx, isl) {
+  getIslandCachedData(isl);
+  const outerPoints = isl._cachedOuter;
+  const innerPoints = isl._cachedInner;
+
+  ctx.save();
+  ctx.translate(isl.x, isl.y);
+
   // 1. Sand Rim / Outer Beach (Organic Shape)
   ctx.fillStyle = isl.sandColor || '#ca8a04';
   ctx.beginPath();
@@ -45,8 +82,8 @@ function drawWorldIsland(ctx, isl) {
   for (let i = 1; i < outerPoints.length; i++) {
     const prev = outerPoints[i - 1];
     const curr = outerPoints[i];
-    const mx = (prev.x + curr.x) / 2;
-    const my = (prev.y + curr.y) / 2;
+    const mx = (prev.x + curr.x) * 0.5;
+    const my = (prev.y + curr.y) * 0.5;
     ctx.quadraticCurveTo(prev.x, prev.y, mx, my);
   }
   ctx.closePath();
@@ -59,8 +96,8 @@ function drawWorldIsland(ctx, isl) {
   for (let i = 1; i < innerPoints.length; i++) {
     const prev = innerPoints[i - 1];
     const curr = innerPoints[i];
-    const mx = (prev.x + curr.x) / 2;
-    const my = (prev.y + curr.y) / 2;
+    const mx = (prev.x + curr.x) * 0.5;
+    const my = (prev.y + curr.y) * 0.5;
     ctx.quadraticCurveTo(prev.x, prev.y, mx, my);
   }
   ctx.closePath();
@@ -70,37 +107,29 @@ function drawWorldIsland(ctx, isl) {
   if (isl.isFlesh) {
     ctx.fillStyle = '#ef4444';
     const time = Date.now() * 0.002;
-    for (let i = 0; i < 9; i++) {
-      const ang = (i / 9) * Math.PI * 2 + 0.3;
-      const r = (getIslandRadiusAt(isl, ang) - 50) * 0.6;
-      const px = Math.cos(ang) * r;
-      const py = Math.sin(ang) * r;
+    for (let i = 0; i < isl._cachedFoliage.length; i++) {
+      const node = isl._cachedFoliage[i];
       ctx.beginPath();
-      ctx.arc(px, py, 15 + Math.sin(time + i) * 4, 0, Math.PI * 2);
+      ctx.arc(node.x, node.y, node.baseRadius + Math.sin(time + i) * 4, 0, Math.PI * 2);
       ctx.fill();
     }
   } else {
     ctx.fillStyle = '#14532d';
-    for (let i = 0; i < 8; i++) {
-      const ang = (i / 8) * Math.PI * 2 + 0.25;
-      const r = (getIslandRadiusAt(isl, ang) - 50) * 0.55;
-      const px = Math.cos(ang) * r;
-      const py = Math.sin(ang) * r;
+    for (let i = 0; i < isl._cachedFoliage.length; i++) {
+      const node = isl._cachedFoliage[i];
       ctx.beginPath();
-      ctx.arc(px, py, 20, 0, Math.PI * 2);
+      ctx.arc(node.x, node.y, node.baseRadius, 0, Math.PI * 2);
       ctx.fill();
     }
   }
 
   // 4. Wooden Pier extending from shoreline
-  const dockR = getIslandRadiusAt(isl, isl.dockAngle) - 18;
-  const dx = Math.cos(isl.dockAngle) * dockR;
-  const dy = Math.sin(isl.dockAngle) * dockR;
+  const pier = isl._cachedPier;
   const pLen = 65;
-  const pAngle = isl.dockAngle;
+  const pAngle = pier.pAngle;
 
   ctx.save();
-  ctx.translate(dx, dy);
+  ctx.translate(pier.dx, pier.dy);
   ctx.rotate(pAngle);
   ctx.fillStyle = '#78350f';
   ctx.strokeStyle = '#451a03';
@@ -1091,14 +1120,46 @@ function renderMistRituals(ctx) {
   });
 }
 
+// Pre-rendered offscreen mist sprite textures for ultra-fast GPU blitting
+let mistSpriteNormal = null;
+let mistSpriteBlood = null;
+
+function createMistSprite(colorA, colorB) {
+  const size = 128;
+  const offCanvas = document.createElement('canvas');
+  offCanvas.width = size;
+  offCanvas.height = size;
+  const offCtx = offCanvas.getContext('2d');
+  const grad = offCtx.createRadialGradient(size / 2, size / 2, 4, size / 2, size / 2, size / 2);
+  grad.addColorStop(0, colorA);
+  grad.addColorStop(0.5, colorB);
+  grad.addColorStop(1, 'rgba(0,0,0,0)');
+  offCtx.fillStyle = grad;
+  offCtx.beginPath();
+  offCtx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+  offCtx.fill();
+  return offCanvas;
+}
+
+function getMistSprite(isBlood) {
+  if (isBlood) {
+    if (!mistSpriteBlood) mistSpriteBlood = createMistSprite('rgba(220, 38, 38, 0.45)', 'rgba(180, 20, 30, 0.15)');
+    return mistSpriteBlood;
+  } else {
+    if (!mistSpriteNormal) mistSpriteNormal = createMistSprite('rgba(220, 240, 255, 0.45)', 'rgba(200, 230, 255, 0.15)');
+    return mistSpriteNormal;
+  }
+}
+
 function render() {
   const playerDist = Math.hypot(playerState.x, playerState.y);
   const biome = getBiomeInfo(playerDist);
   const time = performance.now() * 0.001;
 
+  // Hardware-accelerated linear gradient for mobile GPU fill rate efficiency
   const [r1, g1, b1] = biome.waterA;
   const [r2, g2, b2] = biome.waterB;
-  const oceanGrad = ctx.createRadialGradient(width / 2, height / 2, 80, width / 2, height / 2, Math.max(width, height));
+  const oceanGrad = ctx.createLinearGradient(0, 0, 0, height);
   oceanGrad.addColorStop(0, `rgb(${r1}, ${g1}, ${b1})`);
   oceanGrad.addColorStop(1, `rgb(${r2}, ${g2}, ${b2})`);
   ctx.fillStyle = oceanGrad;
@@ -1120,12 +1181,12 @@ function render() {
   const viewTop = playerState.y - height / 2 - 120;
   const viewBottom = playerState.y + height / 2 + 120;
 
-  // Ocean Wave Ribbons
-  const waveSpacing = 95;
+  // Ocean Wave Ribbons (Optimized step and spacing to cut trig calls and stroke paths)
+  const waveSpacing = 135;
   const startWaveY = Math.floor(viewTop / waveSpacing) * waveSpacing;
   const endWaveY = viewBottom + waveSpacing;
 
-  ctx.lineWidth = 1.8;
+  ctx.lineWidth = 1.6;
   for (let wy = startWaveY; wy < endWaveY; wy += waveSpacing) {
     ctx.beginPath();
     const waveColor = biome.isBloodSea 
@@ -1133,7 +1194,7 @@ function render() {
       : `rgba(255, 255, 255, ${0.08 + Math.sin(time + wy * 0.02) * 0.03})`;
     ctx.strokeStyle = waveColor;
 
-    const stepX = 40;
+    const stepX = 65;
     for (let wx = viewLeft; wx <= viewRight; wx += stepX) {
       const swellOffset = Math.sin(wx * 0.012 + time * 1.4 + wy * 0.02) * 12 
                         + Math.cos(wx * 0.024 - time * 0.8) * 6;
@@ -1146,18 +1207,15 @@ function render() {
     ctx.stroke();
   }
 
-  // Render Drifting Ambient Sea Fog Clouds
+  // Render Drifting Ambient Sea Fog Clouds using pre-rendered texture sprite
+  const mistSprite = getMistSprite(biome.isBloodSea);
   entities.ambientMist.forEach(m => {
     if (m.x + m.radius > viewLeft && m.x - m.radius < viewRight &&
         m.y + m.radius > viewTop && m.y - m.radius < viewBottom) {
-      const mistGrad = ctx.createRadialGradient(m.x, m.y, 10, m.x, m.y, m.radius);
-      const mistColor = biome.isBloodSea ? 'rgba(180, 20, 30, ' : 'rgba(200, 230, 255, ';
-      mistGrad.addColorStop(0, `${mistColor}${m.alpha})`);
-      mistGrad.addColorStop(1, `${mistColor}0)`);
-      ctx.fillStyle = mistGrad;
-      ctx.beginPath();
-      ctx.arc(m.x, m.y, m.radius, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, Math.max(0, m.alpha * 1.3));
+      ctx.drawImage(mistSprite, m.x - m.radius, m.y - m.radius, m.radius * 2, m.radius * 2);
+      ctx.restore();
     }
   });
 

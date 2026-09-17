@@ -36,74 +36,137 @@ function addFloatingText(text, x, y, color = '#fbbf24', isCrit = false) {
   });
 }
 
-function updateHUD() {
-  const maxHp = getStatValue('hull', playerState.upgrades.hull);
-  const hpPercent = Math.max(0, (playerState.hp / maxHp) * 100);
-  
-  const hpBar = document.getElementById('hpBar');
-  const hpNumericText = document.getElementById('hpNumericText');
-  if (hpBar) hpBar.style.width = `${hpPercent}%`;
-  if (hpNumericText) hpNumericText.innerText = `${Math.round(playerState.hp)}/${maxHp}`;
+// Cached DOM Elements for high-performance zero-overhead updates
+let elHpBar = null;
+let elHpNumericText = null;
+let elGoldText = null;
+let elBloodText = null;
+let elDistText = null;
+let elNeedle = null;
+let elZoneInd = null;
+let elShipTitle = null;
+let elShipRankBadge = null;
+let elStealthBar = null;
+let elStealthIcon = null;
+let elStealthLabel = null;
+let elStealthPercentLabel = null;
 
-  const goldText = document.getElementById('goldText');
-  const bloodText = document.getElementById('bloodEssenceText');
-  if (goldText) goldText.innerText = playerState.gold.toLocaleString('id-ID');
-  if (bloodText) bloodText.innerText = playerState.bloodEssence.toLocaleString('id-ID');
+let lastHpDisplay = -1;
+let lastMaxHpDisplay = -1;
+let lastGoldDisplay = -1;
+let lastBloodDisplay = -1;
+let lastDistDisplay = -1;
+let lastZoneName = '';
+let lastShipRank = -1;
+let lastStealthPercent = -1;
+let lastStealthState = '';
+
+const STEALTH_ICONS = {
+  detected: `<svg class="w-4 h-4 text-rose-500 animate-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/><line x1="1" y1="1" x2="23" y2="23" stroke="#ef4444" stroke-width="2.5"/></svg>`,
+  warn: `<svg class="w-4 h-4 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`,
+  safe: `<svg class="w-4 h-4 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`
+};
+
+function initHUDElements() {
+  elHpBar = document.getElementById('hpBar');
+  elHpNumericText = document.getElementById('hpNumericText');
+  elGoldText = document.getElementById('goldText');
+  elBloodText = document.getElementById('bloodEssenceText');
+  elDistText = document.getElementById('distanceText');
+  elNeedle = document.getElementById('compassNeedle');
+  elZoneInd = document.getElementById('zoneIndicator');
+  elShipTitle = document.getElementById('shipTitle');
+  elShipRankBadge = document.getElementById('shipRankBadge');
+  elStealthBar = document.getElementById('stealthBar');
+  elStealthIcon = document.getElementById('stealthIcon');
+  elStealthLabel = document.getElementById('stealthStatusLabel');
+  elStealthPercentLabel = document.getElementById('stealthPercentLabel');
+}
+
+function updateHUD() {
+  if (!elHpBar) initHUDElements();
+
+  const maxHp = getStatValue('hull', playerState.upgrades.hull);
+  const roundedHp = Math.round(playerState.hp);
+  if (roundedHp !== lastHpDisplay || maxHp !== lastMaxHpDisplay) {
+    lastHpDisplay = roundedHp;
+    lastMaxHpDisplay = maxHp;
+    const hpPercent = Math.max(0, (playerState.hp / maxHp) * 100);
+    if (elHpBar) elHpBar.style.width = `${hpPercent}%`;
+    if (elHpNumericText) elHpNumericText.innerText = `${roundedHp}/${maxHp}`;
+  }
+
+  if (playerState.gold !== lastGoldDisplay) {
+    lastGoldDisplay = playerState.gold;
+    if (elGoldText) elGoldText.innerText = playerState.gold.toLocaleString('id-ID');
+  }
+
+  if (playerState.bloodEssence !== lastBloodDisplay) {
+    lastBloodDisplay = playerState.bloodEssence;
+    if (elBloodText) elBloodText.innerText = playerState.bloodEssence.toLocaleString('id-ID');
+  }
 
   const dist = Math.floor(Math.hypot(playerState.x, playerState.y));
-  const distText = document.getElementById('distanceText');
-  if (distText) distText.innerText = `${dist}m`;
+  if (dist !== lastDistDisplay) {
+    lastDistDisplay = dist;
+    if (elDistText) elDistText.innerText = `${dist}m`;
+  }
 
-  const needle = document.getElementById('compassNeedle');
-  if (needle) {
+  if (elNeedle) {
     const deg = (playerState.angle * 180 / Math.PI) + 90;
-    needle.style.transform = `rotate(${deg}deg)`;
+    elNeedle.style.transform = `rotate(${deg}deg)`;
   }
 
   const biome = getBiomeInfo(dist);
-  const zoneInd = document.getElementById('zoneIndicator');
-  if (zoneInd) {
-    zoneInd.innerText = biome.name;
-    zoneInd.className = `text-[9px] font-bold px-1.5 py-0.2 rounded border truncate max-w-[85px] text-center ${biome.isBloodSea ? 'bg-red-950 text-red-300 border-red-500 animate-pulse' : 'bg-sky-950/80 text-sky-300 border-sky-600/30'}`;
+  if (biome.name !== lastZoneName) {
+    lastZoneName = biome.name;
+    if (elZoneInd) {
+      elZoneInd.innerText = biome.name;
+      elZoneInd.className = `text-[9px] font-bold px-1.5 py-0.2 rounded border truncate max-w-[85px] text-center ${biome.isBloodSea ? 'bg-red-950 text-red-300 border-red-500 animate-pulse' : 'bg-sky-950/80 text-sky-300 border-sky-600/30'}`;
+    }
   }
 
   const tier = getShipTier();
-  const shipTitle = document.getElementById('shipTitle');
-  const shipRankBadge = document.getElementById('shipRankBadge');
-  if (shipTitle) {
-    shipTitle.innerText = tier.name;
-    shipTitle.style.color = tier.color;
-  }
-  if (shipRankBadge) {
-    shipRankBadge.innerText = tier.rank;
+  if (tier.rank !== lastShipRank) {
+    lastShipRank = tier.rank;
+    if (elShipTitle) {
+      elShipTitle.innerText = tier.name;
+      elShipTitle.style.color = tier.color;
+    }
+    if (elShipRankBadge) {
+      elShipRankBadge.innerText = tier.rank;
+    }
   }
 
-  // Update Stealth UI Meter with Crisp SVG Icons
+  // Update Stealth UI Meter only on changes
   const stealthPercent = Math.round(highestDetectionLevel * 100);
-  const stealthBar = document.getElementById('stealthBar');
-  const stealthIcon = document.getElementById('stealthIcon');
-  const stealthLabel = document.getElementById('stealthStatusLabel');
-  const stealthPercentLabel = document.getElementById('stealthPercentLabel');
+  if (stealthPercent !== lastStealthPercent) {
+    lastStealthPercent = stealthPercent;
+    if (elStealthBar) elStealthBar.style.width = `${stealthPercent}%`;
+    if (elStealthPercentLabel) elStealthPercentLabel.innerText = `${stealthPercent}%`;
+  }
 
-  if (stealthBar) stealthBar.style.width = `${stealthPercent}%`;
-  if (stealthPercentLabel) stealthPercentLabel.innerText = `${stealthPercent}%`;
+  let currentStealthState = 'safe';
+  if (stealthPercent >= 100) currentStealthState = 'detected';
+  else if (stealthPercent > 10) currentStealthState = 'warn';
 
-  if (stealthLabel && stealthIcon && stealthBar) {
-    if (stealthPercent >= 100) {
-      stealthIcon.innerHTML = `<svg class="w-4 h-4 text-rose-500 animate-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/><line x1="1" y1="1" x2="23" y2="23" stroke="#ef4444" stroke-width="2.5"/></svg>`;
-      stealthLabel.innerText = 'TERDETEKSI!';
-      stealthLabel.className = 'text-rose-400 font-bold truncate';
-      stealthBar.className = 'bg-rose-600 h-full transition-all duration-150';
-    } else if (stealthPercent > 10) {
-      stealthIcon.innerHTML = `<svg class="w-4 h-4 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
-      stealthLabel.innerText = 'Waspada...';
-      stealthLabel.className = 'text-amber-400 font-bold truncate';
-      stealthBar.className = 'bg-amber-500 h-full transition-all duration-150';
-    } else {
-      stealthIcon.innerHTML = `<svg class="w-4 h-4 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
-      stealthLabel.innerText = 'Siluman: Aman';
-      stealthLabel.className = 'text-emerald-400 font-bold truncate';
-      stealthBar.className = 'bg-emerald-500 h-full transition-all duration-150';
+  if (currentStealthState !== lastStealthState) {
+    lastStealthState = currentStealthState;
+    if (elStealthIcon) elStealthIcon.innerHTML = STEALTH_ICONS[currentStealthState];
+    if (elStealthLabel && elStealthBar) {
+      if (currentStealthState === 'detected') {
+        elStealthLabel.innerText = 'TERDETEKSI!';
+        elStealthLabel.className = 'text-rose-400 font-bold truncate';
+        elStealthBar.className = 'bg-rose-600 h-full transition-all duration-150';
+      } else if (currentStealthState === 'warn') {
+        elStealthLabel.innerText = 'Waspada...';
+        elStealthLabel.className = 'text-amber-400 font-bold truncate';
+        elStealthBar.className = 'bg-amber-500 h-full transition-all duration-150';
+      } else {
+        elStealthLabel.innerText = 'Siluman: Aman';
+        elStealthLabel.className = 'text-emerald-400 font-bold truncate';
+        elStealthBar.className = 'bg-emerald-500 h-full transition-all duration-150';
+      }
     }
   }
 }
