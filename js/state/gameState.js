@@ -14,6 +14,8 @@ let playerState = {
   salvages: 0,
   maxDistanceReached: 0,
   speedSnareTimer: 0, // Iron harpoon snare debuff timer
+  inkedTimer: 0, // Kraken ink blindness timer
+  whirlpoolPull: { x: 0, y: 0 }, // Leviathan whirlpool pull vector
   conqueredIslands: ['haven', 'shop_haven_senja', 'shop_karang_tengah', 'shop_ambang_kabut'],
   mapLevel: 1, // 1 to 4
   exploredSectors: {}, // { "x,y": true }
@@ -38,6 +40,8 @@ const entities = {
   towers: [],       // Island defense bastions, turrets, spires, tentacles, and peranakans
   projectiles: [],
   mines: [],        // Player dropped gunpowder barrels
+  whirlpools: [],   // Ancient Leviathan swirling whirlpool vortices
+  inkClouds: [],    // The Abyssal Kraken murky ink clouds
   sunkenShips: [],  // Ancient wrecked hulls to salvage
   floatingLoots: [],
   particles: [],
@@ -399,12 +403,31 @@ function seedWorldMerchants() {
 
 // Entity Factory for Ships and Abyssal Sea Monsters
 function createEnemyEntity(clanKey, tierIndex, x, y, angle, options = {}) {
-  const clanData = CLAN_LORE[clanKey];
+  const clanData = CLAN_LORE[clanKey] || CLAN_LORE.gold;
   const tierData = clanData.tiers[Math.max(0, Math.min(2, tierIndex))];
   const isMonster = clanKey === 'blood';
   const diffCfg = (typeof getDifficultyConfig === 'function') ? getDifficultyConfig() : { enemyHpMultiplier: 1.0 };
   const baseHp = options.hp || tierData.hp;
   const scaledHp = Math.round(baseHp * (diffCfg.enemyHpMultiplier || 1.0));
+
+  const monsterType = options.monsterType || (isMonster ? (tierIndex === 0 ? 'larva' : (tierIndex === 1 ? 'kraken' : 'leviathan')) : null);
+  let speed = options.speed || tierData.speed;
+  let preferredDist = isMonster ? (100 + tierIndex * 30) : (clanKey === 'iron' ? (120 + tierIndex * 20) : (clanKey === 'viking' ? 95 : (clanKey === 'wokou' ? 220 : (180 + tierIndex * 35))));
+  let turnRate = isMonster ? 3.6 : (clanKey === 'wokou' ? 2.8 : (clanKey === 'viking' ? 2.5 : 2.2));
+
+  if (monsterType === 'megalodon') {
+    speed = options.speed || 3.8;
+    preferredDist = 75;
+    turnRate = 3.2;
+  } else if (monsterType === 'kraken') {
+    speed = options.speed || 2.4;
+    preferredDist = 220;
+    turnRate = 2.4;
+  } else if (monsterType === 'leviathan') {
+    speed = options.speed || 3.4;
+    preferredDist = 140;
+    turnRate = 3.4;
+  }
 
   return {
     id: Math.random(),
@@ -429,14 +452,15 @@ function createEnemyEntity(clanKey, tierIndex, x, y, angle, options = {}) {
     tier: tierData.level,
     name: options.name || tierData.name,
     isMonster: isMonster,
+    monsterType: monsterType,
     hp: scaledHp,
     maxHp: scaledHp,
-    speed: options.speed || tierData.speed,
-    baseSpeed: options.speed || tierData.speed,
+    speed: speed,
+    baseSpeed: speed,
     damage: options.damage || tierData.damage,
     radius: options.radius || tierData.radius,
     shootCooldown: 1.2 + Math.random() * 1.5,
-    specialCooldown: 3.2 + Math.random() * 2.5,
+    specialCooldown: 2.8 + Math.random() * 2.2,
     chargeState: 'idle',
     chargeTimer: 0,
     recoveryTimer: 0,
@@ -444,15 +468,15 @@ function createEnemyEntity(clanKey, tierIndex, x, y, angle, options = {}) {
     disengageTimer: 0,
     tailgateTimer: 0,
     orbitDir: Math.random() > 0.5 ? 1 : -1,
-    preferredDist: isMonster ? (100 + tierIndex * 30) : (clanKey === 'iron' ? (120 + tierIndex * 20) : (180 + tierIndex * 35)),
-    turnRate: isMonster ? 3.6 : 2.2,
+    preferredDist: preferredDist,
+    turnRate: turnRate,
     patrolAngle: angle,
     detectionMeter: 0,
     alertState: 'unaware',
     searchTimer: 0,
     lastKnownPos: null,
     targetEntity: null,
-    bulletColor: '#475569'
+    bulletColor: clanData.bulletColor || '#475569'
   };
 }
 
@@ -598,7 +622,7 @@ function spawnMonsterPair(ex, ey, angle) {
 function spawnSolitaryShip(ex, ey, angle, clan, distFromCenter) {
   const destIsl = pickDestinationIsland(clan);
   const isStartingDocked = Math.random() < 0.35;
-  const tier = Math.min(2, Math.floor(distFromCenter / 2600));
+  const tier = Math.min(2, Math.floor(distFromCenter / 22000));
   entities.enemies.push(createEnemyEntity(clan, tier, ex, ey, angle, {
     formationType: 'solitary',
     formationRole: 'solitary',
@@ -608,51 +632,129 @@ function spawnSolitaryShip(ex, ey, angle, clan, distFromCenter) {
   }));
 }
 
+function spawnVikingRaidFlotilla(ex, ey, angle) {
+  const convoyId = 'convoy_viking_' + Math.random().toString(36).substr(2, 6);
+  const destIsl = pickDestinationIsland('viking');
+  // Flagship Skeid / Drakkar Leader
+  entities.enemies.push(createEnemyEntity('viking', 1, ex, ey, angle, {
+    convoyId,
+    formationType: 'viking_line',
+    formationRole: 'leader',
+    formationIndex: 0,
+    voyageState: 'voyaging',
+    destinationIslandId: destIsl ? destIsl.id : 'haven'
+  }));
+
+  // Line Abreast Flankers (Sejajar kiri dan kanan untuk serbuan massal)
+  [-55, 55].forEach((offsetSide, idx) => {
+    const lx = ex + Math.cos(angle + Math.PI / 2) * offsetSide - Math.cos(angle) * 35;
+    const ly = ey + Math.sin(angle + Math.PI / 2) * offsetSide - Math.sin(angle) * 35;
+    entities.enemies.push(createEnemyEntity('viking', 0, lx, ly, angle, {
+      convoyId,
+      formationType: 'viking_line',
+      formationRole: 'flanker_' + (idx + 1),
+      formationIndex: idx + 1,
+      voyageState: 'voyaging',
+      destinationIslandId: destIsl ? destIsl.id : 'haven'
+    }));
+  });
+}
+
+function spawnWokouWolfpack(ex, ey, angle) {
+  const convoyId = 'convoy_wokou_' + Math.random().toString(36).substr(2, 6);
+  const destIsl = pickDestinationIsland('wokou');
+  // War Junk Leader
+  entities.enemies.push(createEnemyEntity('wokou', 1, ex, ey, angle, {
+    convoyId,
+    formationType: 'wokou_pack',
+    formationRole: 'leader',
+    formationIndex: 0,
+    voyageState: 'voyaging',
+    destinationIslandId: destIsl ? destIsl.id : 'haven'
+  }));
+
+  // Agile Rocket Sampans trailing in chevron
+  const flankers = [
+    { dist: 65, sideAng: 2.3 },
+    { dist: 65, sideAng: -2.3 }
+  ];
+  flankers.forEach((flk, idx) => {
+    const fx = ex + Math.cos(angle + flk.sideAng) * flk.dist;
+    const fy = ey + Math.sin(angle + flk.sideAng) * flk.dist;
+    entities.enemies.push(createEnemyEntity('wokou', 0, fx, fy, angle, {
+      convoyId,
+      formationType: 'wokou_pack',
+      formationRole: 'wing_' + (idx + 1),
+      formationIndex: idx + 1,
+      voyageState: 'voyaging',
+      destinationIslandId: destIsl ? destIsl.id : 'haven'
+    }));
+  });
+}
+
 // Seed persistent initial formations across the oceanic rings so the world is alive immediately!
 function seedWorldFormations() {
   entities.enemies = [];
 
   // 1. Batavia Column Convoy in Ring 1 (Gold/Batavia Waters)
-  const goldIslands = WORLD_ISLANDS.filter(i => i.clan === 'gold');
+  const goldIslands = WORLD_ISLANDS.filter(i => i.clan === 'gold' && i.id !== 'haven');
   if (goldIslands.length > 0) {
     const targetIsl = goldIslands[0];
     const bAngle = Math.atan2(targetIsl.y, targetIsl.x) + 0.35;
-    const bDist = 1100 + Math.random() * 350;
+    const bDist = Math.max(1200, Math.hypot(targetIsl.x, targetIsl.y) * 0.65);
     spawnBataviaConvoy(Math.cos(bAngle) * bDist, Math.sin(bAngle) * bDist, bAngle + Math.PI / 2);
   } else {
-    spawnBataviaConvoy(1150, -850, 0.4);
+    spawnBataviaConvoy(1850, -1250, 0.4);
   }
 
-  // 2. Iron Wedge Armada in Ring 2 (Iron Waters)
+  // 2. Wokou Wolfpack in Ring 1/2
+  const wokouIslands = WORLD_ISLANDS.filter(i => i.clan === 'wokou');
+  if (wokouIslands.length > 0) {
+    const wIsl = wokouIslands[0];
+    const wAngle = Math.atan2(wIsl.y, wIsl.x) + 0.4;
+    const wDist = Math.max(5000, Math.hypot(wIsl.x, wIsl.y) * 0.75);
+    spawnWokouWolfpack(Math.cos(wAngle) * wDist, Math.sin(wAngle) * wDist, wAngle + Math.PI / 2);
+  }
+
+  // 3. Iron Wedge Armada in Ring 2 (Iron Waters)
   const ironIslands = WORLD_ISLANDS.filter(i => i.clan === 'iron');
   if (ironIslands.length > 0) {
     const ironIsl = ironIslands[0];
     const iAngle = Math.atan2(ironIsl.y, ironIsl.x) - 0.3;
-    const iDist = 1850 + Math.random() * 350;
+    const iDist = Math.max(8000, Math.hypot(ironIsl.x, ironIsl.y) * 0.8);
     spawnIronWedge(Math.cos(iAngle) * iDist, Math.sin(iAngle) * iDist, iAngle - Math.PI / 2);
   } else {
-    spawnIronWedge(-1600, 1300, -0.7);
+    spawnIronWedge(-12000, 10000, -0.7);
   }
 
-  // 3. Mist Occult Ritual Circle in Ring 3 (Mist Waters)
+  // 4. Viking Raid Flotilla in Ring 2
+  const vikingIslands = WORLD_ISLANDS.filter(i => i.clan === 'viking');
+  if (vikingIslands.length > 0) {
+    const vIsl = vikingIslands[0];
+    const vAngle = Math.atan2(vIsl.y, vIsl.x) - 0.4;
+    const vDist = Math.max(15000, Math.hypot(vIsl.x, vIsl.y) * 0.8);
+    spawnVikingRaidFlotilla(Math.cos(vAngle) * vDist, Math.sin(vAngle) * vDist, vAngle + Math.PI / 2);
+  }
+
+  // 5. Mist Occult Ritual Circle in Ring 3 (Mist Waters)
   const mistIslands = WORLD_ISLANDS.filter(i => i.clan === 'mist');
   if (mistIslands.length > 0) {
     const mistIsl = mistIslands[0];
     const mAngle = Math.atan2(mistIsl.y, mistIsl.x) + 0.2;
-    const mDist = 2650 + Math.random() * 400;
+    const mDist = Math.max(25000, Math.hypot(mistIsl.x, mistIsl.y) * 0.85);
     spawnMistRitual(Math.cos(mAngle) * mDist, Math.sin(mAngle) * mDist);
   } else {
-    spawnMistRitual(-2100, -2100);
+    spawnMistRitual(-32000, -28000);
   }
 
-  // 4. Roaming Monster Pair in Ring 4/5 (Abyssal Waters)
+  // 4. Roaming Monster Pair in Ring 4/5 (Laut Merah Abisal >= 75000m)
   const monAngle = Math.random() * Math.PI * 2;
-  const monDist = 4100 + Math.random() * 450;
+  const monDist = 76000 + Math.random() * 4000;
   spawnMonsterPair(Math.cos(monAngle) * monDist, Math.sin(monAngle) * monDist, monAngle + Math.PI / 2);
 
   // 5. One or two solitary ships in transit
-  spawnSolitaryShip(850, 750, Math.random() * Math.PI * 2, 'gold', 1100);
-  spawnSolitaryShip(-1100, -900, Math.random() * Math.PI * 2, 'iron', 1400);
+  spawnSolitaryShip(1200, 950, Math.random() * Math.PI * 2, 'gold', 1500);
+  spawnSolitaryShip(-2200, -1800, Math.random() * Math.PI * 2, 'iron', 2800);
 }
 
 initTerritorialDefenses();

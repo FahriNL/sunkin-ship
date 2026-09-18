@@ -207,79 +207,1005 @@ if (helpModal) {
   });
 }
 
-// Shipyard Upgrades Modal (Rendered with pure SVG icons)
-function renderUpgradeUI() {
-  if (!upgradeList) return;
-  upgradeList.innerHTML = '';
-  let totalLevels = 0;
+// ============================================================================
+// PHASE 2: SHIPYARD CROSS-SECTION CUTAWAY & COMPARTMENT UPGRADE SYSTEM
+// ============================================================================
 
-  for (const [key, conf] of Object.entries(UPGRADE_CONFIG)) {
-    const currentLvl = playerState.upgrades[key];
-    totalLevels += currentLvl;
-    const isMax = currentLvl >= conf.maxLevel;
+const shipCutawayCanvas = document.getElementById('shipCutawayCanvas');
+const compartmentDetailPanel = document.getElementById('compartmentDetailPanel');
+const compartmentChipsBar = document.getElementById('compartmentChipsBar');
+const shipyardTierBadge = document.getElementById('shipyardTierBadge');
+const shipyardLocationLabel = document.getElementById('shipyardLocationLabel');
+const shipyardGoldText = document.getElementById('shipyardGoldText');
+const shipyardBloodText = document.getElementById('shipyardBloodText');
+const cutawayHoverLabel = document.getElementById('cutawayHoverLabel');
+const shipOverallTierTitle = document.getElementById('shipOverallTierTitle');
+const maxProgressLabel = document.getElementById('maxProgressLabel');
 
-    const goldCost = isMax ? 0 : Math.floor(conf.baseCost * Math.pow(conf.costMult, Math.max(0, currentLvl - (key === 'rearDefense' ? 0 : 1))));
-    const bloodCost = (!isMax && currentLvl >= conf.bloodCostStart) ? (currentLvl - conf.bloodCostStart + 1) * 3 : 0;
-    const canAfford = !isMax && (playerState.gold >= goldCost) && (playerState.bloodEssence >= bloodCost);
+// 6 Functional Ship Compartments matching UPGRADE_CONFIG
+const SHIP_COMPARTMENTS = {
+  relicSiphon: {
+    key: 'relicSiphon',
+    name: "Haluan & Ram Relik (Forecastle)",
+    shortName: "Haluan & Ram",
+    subtitle: "Moncong Depan, Tiang Cucur, Rantai Jangkar & Ram Pertempuran",
+    lore: '"Moncong kapal diperkuat perunggu tebal dan ornamen naga abisal yang mampu meremukkan lambung lawan sekaligus menyedot esensi darah untuk memulihkan kapal."',
+    iconKey: "relicSiphon",
+    rect: { x: 640, y: 170, w: 150, h: 175 },
+    badgePos: { x: 715, y: 250 },
+    statName: "Hisapan Darah (Vampirism)",
+    getStatDesc: (lvl) => {
+      const cur = getStatValue('relicSiphon', lvl);
+      const nxt = getStatValue('relicSiphon', lvl + 1);
+      return lvl === 0 ? `Terkunci -> +${nxt.toFixed(1)} HP per pukulan` : `+${cur.toFixed(1)} HP -> +${nxt.toFixed(1)} HP per pukulan (+4.5)`;
+    }
+  },
+  speed: {
+    key: 'speed',
+    name: "Geladak Utama & Layar (Main Deck & Rigging)",
+    shortName: "Geladak & Layar",
+    subtitle: "Tiang Layar Bertingkat, Tangga Tali, Roda Kemudi & Kompas",
+    lore: '"Ketinggian tiang layar kayu ulin dan rajutan tambang sutra rami memungkinkan kapal membelah angin kencang dengan kelincahan manuver mematikan."',
+    iconKey: "speed",
+    rect: { x: 270, y: 25, w: 370, h: 185 },
+    badgePos: { x: 455, y: 105 },
+    statName: "Kecepatan Jelajah & Kelincahan",
+    getStatDesc: (lvl) => {
+      const cur = getStatValue('speed', lvl);
+      const nxt = getStatValue('speed', lvl + 1);
+      return `${cur.toFixed(2)} knot -> ${nxt.toFixed(2)} knot (+0.65 Spd)`;
+    }
+  },
+  cannons: {
+    key: 'cannons',
+    name: "Geladak Meriam (Gun Deck & Powder Magazine)",
+    shortName: "Geladak Meriam",
+    subtitle: "Baterai Meriam Samping, Kereta Roda Kayu & Peti Amunisi",
+    lore: '"Lantai tengah kapal dirancang meredam sentakan dentuman meriam kaliber berat, dilengkapi laci mesiu kedap air untuk tembakan broadside beruntun."',
+    iconKey: "cannons",
+    rect: { x: 270, y: 210, w: 370, h: 75 },
+    badgePos: { x: 455, y: 248 },
+    statName: "Daya Hancur & Jumlah Meriam",
+    getStatDesc: (lvl) => {
+      const curDmg = getStatValue('cannons', lvl);
+      const nxtDmg = getStatValue('cannons', lvl + 1);
+      const curBalls = Math.min(4, 1 + Math.floor(lvl / 2));
+      const nxtBalls = Math.min(4, 1 + Math.floor((lvl + 1) / 2));
+      return `${curBalls} Meriam (${curDmg} Dmg) -> ${nxtBalls} Meriam (${nxtDmg} Dmg)`;
+    }
+  },
+  hull: {
+    key: 'hull',
+    name: "Palka Bawah & Ballast (Bilge & Lower Hold)",
+    shortName: "Palka & Lambung",
+    subtitle: "Gading Lambung Kayu Lapis, Pompa Air Ballast & Peti Kargo",
+    lore: '"Dasar terdalam lambung kapal diperkuat balok kayu ulin lapis ganda dan batu ballast pemberat ombak, mencegah kebocoran fatal di laut ganas."',
+    iconKey: "hull",
+    rect: { x: 270, y: 285, w: 370, h: 75 },
+    badgePos: { x: 455, y: 322 },
+    statName: "Ketahanan Lambung (Max HP)",
+    getStatDesc: (lvl) => {
+      const cur = getStatValue('hull', lvl);
+      const nxt = getStatValue('hull', lvl + 1);
+      return `${cur} Max HP -> ${nxt} Max HP (+75 HP)`;
+    }
+  },
+  stealthCamo: {
+    key: 'stealthCamo',
+    name: "Kabin Kapten & Navigasi (Captain's Cabin)",
+    shortName: "Kabin Kapten",
+    subtitle: "Meja Peta Kuno, Galeri Kaca Buritan & Dupa Siluman Kabut",
+    lore: '"Ruang komando pribadi kapten menyimpan instrumen navigasi bahari dan pembakar dupa kabut gaib yang menyamarkan siluet kapal dari intaian musuh."',
+    iconKey: "stealthCamo",
+    rect: { x: 120, y: 160, w: 150, h: 80 },
+    badgePos: { x: 195, y: 200 },
+    statName: "Reduksi Deteksi (Stealth)",
+    getStatDesc: (lvl) => {
+      const cur = Math.round((1 - getStatValue('stealthCamo', lvl)) * 100);
+      const nxt = Math.round((1 - getStatValue('stealthCamo', lvl + 1)) * 100);
+      return `${cur}% Kamuflase -> ${nxt}% Kamuflase (-12% Deteksi)`;
+    }
+  },
+  rearDefense: {
+    key: 'rearDefense',
+    name: "Geladak Buritan & Ranjau (Stern Castle & Mine Station)",
+    shortName: "Buritan & Ranjau",
+    subtitle: "Saluran Luncur Ranjau, Katrol Derek & Meriam Putar Belakang",
+    lore: '"Menara buritan bertingkat mengawasi titik buta kapal, dilengkapi pelontar mekanik untuk menebar ranjau mesiu berduri bagi musuh yang membuntuti."',
+    iconKey: "rearDefense",
+    rect: { x: 120, y: 240, w: 150, h: 110 },
+    badgePos: { x: 195, y: 295 },
+    statName: "Ranjau & Meriam Belakang",
+    getStatDesc: (lvl) => {
+      const cur = getStatValue('rearDefense', lvl);
+      const nxt = getStatValue('rearDefense', lvl + 1);
+      return lvl === 0 ? `Terkunci -> Aktif (${nxt} Dmg Ranjau)` : `${cur} Dmg -> ${nxt} Dmg Ranjau/Chaser`;
+    }
+  }
+};
 
-    const iconHtml = SVG_ICONS[conf.iconKey] || SVG_ICONS.hull;
+const cutawayState = {
+  selectedKey: 'cannons',
+  hoveredKey: null,
+  animTime: 0,
+  particles: []
+};
 
-    const row = document.createElement('div');
-    row.className = 'bg-slate-900/80 p-3 rounded-2xl border border-white/5 flex items-center justify-between gap-2.5';
-    row.innerHTML = `
-      <div class="flex items-center gap-2.5">
-        <div class="p-2 rounded-xl bg-slate-950/70 border border-white/10 shrink-0">
-          ${iconHtml}
-        </div>
-        <div>
-          <div class="flex items-center gap-1.5">
-            <span class="text-xs font-bold text-slate-200">${conf.name}</span>
-            <span class="text-[10px] px-1.5 py-0.2 rounded font-mono ${isMax ? 'bg-amber-400 text-slate-950 font-black' : 'bg-slate-800 text-slate-400'}">
-              ${isMax ? 'MAX' : (currentLvl === 0 ? 'Terkunci' : `Lv.${currentLvl}/${conf.maxLevel}`)}
-            </span>
-          </div>
-          <p class="text-[10px] text-slate-400 mt-0.5 leading-tight">${conf.desc}</p>
-        </div>
-      </div>
-      <button data-key="${key}" class="upgrade-btn px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap ${
-        isMax ? 'bg-slate-800 text-slate-500 cursor-not-allowed' :
-        canAfford ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 active:scale-95' :
-        'bg-slate-800/80 text-slate-500 cursor-not-allowed'
-      }">
-        ${isMax ? 'TERKUAT' : `${goldCost} Koin ${bloodCost > 0 ? `+ ${bloodCost} Darah` : ''}`}
-      </button>
-    `;
-    upgradeList.appendChild(row);
+let cutawayAnimationId = null;
+
+// Convert client mouse/touch event coordinates into virtual 880x440 canvas coordinates
+function getCutawayCanvasCoords(e) {
+  if (!shipCutawayCanvas) return { x: 0, y: 0 };
+  const rect = shipCutawayCanvas.getBoundingClientRect();
+  let clientX = e.clientX;
+  let clientY = e.clientY;
+  if (e.touches && e.touches.length > 0) {
+    clientX = e.touches[0].clientX;
+    clientY = e.touches[0].clientY;
+  } else if (e.changedTouches && e.changedTouches.length > 0) {
+    clientX = e.changedTouches[0].clientX;
+    clientY = e.changedTouches[0].clientY;
+  }
+  const w = rect.width > 0 ? rect.width : 1;
+  const h = rect.height > 0 ? rect.height : 1;
+  const scaleX = 880 / w;
+  const scaleY = 440 / h;
+  return {
+    x: (clientX - rect.left) * scaleX,
+    y: (clientY - rect.top) * scaleY
+  };
+}
+
+function findCompartmentAt(x, y) {
+  // 1. Direct bounding box hit
+  for (const comp of Object.values(SHIP_COMPARTMENTS)) {
+    const r = comp.rect;
+    if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) {
+      return comp.key;
+    }
   }
 
-  const maxProgressLabel = document.getElementById('maxProgressLabel');
+  // 2. Proximity fallback: check distance to badge center or compartment center (up to 45px tolerance)
+  let closestKey = null;
+  let minDistSq = 45 * 45;
+  for (const comp of Object.values(SHIP_COMPARTMENTS)) {
+    const bp = comp.badgePos;
+    const dx = x - bp.x;
+    const dy = y - bp.y;
+    const dSq = dx * dx + dy * dy;
+    if (dSq < minDistSq) {
+      minDistSq = dSq;
+      closestKey = comp.key;
+    }
+  }
+  return closestKey;
+}
+
+// Draw the master architectural cutaway schematic on the HTML5 canvas
+function renderShipCutaway() {
+  if (!shipCutawayCanvas || !upgradeModal || !upgradeModal.classList.contains('modal-active')) return;
+  const ctx = shipCutawayCanvas.getContext('2d');
+  if (!ctx) return;
+
+  const rect = shipCutawayCanvas.getBoundingClientRect();
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const targetW = Math.round(rect.width * dpr);
+  const targetH = Math.round(rect.height * dpr);
+
+  if (shipCutawayCanvas.width !== targetW || shipCutawayCanvas.height !== targetH) {
+    shipCutawayCanvas.width = targetW;
+    shipCutawayCanvas.height = targetH;
+  }
+
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const scaleCanvasX = rect.width / 880;
+  const scaleCanvasY = rect.height / 440;
+  ctx.scale(scaleCanvasX, scaleCanvasY);
+
+  cutawayState.animTime += 0.035;
+  const t = cutawayState.animTime;
+
+  // 1. Deep Parchment / Ocean Blueprint Background
+  const bgGrad = ctx.createLinearGradient(0, 0, 0, 440);
+  bgGrad.addColorStop(0, '#060a12');
+  bgGrad.addColorStop(0.65, '#0b1322');
+  bgGrad.addColorStop(1, '#080d19');
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, 880, 440);
+
+  // Subtle architectural grid watermark lines
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+  ctx.lineWidth = 1;
+  for (let gx = 40; gx < 880; gx += 40) {
+    ctx.beginPath();
+    ctx.moveTo(gx, 0);
+    ctx.lineTo(gx, 440);
+    ctx.stroke();
+  }
+  for (let gy = 40; gy < 440; gy += 40) {
+    ctx.beginPath();
+    ctx.moveTo(0, gy);
+    ctx.lineTo(880, gy);
+    ctx.stroke();
+  }
+
+  // 2. Calm Ocean Waterline under keel
+  const waterY = 320;
+  ctx.fillStyle = 'rgba(14, 116, 144, 0.12)';
+  ctx.beginPath();
+  ctx.moveTo(0, waterY);
+  for (let wx = 0; wx <= 880; wx += 20) {
+    ctx.lineTo(wx, waterY + Math.sin(wx * 0.015 + t * 1.5) * 4);
+  }
+  ctx.lineTo(880, 440);
+  ctx.lineTo(0, 440);
+  ctx.closePath();
+  ctx.fill();
+
+  // Waterline surface sheen
+  ctx.strokeStyle = 'rgba(56, 189, 248, 0.25)';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  for (let wx = 0; wx <= 880; wx += 20) {
+    const wy = waterY + Math.sin(wx * 0.015 + t * 1.5) * 4;
+    if (wx === 0) ctx.moveTo(wx, wy);
+    else ctx.lineTo(wx, wy);
+  }
+  ctx.stroke();
+
+  // 3. Draw Outer Hull Framework Silhouette
+  ctx.save();
+
+  // Keel beam & outer planking curve
+  ctx.fillStyle = '#241208';
+  ctx.strokeStyle = '#78350f';
+  ctx.lineWidth = 3;
+
+  ctx.beginPath();
+  ctx.moveTo(120, 160); // Quarterdeck stern top
+  ctx.lineTo(120, 240); // Stern drop
+  ctx.bezierCurveTo(115, 280, 130, 350, 180, 360); // Stern curve to keel
+  ctx.lineTo(700, 360); // Flat keel bottom
+  ctx.bezierCurveTo(740, 350, 770, 270, 755, 175); // Prow bow sweep
+  ctx.lineTo(640, 180); // Forecastle step
+  ctx.lineTo(640, 210); // Down to main deck
+  ctx.lineTo(270, 210); // Main deck run
+  ctx.lineTo(270, 160); // Quarterdeck step
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Heavy Keel Beam at bottom
+  ctx.fillStyle = '#1c0d06';
+  ctx.fillRect(170, 355, 540, 14);
+  ctx.strokeStyle = '#451a03';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(170, 355, 540, 14);
+
+  // Stern Rudder Post
+  ctx.fillStyle = '#3a1a08';
+  ctx.fillRect(100, 255, 18, 105);
+  ctx.strokeStyle = '#78350f';
+  ctx.strokeRect(100, 255, 18, 105);
+
+  // Bowsprit spar reaching forward
+  ctx.fillStyle = '#451a03';
+  ctx.beginPath();
+  ctx.moveTo(740, 180);
+  ctx.lineTo(865, 95);
+  ctx.lineTo(865, 105);
+  ctx.lineTo(740, 195);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.restore();
+
+  // 4. Render the 6 Cutaway Compartments
+  const hullLvl = (playerState.upgrades && playerState.upgrades.hull) || 1;
+  const speedLvl = (playerState.upgrades && playerState.upgrades.speed) || 1;
+  const cannonLvl = (playerState.upgrades && playerState.upgrades.cannons) || 1;
+  const rearLvl = (playerState.upgrades && playerState.upgrades.rearDefense) || 0;
+  const stealthLvl = (playerState.upgrades && playerState.upgrades.stealthCamo) || 1;
+  const relicLvl = (playerState.upgrades && playerState.upgrades.relicSiphon) || 1;
+
+  for (const comp of Object.values(SHIP_COMPARTMENTS)) {
+    const r = comp.rect;
+    const isSelected = (cutawayState.selectedKey === comp.key);
+    const isHovered = (cutawayState.hoveredKey === comp.key);
+    const lvl = (playerState.upgrades && playerState.upgrades[comp.key]) || 0;
+    const conf = UPGRADE_CONFIG[comp.key];
+    const isMax = lvl >= conf.maxLevel;
+    const goldCost = isMax ? 0 : Math.floor(conf.baseCost * Math.pow(conf.costMult, Math.max(0, lvl - (comp.key === 'rearDefense' ? 0 : 1))));
+    const bloodCost = (!isMax && lvl >= conf.bloodCostStart) ? (lvl - conf.bloodCostStart + 1) * 3 : 0;
+    const canAfford = !isMax && (playerState.gold >= goldCost) && (playerState.bloodEssence >= bloodCost);
+
+    ctx.save();
+
+    // Compartment interior chamber base fill
+    ctx.fillStyle = isSelected 
+      ? 'rgba(245, 158, 11, 0.14)' 
+      : (isHovered ? 'rgba(245, 158, 11, 0.08)' : 'rgba(15, 23, 42, 0.35)');
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+
+    // Deck plank floor and boundary joists
+    ctx.strokeStyle = isSelected 
+      ? '#fbbf24' 
+      : (isHovered ? '#f59e0b' : 'rgba(217, 119, 6, 0.45)');
+    ctx.lineWidth = isSelected ? 2.2 : (isHovered ? 1.8 : 1.2);
+    ctx.strokeRect(r.x, r.y, r.w, r.h);
+
+    // Subtle wooden ceiling & floor beam lines
+    ctx.strokeStyle = 'rgba(120, 53, 15, 0.3)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(r.x, r.y + r.h - 3);
+    ctx.lineTo(r.x + r.w, r.y + r.h - 3);
+    ctx.stroke();
+
+    // -------------------------------------------------------------
+    // PROCEDURAL INTERIOR PROPS PER COMPARTMENT & LEVEL
+    // -------------------------------------------------------------
+    if (comp.key === 'speed') {
+      // 1. MAIN DECK & RIGGING (speed)
+      // Billowing Sails & 3 Towering Masts
+      const masts = [
+        { x: 330, scale: 0.75, name: 'Mizzen' },
+        { x: 455, scale: 1.0,  name: 'Main' },
+        { x: 575, scale: 0.85, name: 'Fore' }
+      ];
+
+      masts.forEach((m, idx) => {
+        // Only draw Fore/Mizzen if speedLvl >= 2 or 4
+        if (idx === 0 && speedLvl < 4) return;
+        if (idx === 2 && speedLvl < 2) return;
+
+        // Mast pole
+        ctx.fillStyle = '#291508';
+        ctx.fillRect(m.x - 3, 20, 6, 190);
+        ctx.strokeStyle = '#78350f';
+        ctx.strokeRect(m.x - 3, 20, 6, 190);
+
+        // Crow's nest lookout
+        if (speedLvl >= 3) {
+          ctx.fillStyle = '#451a03';
+          ctx.fillRect(m.x - 10, 50, 20, 10);
+        }
+
+        // Billowing canvas sails (animated wind sway)
+        const sway = Math.sin(t * 1.8 + idx) * 3;
+        ctx.fillStyle = stealthLvl >= 4 ? 'rgba(51, 65, 85, 0.85)' : 'rgba(248, 250, 252, 0.88)';
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = 1;
+
+        // Lower yard & sail
+        ctx.beginPath();
+        ctx.moveTo(m.x - 36 * m.scale, 75);
+        ctx.quadraticCurveTo(m.x + sway, 105, m.x + 40 * m.scale, 75);
+        ctx.lineTo(m.x + 36 * m.scale, 130);
+        ctx.quadraticCurveTo(m.x + sway * 1.2, 145, m.x - 32 * m.scale, 130);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Upper topsail if speedLvl >= 3
+        if (speedLvl >= 3) {
+          ctx.beginPath();
+          ctx.moveTo(m.x - 26 * m.scale, 30);
+          ctx.quadraticCurveTo(m.x + sway * 0.8, 52, m.x + 28 * m.scale, 30);
+          ctx.lineTo(m.x + 24 * m.scale, 65);
+          ctx.quadraticCurveTo(m.x + sway, 75, m.x - 22 * m.scale, 65);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        }
+
+        // Rigging ropes
+        ctx.strokeStyle = 'rgba(180, 130, 80, 0.4)';
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(m.x, 25);
+        ctx.lineTo(m.x - 45 * m.scale, 205);
+        ctx.moveTo(m.x, 25);
+        ctx.lineTo(m.x + 45 * m.scale, 205);
+        ctx.stroke();
+      });
+
+      // Ship's Helm Wheel on Main Deck
+      ctx.fillStyle = '#b45309';
+      ctx.beginPath();
+      ctx.arc(385, 195, 8, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(385, 195, 3, 0, Math.PI * 2);
+      ctx.fill();
+
+    } else if (comp.key === 'cannons') {
+      // 2. GUN DECK (cannons)
+      const numGuns = Math.min(3, 1 + Math.floor(cannonLvl / 2));
+      for (let g = 0; g < numGuns; g++) {
+        const gx = r.x + 45 + g * 110;
+        const gy = r.y + 45;
+
+        // Wood gun carriage
+        ctx.fillStyle = '#78350f';
+        ctx.fillRect(gx - 14, gy + 8, 28, 12);
+        // Carriage wheels
+        ctx.fillStyle = '#1c0d06';
+        ctx.beginPath();
+        ctx.arc(gx - 10, gy + 20, 5, 0, Math.PI * 2);
+        ctx.arc(gx + 10, gy + 20, 5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Cannon barrel (longer & bronze as level increases)
+        ctx.fillStyle = cannonLvl >= 5 ? '#d97706' : (cannonLvl >= 3 ? '#92400e' : '#1e293b');
+        ctx.fillRect(gx - 18, gy - 2, 34, 10);
+        ctx.fillRect(gx + 14, gy, 6, 6);
+
+        // Cannon recoil ropes
+        ctx.strokeStyle = '#b45309';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(gx - 12, gy + 12);
+        ctx.lineTo(gx - 22, gy + 22);
+        ctx.stroke();
+      }
+
+      // Stack of cannonballs & powder kegs
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.arc(r.x + 335, r.y + 60, 4.5, 0, Math.PI * 2);
+      ctx.arc(r.x + 344, r.y + 60, 4.5, 0, Math.PI * 2);
+      ctx.arc(r.x + 339.5, r.y + 52, 4.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Powder keg
+      ctx.fillStyle = '#b91c1c';
+      ctx.fillRect(r.x + 348, r.y + 48, 12, 16);
+      ctx.strokeStyle = '#fde047';
+      ctx.strokeRect(r.x + 348, r.y + 48, 12, 16);
+
+    } else if (comp.key === 'hull') {
+      // 3. CARGO HOLD & BILGE (hull)
+      // Oak curved framing ribs
+      ctx.strokeStyle = hullLvl >= 4 ? '#d97706' : '#78350f';
+      ctx.lineWidth = hullLvl >= 4 ? 2.5 : 1.5;
+      for (let ribX = r.x + 20; ribX < r.x + r.w - 10; ribX += 35) {
+        ctx.beginPath();
+        ctx.moveTo(ribX, r.y);
+        ctx.lineTo(ribX, r.y + r.h);
+        ctx.stroke();
+      }
+
+      // Ballast stones at bottom
+      ctx.fillStyle = '#475569';
+      for (let bx = r.x + 15; bx < r.x + 110; bx += 18) {
+        ctx.beginPath();
+        ctx.ellipse(bx, r.y + r.h - 7, 9, 5, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Treasure Chest & Rum Barrels
+      ctx.fillStyle = '#b45309';
+      ctx.fillRect(r.x + 130, r.y + 42, 24, 18);
+      ctx.strokeStyle = '#fbbf24';
+      ctx.strokeRect(r.x + 130, r.y + 42, 24, 18);
+      // Gold chest latch
+      ctx.fillStyle = '#fde047';
+      ctx.fillRect(r.x + 140, r.y + 48, 4, 6);
+
+      // Rum Barrels
+      for (let br = 0; br < 3; br++) {
+        ctx.fillStyle = '#78350f';
+        ctx.fillRect(r.x + 175 + br * 18, r.y + 40, 16, 22);
+        ctx.strokeStyle = '#1e293b';
+        ctx.strokeRect(r.x + 175 + br * 18, r.y + 40, 16, 22);
+      }
+
+      // Bilge pump pistons
+      ctx.fillStyle = '#64748b';
+      ctx.fillRect(r.x + 265, r.y + 25, 8, 38);
+      ctx.fillRect(r.x + 258, r.y + 25, 22, 6);
+
+    } else if (comp.key === 'stealthCamo') {
+      // 4. CAPTAIN'S CABIN (stealthCamo)
+      // Stern transom multi-pane glass gallery windows
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.25)';
+      ctx.fillRect(r.x + 6, r.y + 12, 34, 45);
+      ctx.strokeStyle = '#b45309';
+      ctx.lineWidth = 1.2;
+      ctx.strokeRect(r.x + 6, r.y + 12, 34, 45);
+      // Window panes
+      ctx.beginPath();
+      ctx.moveTo(r.x + 23, r.y + 12);
+      ctx.lineTo(r.x + 23, r.y + 57);
+      ctx.moveTo(r.x + 6, r.y + 34);
+      ctx.lineTo(r.x + 40, r.y + 34);
+      ctx.stroke();
+
+      // Captain's chart table & rolled map
+      ctx.fillStyle = '#451a03';
+      ctx.fillRect(r.x + 55, r.y + 45, 45, 18);
+      ctx.fillStyle = '#fef08a';
+      ctx.fillRect(r.x + 62, r.y + 42, 28, 4);
+
+      // Hanging lantern
+      ctx.fillStyle = stealthLvl >= 3 ? '#22d3ee' : '#fbbf24';
+      ctx.beginPath();
+      ctx.arc(r.x + 115, r.y + 26, 4.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Stealth mystic mist cloud if upgraded
+      if (stealthLvl >= 3) {
+        const mistPulse = 0.35 + Math.sin(t * 2) * 0.15;
+        ctx.fillStyle = `rgba(168, 85, 247, ${mistPulse.toFixed(2)})`;
+        ctx.beginPath();
+        ctx.ellipse(r.x + 80, r.y + 35, 35, 16, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+    } else if (comp.key === 'rearDefense') {
+      // 5. STERN CASTLE & MINES (rearDefense)
+      // Wooden mine slide chute angled off the transom
+      ctx.fillStyle = '#291508';
+      ctx.beginPath();
+      ctx.moveTo(r.x + 15, r.y + 35);
+      ctx.lineTo(r.x + 60, r.y + 65);
+      ctx.lineTo(r.x + 55, r.y + 75);
+      ctx.lineTo(r.x + 10, r.y + 45);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#78350f';
+      ctx.stroke();
+
+      // Floating Spiked Contact Mines
+      if (rearLvl > 0) {
+        const mineCount = Math.min(3, rearLvl);
+        for (let m = 0; m < mineCount; m++) {
+          const mx = r.x + 75 + m * 24;
+          const my = r.y + 55;
+          ctx.fillStyle = rearLvl >= 4 ? '#b91c1c' : '#1e293b';
+          ctx.beginPath();
+          ctx.arc(mx, my, 7, 0, Math.PI * 2);
+          ctx.fill();
+          // Contact mine spikes
+          ctx.strokeStyle = '#f59e0b';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.moveTo(mx - 10, my); ctx.lineTo(mx + 10, my);
+          ctx.moveTo(mx, my - 10); ctx.lineTo(mx, my + 10);
+          ctx.stroke();
+        }
+      } else {
+        // Locked label indicator inside room
+        ctx.font = '9px sans-serif';
+        ctx.fillStyle = 'rgba(148, 163, 184, 0.6)';
+        ctx.textAlign = 'center';
+        ctx.fillText("Terkunci (Lv.0)", r.x + r.w / 2, r.y + 55);
+      }
+
+      // Stern swivel chaser gun
+      ctx.fillStyle = '#334155';
+      ctx.fillRect(r.x + 35, r.y + 12, 22, 5);
+
+    } else if (comp.key === 'relicSiphon') {
+      // 6. FORECASTLE & RAM (relicSiphon)
+      // Heavy bronze ram spur projecting forward
+      ctx.fillStyle = relicLvl >= 4 ? '#991b1b' : (relicLvl >= 2 ? '#d97706' : '#64748b');
+      ctx.beginPath();
+      ctx.moveTo(r.x + 95, r.y + 110);
+      ctx.lineTo(r.x + 145 + Math.min(20, relicLvl * 3), r.y + 140);
+      ctx.lineTo(r.x + 95, r.y + 155);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#fde047';
+      ctx.stroke();
+
+      // Anchor Winch Drum & Cable
+      ctx.fillStyle = '#451a03';
+      ctx.fillRect(r.x + 30, r.y + 55, 32, 20);
+      ctx.strokeStyle = '#d97706';
+      ctx.strokeRect(r.x + 30, r.y + 55, 32, 20);
+
+      // Hanging Iron Anchor
+      ctx.fillStyle = '#334155';
+      ctx.beginPath();
+      ctx.arc(r.x + 85, r.y + 90, 8, 0, Math.PI);
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+
+      // Glowing Blood Vampirism Orb / Relic Lantern
+      if (relicLvl >= 2) {
+        const relicPulse = 0.65 + Math.sin(t * 3) * 0.35;
+        const radGrad = ctx.createRadialGradient(r.x + 80, r.y + 35, 2, r.x + 80, r.y + 35, 22);
+        radGrad.addColorStop(0, `rgba(244, 63, 94, ${relicPulse.toFixed(2)})`);
+        radGrad.addColorStop(0.6, `rgba(225, 29, 72, 0.4)`);
+        radGrad.addColorStop(1, 'rgba(225, 29, 72, 0)');
+        ctx.fillStyle = radGrad;
+        ctx.beginPath();
+        ctx.arc(r.x + 80, r.y + 35, 22, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#f43f5e';
+        ctx.beginPath();
+        ctx.arc(r.x + 80, r.y + 35, 5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // -------------------------------------------------------------
+    // LEVEL BADGE & GOLD PULSE UPGRADE READY INDICATOR
+    // -------------------------------------------------------------
+    const bp = comp.badgePos;
+    ctx.font = 'bold 9.5px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    // Badge pill background
+    ctx.fillStyle = isSelected 
+      ? '#b45309' 
+      : (isMax ? 'rgba(30, 41, 59, 0.9)' : 'rgba(15, 23, 42, 0.85)');
+    ctx.strokeStyle = isSelected ? '#fde68a' : (canAfford ? '#fbbf24' : 'rgba(255, 255, 255, 0.2)');
+    ctx.lineWidth = 1;
+
+    const badgeText = isMax ? 'MAX' : `Lv.${lvl}/${conf.maxLevel}`;
+    const badgeW = 48;
+    const badgeH = 16;
+    ctx.beginPath();
+    if (typeof ctx.roundRect === 'function') {
+      ctx.roundRect(bp.x - badgeW / 2, bp.y - badgeH / 2, badgeW, badgeH, 6);
+    } else {
+      ctx.rect(bp.x - badgeW / 2, bp.y - badgeH / 2, badgeW, badgeH);
+    }
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = isSelected ? '#ffffff' : (canAfford ? '#fef08a' : '#cbd5e1');
+    ctx.fillText(badgeText, bp.x, bp.y);
+
+    // Pulsing Gold indicator dot if upgrade is affordable & ready!
+    if (canAfford) {
+      const pDot = 0.5 + Math.sin(t * 4) * 0.5;
+      ctx.fillStyle = `rgba(251, 191, 36, ${0.4 + pDot * 0.6})`;
+      ctx.beginPath();
+      ctx.arc(bp.x + badgeW / 2 + 5, bp.y, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  // 5. Draw Floating Upgrade Sparks / Celebration Particles
+  for (let i = cutawayState.particles.length - 1; i >= 0; i--) {
+    const p = cutawayState.particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.life -= 0.035;
+    if (p.life <= 0) {
+      cutawayState.particles.splice(i, 1);
+      continue;
+    }
+    const alpha = p.life / p.maxLife;
+    ctx.fillStyle = p.color.replace(')', `, ${alpha.toFixed(2)})`).replace('rgb', 'rgba');
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size * alpha, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Loop next frame
+  if (upgradeModal && upgradeModal.classList.contains('modal-active')) {
+    cutawayAnimationId = requestAnimationFrame(renderShipCutaway);
+  }
+}
+
+function startCutawayLoop() {
+  if (cutawayAnimationId) cancelAnimationFrame(cutawayAnimationId);
+  cutawayAnimationId = requestAnimationFrame(renderShipCutaway);
+}
+
+function stopCutawayLoop() {
+  if (cutawayAnimationId) {
+    cancelAnimationFrame(cutawayAnimationId);
+    cutawayAnimationId = null;
+  }
+}
+
+// Unified selector for ship compartments ensuring immediate visual synchronization
+function selectCompartment(key, shouldScroll = false) {
+  if (!key || !SHIP_COMPARTMENTS[key]) return;
+  const prevKey = cutawayState.selectedKey;
+  cutawayState.selectedKey = key;
+  if (prevKey !== key) sound.playClick();
+  renderCompartmentChips();
+  renderCompartmentDetail(key);
+  if (shouldScroll && compartmentDetailPanel) {
+    compartmentDetailPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+}
+
+// Render the 6 Touch-Friendly Selector Chips underneath the canvas
+function renderCompartmentChips() {
+  if (!compartmentChipsBar) return;
+  compartmentChipsBar.innerHTML = '';
+
+  for (const comp of Object.values(SHIP_COMPARTMENTS)) {
+    const lvl = (playerState.upgrades && playerState.upgrades[comp.key]) || 0;
+    const conf = UPGRADE_CONFIG[comp.key];
+    const isMax = lvl >= conf.maxLevel;
+    const goldCost = isMax ? 0 : Math.floor(conf.baseCost * Math.pow(conf.costMult, Math.max(0, lvl - (comp.key === 'rearDefense' ? 0 : 1))));
+    const bloodCost = (!isMax && lvl >= conf.bloodCostStart) ? (lvl - conf.bloodCostStart + 1) * 3 : 0;
+    const canAfford = !isMax && (playerState.gold >= goldCost) && (playerState.bloodEssence >= bloodCost);
+    const isSelected = (cutawayState.selectedKey === comp.key);
+
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = `compartment-chip px-2.5 py-1.5 rounded-xl border flex items-center gap-1.5 shrink-0 whitespace-nowrap cursor-pointer ${
+      isSelected 
+        ? 'active bg-amber-950/80 border-amber-400 text-amber-300 font-bold shadow-md' 
+        : 'bg-slate-900/80 border-white/10 text-slate-300 hover:border-amber-500/40'
+    }`;
+
+    chip.innerHTML = `
+      <span class="w-3.5 h-3.5 flex items-center justify-center shrink-0">
+        ${SVG_ICONS[comp.iconKey] || SVG_ICONS.hull}
+      </span>
+      <span class="text-[11px] font-medium">${comp.shortName}</span>
+      <span class="text-[9px] font-mono px-1 py-0.2 rounded ${isMax ? 'bg-amber-400 text-slate-950 font-black' : 'bg-slate-800 text-slate-400'}">
+        ${isMax ? 'MAX' : `Lv.${lvl}`}
+      </span>
+      ${canAfford ? '<span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0"></span>' : ''}
+    `;
+
+    chip.addEventListener('click', (e) => {
+      e.stopPropagation();
+      selectCompartment(comp.key, false);
+    });
+
+    compartmentChipsBar.appendChild(chip);
+  }
+}
+
+// Render the detailed upgrade card for the currently selected compartment
+function renderCompartmentDetail(key) {
+  if (!compartmentDetailPanel) return;
+  const comp = SHIP_COMPARTMENTS[key] || SHIP_COMPARTMENTS.cannons;
+  const actualKey = comp.key;
+  cutawayState.selectedKey = actualKey;
+  const conf = UPGRADE_CONFIG[actualKey];
+  const lvl = (playerState.upgrades && playerState.upgrades[actualKey]) || 0;
+  const isMax = lvl >= conf.maxLevel;
+
+  const goldCost = isMax ? 0 : Math.floor(conf.baseCost * Math.pow(conf.costMult, Math.max(0, lvl - (actualKey === 'rearDefense' ? 0 : 1))));
+  const bloodCost = (!isMax && lvl >= conf.bloodCostStart) ? (lvl - conf.bloodCostStart + 1) * 3 : 0;
+  const hasGold = playerState.gold >= goldCost;
+  const hasBlood = playerState.bloodEssence >= bloodCost;
+  const canAfford = !isMax && hasGold && hasBlood;
+
+  // Segmented Progress Notches (6 blocks)
+  let notchesHtml = '';
+  for (let i = 1; i <= conf.maxLevel; i++) {
+    const isDone = (i <= lvl);
+    const isNext = (i === lvl + 1);
+    notchesHtml += `
+      <div class="flex-1 h-2 rounded-full overflow-hidden border ${
+        isDone ? 'bg-gradient-to-r from-amber-500 to-amber-400 border-amber-300 shadow-sm' :
+        (isNext && canAfford ? 'bg-amber-950/60 border-amber-400/80 animate-pulse' : 'bg-slate-900 border-white/5')
+      }"></div>
+    `;
+  }
+
+  compartmentDetailPanel.innerHTML = `
+    <!-- Header: Title, Category & Level Status -->
+    <div class="flex items-start justify-between gap-2 border-b border-white/10 pb-2">
+      <div class="flex items-center gap-2.5">
+        <div class="p-2.5 rounded-2xl bg-amber-950/60 border border-amber-500/40 text-amber-300 shrink-0 shadow-inner">
+          ${SVG_ICONS[comp.iconKey] || SVG_ICONS.hull}
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h3 class="font-cinzel text-sm sm:text-base font-bold text-slate-100">${comp.name}</h3>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
+              isMax ? 'bg-amber-400 text-slate-950' : 'bg-slate-800 text-amber-300 border border-amber-500/30'
+            }">
+              ${isMax ? 'TINGKAT MAKSIMAL' : `Level ${lvl} / ${conf.maxLevel}`}
+            </span>
+          </div>
+          <p class="text-[10.5px] text-slate-400 mt-0.5">${comp.subtitle}</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Segmented Level Progress Bar -->
+    <div class="space-y-1">
+      <div class="flex justify-between text-[10px] text-slate-400">
+        <span>Tahap Arsitektur</span>
+        <span class="font-mono text-amber-400 font-bold">${lvl} dari ${conf.maxLevel} Tingkat</span>
+      </div>
+      <div class="flex items-center gap-1.5 w-full">
+        ${notchesHtml}
+      </div>
+    </div>
+
+    <!-- Lore Quote -->
+    <p class="text-[10px] sm:text-[10.5px] text-slate-300 italic bg-black/40 p-2.5 rounded-xl border border-white/5 leading-relaxed">
+      ${comp.lore}
+    </p>
+
+    <!-- Stat Differential Comparison Card -->
+    <div class="bg-slate-900/90 rounded-xl p-2.5 border border-white/10 flex items-center justify-between gap-3 text-xs">
+      <div class="flex flex-col">
+        <span class="text-[9.5px] uppercase tracking-wider font-bold text-slate-400">${comp.statName}</span>
+        <span class="text-xs font-bold text-amber-300 font-mono mt-0.5">
+          ${isMax ? getStatValue(actualKey, lvl) + ' (Maksimal)' : comp.getStatDesc(lvl)}
+        </span>
+      </div>
+      <div class="text-right">
+        <span class="text-[9.5px] uppercase tracking-wider text-slate-400">Efek Kapal</span>
+        <div class="text-[10.5px] text-emerald-400 font-semibold mt-0.5">
+          ${isMax ? 'Performa Optimal' : '+Peningkatan Efektif'}
+        </div>
+      </div>
+    </div>
+
+    <!-- Action Upgrade Button & Resource Cost Row -->
+    <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-1">
+      <!-- Cost breakdown -->
+      <div class="flex items-center gap-3 text-xs font-mono font-bold">
+        ${!isMax ? `
+          <div class="flex items-center gap-1 ${hasGold ? 'text-amber-400' : 'text-rose-400'}">
+            <span class="w-2.5 h-2.5 rounded-full ${hasGold ? 'bg-amber-400' : 'bg-rose-500'} inline-block shadow-sm"></span>
+            <span>${goldCost} Koin</span>
+          </div>
+          ${bloodCost > 0 ? `
+            <div class="flex items-center gap-1 ${hasBlood ? 'text-rose-300' : 'text-rose-500'}">
+              <span class="w-2.5 h-2.5 rounded-full ${hasBlood ? 'bg-rose-500' : 'bg-rose-700'} inline-block shadow-sm"></span>
+              <span>${bloodCost} Darah</span>
+            </div>
+          ` : ''}
+        ` : '<span class="text-amber-400 text-xs font-bold">Kompartemen ini telah mencapai potensi puncak armada!</span>'}
+      </div>
+
+      <!-- Upgrade Button -->
+      <button id="btnPerformUpgrade" type="button" class="px-5 py-2 rounded-xl text-xs font-bold font-cinzel transition tracking-wide flex items-center justify-center gap-2 shadow-lg ${
+        isMax 
+          ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-white/5' 
+          : (canAfford 
+              ? 'bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 border border-amber-300 active:scale-95 shadow-amber-900/40 cursor-pointer' 
+              : 'bg-slate-800 text-slate-400 cursor-not-allowed border border-white/10 opacity-70')
+      }" ${!canAfford ? 'disabled' : ''}>
+        ${isMax ? 'TINGKAT MAKSIMAL' : (canAfford ? `TINGKATKAN KE LV.${lvl + 1}` : 'SUMBER DAYA TIDAK CUKUP')}
+      </button>
+    </div>
+  `;
+
+  // Bind upgrade button click and touch for instantaneous responsiveness
+  const btnUpgrade = document.getElementById('btnPerformUpgrade');
+  if (btnUpgrade && canAfford) {
+    const handleUpgradeClick = (e) => {
+      e.stopPropagation();
+      performCompartmentUpgrade(actualKey);
+    };
+    btnUpgrade.addEventListener('click', handleUpgradeClick);
+  }
+}
+
+// Perform the actual upgrade purchase with animation and audio
+function performCompartmentUpgrade(key) {
+  const comp = SHIP_COMPARTMENTS[key];
+  if (!comp) return;
+  cutawayState.selectedKey = key;
+  const conf = UPGRADE_CONFIG[key];
+  const lvl = (playerState.upgrades && playerState.upgrades[key]) || 0;
+  if (lvl >= conf.maxLevel) return;
+
+  const goldCost = Math.floor(conf.baseCost * Math.pow(conf.costMult, Math.max(0, lvl - (key === 'rearDefense' ? 0 : 1))));
+  const bloodCost = lvl >= conf.bloodCostStart ? (lvl - conf.bloodCostStart + 1) * 3 : 0;
+
+  if (playerState.gold >= goldCost && playerState.bloodEssence >= bloodCost) {
+    playerState.gold -= goldCost;
+    playerState.bloodEssence -= bloodCost;
+    playerState.upgrades[key]++;
+
+    // If upgrading hull, reward player with immediate +75 HP heal matching the increased max capacity!
+    if (key === 'hull') {
+      const newMaxHp = getStatValue('hull', playerState.upgrades.hull);
+      playerState.hp = Math.min(newMaxHp, playerState.hp + 75);
+    }
+
+    // Spawn 25 celebration sparkle particles around the upgraded compartment
+    const r = comp.rect;
+    for (let p = 0; p < 25; p++) {
+      cutawayState.particles.push({
+        x: r.x + Math.random() * r.w,
+        y: r.y + Math.random() * r.h,
+        vx: (Math.random() - 0.5) * 4,
+        vy: (Math.random() - 0.5) * 4 - 1.5,
+        life: 1.0,
+        maxLife: 1.0,
+        color: Math.random() < 0.6 ? 'rgb(251, 191, 36)' : 'rgb(244, 63, 94)',
+        size: 2.5 + Math.random() * 3.5
+      });
+    }
+
+    sound.playLoot();
+    showToast(`${comp.name} ditingkatkan ke Lv.${playerState.upgrades[key]}!`, "check");
+    saveGame();
+
+    // Re-render entire shipyard UI and detail card instantly in place!
+    renderUpgradeUI();
+    updateHUD();
+  } else {
+    showToast("Emas atau Esensi Darah Anda tidak mencukupi untuk peningkatan ini.", "alert");
+  }
+}
+
+// Master shipyard update function called when modal opens or state refreshes
+function renderUpgradeUI() {
+  // Update header currencies
+  if (shipyardGoldText) shipyardGoldText.innerText = (playerState.gold || 0).toLocaleString('id-ID');
+  if (shipyardBloodText) shipyardBloodText.innerText = (playerState.bloodEssence || 0).toLocaleString('id-ID');
+
+  // Update Ship Tier Badge & Title
+  const tierInfo = getShipTier();
+  if (shipyardTierBadge) {
+    shipyardTierBadge.innerText = `Rank ${tierInfo.rank}`;
+    shipyardTierBadge.style.color = tierInfo.color;
+  }
+  if (shipOverallTierTitle) {
+    shipOverallTierTitle.innerText = `• ${tierInfo.name}`;
+    shipOverallTierTitle.style.color = tierInfo.color;
+  }
+
+  // Update Total Level Progress
+  const totalLevels = Object.values(playerState.upgrades || {}).reduce((a, b) => a + b, 0);
   if (maxProgressLabel) {
     maxProgressLabel.innerText = `${totalLevels}/36 Tingkat`;
   }
 
-  document.querySelectorAll('.upgrade-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const key = btn.getAttribute('data-key');
-      if (!key) return;
-      const conf = UPGRADE_CONFIG[key];
-      const currentLvl = playerState.upgrades[key];
-      if (currentLvl >= conf.maxLevel) return;
+  // Update Port Docking Location subtitle
+  if (shipyardLocationLabel) {
+    const portName = playerState.dockedPortName || "Dermaga Nusa Damai";
+    shipyardLocationLabel.innerText = `Dermaga Berlabuh: ${portName} • Sentuh kompartemen untuk meneliti & meningkatkan`;
+  }
 
-      const goldCost = Math.floor(conf.baseCost * Math.pow(conf.costMult, Math.max(0, currentLvl - (key === 'rearDefense' ? 0 : 1))));
-      const bloodCost = currentLvl >= conf.bloodCostStart ? (currentLvl - conf.bloodCostStart + 1) * 3 : 0;
+  // Render quick chips & detail panel immediately
+  renderCompartmentChips();
+  renderCompartmentDetail(cutawayState.selectedKey);
+}
 
-      if (playerState.gold >= goldCost && playerState.bloodEssence >= bloodCost) {
-        playerState.gold -= goldCost;
-        playerState.bloodEssence -= bloodCost;
-        playerState.upgrades[key]++;
-        sound.playLoot();
-        showToast(`${conf.name} ditingkatkan ke Lv.${playerState.upgrades[key]}!`, "check");
-        saveGame();
-        renderUpgradeUI();
-        updateHUD();
+// Setup pointer interaction events on the cutaway canvas
+if (shipCutawayCanvas) {
+  shipCutawayCanvas.addEventListener('pointermove', (e) => {
+    const { x, y } = getCutawayCanvasCoords(e);
+    const key = findCompartmentAt(x, y);
+    if (key !== cutawayState.hoveredKey) {
+      cutawayState.hoveredKey = key;
+      if (cutawayHoverLabel) {
+        if (key && SHIP_COMPARTMENTS[key]) {
+          cutawayHoverLabel.innerText = SHIP_COMPARTMENTS[key].shortName;
+          cutawayHoverLabel.classList.remove('hidden');
+        } else {
+          cutawayHoverLabel.innerText = "Pilih Kompartemen";
+        }
       }
-    });
+    }
   });
+
+  shipCutawayCanvas.addEventListener('pointerleave', () => {
+    cutawayState.hoveredKey = null;
+    if (cutawayHoverLabel) cutawayHoverLabel.innerText = "Pilih Kompartemen";
+  });
+
+  const handleCanvasSelect = (e) => {
+    const { x, y } = getCutawayCanvasCoords(e);
+    const key = findCompartmentAt(x, y);
+    if (key) {
+      selectCompartment(key, false);
+    }
+  };
+
+  shipCutawayCanvas.addEventListener('pointerdown', handleCanvasSelect);
+  shipCutawayCanvas.addEventListener('click', handleCanvasSelect);
 }
 
 function openUpgradeModal() {
@@ -297,6 +1223,7 @@ function openUpgradeModal() {
   upgradeModal.classList.remove('modal-enter', 'hidden');
   upgradeModal.classList.add('modal-active');
   isGamePaused = true;
+  startCutawayLoop();
 }
 
 function closeUpgradeModal() {
@@ -305,6 +1232,7 @@ function closeUpgradeModal() {
   upgradeModal.classList.add('modal-enter', 'hidden');
   isGamePaused = false;
   lastTime = performance.now();
+  stopCutawayLoop();
 }
 
 function toggleUpgradeModal() {
@@ -762,10 +1690,11 @@ function renderSeaMapCanvas() {
 
   // 1. Concentric Ocean Rings
   const rings = [
-    { r: 1600, label: "Ring 1: Perairan Senja", color: 'rgba(56, 189, 248, 0.15)' },
-    { r: 3200, label: "Ring 2: Karang Besi", color: 'rgba(234, 88, 12, 0.15)' },
-    { r: 5000, label: "Ring 3: Sekte Kabut", color: 'rgba(168, 85, 247, 0.15)' },
-    { r: 7500, label: "Ring 4: Laut Darah Abisal", color: 'rgba(225, 29, 72, 0.18)' }
+    { r: 8000,  label: "Ring 0: Teluk Nusa Damai", color: 'rgba(56, 189, 248, 0.2)' },
+    { r: 22000, label: "Ring 1: Perairan Senja",   color: 'rgba(234, 179, 8, 0.2)' },
+    { r: 42000, label: "Ring 2: Karang Besi",      color: 'rgba(234, 88, 12, 0.2)' },
+    { r: 62000, label: "Ring 3: Sekte Kabut",      color: 'rgba(168, 85, 247, 0.2)' },
+    { r: 75000, label: "Ring 4: Laut Merah Abisal", color: 'rgba(225, 29, 72, 0.25)' }
   ];
 
   rings.forEach(ring => {
@@ -778,7 +1707,7 @@ function renderSeaMapCanvas() {
       mctx.stroke();
 
       mctx.font = '8px sans-serif';
-      mctx.fillStyle = ring.color.replace('0.15', '0.5').replace('0.18', '0.6');
+      mctx.fillStyle = ring.color.replace('0.2', '0.6').replace('0.25', '0.7');
       mctx.fillText(ring.label, cx + 6, cy - ring.r * scale - 3);
     }
   });
@@ -795,7 +1724,7 @@ function renderSeaMapCanvas() {
   }
 
   // 3. Explored Sectors (Fog of War)
-  const sectorSize = 180;
+  const sectorSize = (typeof FOG_SECTOR_SIZE !== 'undefined') ? FOG_SECTOR_SIZE : 1200;
   if (playerState.exploredSectors) {
     mctx.fillStyle = 'rgba(14, 165, 233, 0.08)';
     for (const secKey in playerState.exploredSectors) {

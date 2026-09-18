@@ -195,12 +195,26 @@ canvas {
 
 /* Canvas overrides for HUD & Modals */
 #compassCanvas,
-#seaMapCanvas {
+#seaMapCanvas,
+#shipCutawayCanvas {
   position: relative !important;
   width: 100% !important;
   height: 100% !important;
   display: block !important;
   z-index: 5 !important;
+}
+
+/* Ship Cutaway Compartment Chips & Interactive Elements */
+.compartment-chip {
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.compartment-chip:hover,
+.compartment-chip.active {
+  background: linear-gradient(135deg, rgba(217, 119, 6, 0.35) 0%, rgba(180, 83, 9, 0.55) 100%) !important;
+  border-color: rgba(251, 191, 36, 0.85) !important;
+  color: #fef08a !important;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.35);
+  transform: translateY(-1px);
 }
 
 /* Circular Mobile HP Ring & Concentric Helm Wrapper */

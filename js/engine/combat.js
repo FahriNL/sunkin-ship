@@ -221,3 +221,121 @@ function fireChitinSpikes(enemy, isNova = false) {
     }
   }
 }
+
+function fireFrostAxes(enemy, target = null) {
+  if (sound && sound.playFrostThrow) sound.playFrostThrow(enemy.x, enemy.y);
+  const tgt = target || enemy.targetEntity || playerState;
+  const count = enemy.tier === 3 ? 3 : (enemy.tier === 2 ? 2 : 1);
+  const targetX = tgt.x || enemy.x;
+  const targetY = tgt.y || enemy.y;
+  const baseAngle = Math.atan2(targetY - enemy.y, targetX - enemy.x);
+  const projSpeed = 7.2 + enemy.tier * 0.4;
+
+  for (let i = 0; i < count; i++) {
+    const ang = baseAngle + (i - (count - 1) / 2) * 0.24;
+    entities.projectiles.push({
+      type: 'frost_axe',
+      sourceClan: 'viking',
+      x: enemy.x + Math.cos(ang) * (enemy.radius + 8),
+      y: enemy.y + Math.sin(ang) * (enemy.radius + 8),
+      vx: Math.cos(ang) * projSpeed,
+      vy: Math.sin(ang) * projSpeed,
+      angle: ang,
+      radius: 6,
+      damage: enemy.damage * 1.05,
+      isPlayer: false,
+      life: 1.6,
+      clan: 'viking'
+    });
+  }
+}
+
+function fireRocketVolley(enemy, target = null) {
+  if (sound && sound.playRocketBarrage) sound.playRocketBarrage(enemy.x, enemy.y);
+  const tgt = target || enemy.targetEntity || playerState;
+  const count = enemy.tier === 3 ? 4 : (enemy.tier === 2 ? 3 : 2);
+  const targetX = tgt.x || enemy.x;
+  const targetY = tgt.y || enemy.y;
+  const baseAngle = Math.atan2(targetY - enemy.y, targetX - enemy.x);
+  const projSpeed = 8.5;
+
+  for (let i = 0; i < count; i++) {
+    const spread = (Math.random() - 0.5) * 0.35;
+    const ang = baseAngle + spread;
+    entities.projectiles.push({
+      type: 'rocket_arrow',
+      sourceClan: 'wokou',
+      x: enemy.x + Math.cos(ang) * (enemy.radius + 6),
+      y: enemy.y + Math.sin(ang) * (enemy.radius + 6),
+      vx: Math.cos(ang) * projSpeed,
+      vy: Math.sin(ang) * projSpeed,
+      angle: ang,
+      radius: 5,
+      damage: enemy.damage * 0.85,
+      isPlayer: false,
+      life: 1.4,
+      clan: 'wokou'
+    });
+  }
+}
+
+function spitKrakenInk(enemy, target = null) {
+  if (sound && sound.playInkSpit) sound.playInkSpit(enemy.x, enemy.y);
+  const tgt = target || enemy.targetEntity || playerState;
+  const targetX = tgt.x || enemy.x;
+  const targetY = tgt.y || enemy.y;
+  const angleToTarget = Math.atan2(targetY - enemy.y, targetX - enemy.x);
+  const dist = Math.min(220, Math.hypot(targetX - enemy.x, targetY - enemy.y));
+
+  // Spawn expanding ink cloud entity on the water surface
+  const cloudX = enemy.x + Math.cos(angleToTarget) * (dist * 0.65);
+  const cloudY = enemy.y + Math.sin(angleToTarget) * (dist * 0.65);
+
+  if (!entities.inkClouds) entities.inkClouds = [];
+  entities.inkClouds.push({
+    id: Math.random(),
+    x: cloudX,
+    y: cloudY,
+    radius: 95,
+    life: 5.5,
+    maxLife: 5.5,
+    seed: Math.random() * Math.PI * 2
+  });
+
+  // Also push small ink droplets
+  for (let p = 0; p < 8; p++) {
+    const sAng = angleToTarget + (Math.random() - 0.5) * 0.6;
+    const sSpd = 3.5 + Math.random() * 4;
+    entities.projectiles.push({
+      type: 'blood_bile',
+      sourceClan: 'blood',
+      x: enemy.x,
+      y: enemy.y,
+      vx: Math.cos(sAng) * sSpd,
+      vy: Math.sin(sAng) * sSpd,
+      radius: 6,
+      damage: enemy.damage * 0.5,
+      isPlayer: false,
+      life: 1.2
+    });
+  }
+}
+
+function summonLeviathanWhirlpool(enemy, target = null) {
+  if (sound && sound.playWhirlpool) sound.playWhirlpool(enemy.x, enemy.y);
+  const tgt = target || enemy.targetEntity || playerState;
+  const targetX = tgt.x || enemy.x;
+  const targetY = tgt.y || enemy.y;
+
+  if (!entities.whirlpools) entities.whirlpools = [];
+  entities.whirlpools.push({
+    id: Math.random(),
+    x: targetX,
+    y: targetY,
+    radius: 130,
+    pullStrength: 1.4,
+    life: 6.5,
+    maxLife: 6.5,
+    enemySourceId: enemy.id
+  });
+}

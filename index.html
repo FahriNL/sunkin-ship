@@ -275,34 +275,87 @@
           </div>
           <p class="text-[11px] text-slate-400">Peta kekuasaan faksi bajak laut & teror palung abisal • <span id="worldGenLabel" class="text-amber-300 font-mono font-bold">Generasi #1</span></p>
         </div>
-        <button id="btnCloseLore" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-sm font-bold">✕</button>
+        <button id="btnCloseLore" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-sm font-bold"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>
       <div class="overflow-y-auto py-3 space-y-3 flex-1 pr-1" id="clanCodexContainer"></div>
     </div>
   </div>
 
-  <!-- Modal: Galangan Kapal / Ship Upgrades -->
-  <div id="upgradeModal" class="fixed inset-0 z-40 bg-black/75 backdrop-blur-md flex items-center justify-center p-4 modal-enter hidden">
-    <div class="pirate-panel w-full max-w-md rounded-3xl p-5 border border-white/15 flex flex-col max-h-[85vh]">
-      <div class="flex justify-between items-center pb-3 border-b border-white/10">
-        <div>
-          <div class="flex items-center gap-2">
-            <h2 class="font-cinzel text-lg font-extrabold text-amber-300">GALANGAN KAPAL</h2>
-            <span class="text-[10px] px-2 py-0.5 rounded-full bg-red-950/80 text-red-300 border border-red-500/40 font-bold uppercase tracking-wider animate-pulse">Jeda [U]</span>
+  <!-- Modal: Galangan Kapal / Ship Upgrades with Interactive Cross-Section Cutaway -->
+  <div id="upgradeModal" class="fixed inset-0 z-40 bg-black/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 modal-enter hidden">
+    <div class="pirate-panel w-full max-w-4xl rounded-3xl p-3 sm:p-5 border border-amber-500/35 flex flex-col max-h-[94vh] shadow-2xl overflow-hidden">
+      <!-- Header with Ship Name, Rank, Dock Location, and Currency Counters -->
+      <div class="flex justify-between items-center pb-2.5 border-b border-white/10 shrink-0">
+        <div class="flex items-center gap-2 sm:gap-3">
+          <div class="w-9 h-9 rounded-2xl bg-amber-950/80 border border-amber-500/50 flex items-center justify-center shrink-0 shadow-inner">
+            <svg class="w-5 h-5 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M2 20a2.4 2.4 0 0 0 2 1 2.4 2.4 0 0 0 2-1 2.4 2.4 0 0 1 2-1 2.4 2.4 0 0 1 2 1 2.4 2.4 0 0 0 2 1 2.4 2.4 0 0 0 2-1 2.4 2.4 0 0 1 2-1 2.4 2.4 0 0 1 2 1 2.4 2.4 0 0 0 2 1 2.4 2.4 0 0 0 2-1"/>
+              <path d="M4 18 3 9l4 1 5-6 5 6 4-1-1 9"/>
+              <line x1="12" y1="4" x2="12" y2="18"/>
+            </svg>
           </div>
-          <p class="text-[11px] text-slate-400">Tingkatkan seluruh persenjataan, siluman & pertahanan!</p>
+          <div>
+            <div class="flex items-center gap-2">
+              <h2 class="font-cinzel text-base sm:text-xl font-extrabold text-amber-300 tracking-wide">GALANGAN KAPAL & ANATOMI</h2>
+              <span id="shipyardTierBadge" class="text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full bg-amber-950 text-amber-300 border border-amber-500/40 font-bold font-mono">Rank 1</span>
+            </div>
+            <p id="shipyardLocationLabel" class="text-[10px] sm:text-[11px] text-slate-400">Dermaga Berlabuh: Teluk Nusa Damai • Sentuh kompartemen untuk meneliti & meningkatkan</p>
+          </div>
         </div>
-        <button id="btnCloseUpgrade" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-sm font-bold">✕</button>
+        
+        <div class="flex items-center gap-2">
+          <!-- Currencies displayed in modal header -->
+          <div class="flex items-center gap-2 bg-slate-950/70 border border-white/10 px-2.5 py-1 rounded-xl">
+            <div class="flex items-center gap-1 text-[11px] font-bold text-amber-400">
+              <span class="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block shadow-sm"></span>
+              <span id="shipyardGoldText">0</span>
+            </div>
+            <div class="flex items-center gap-1 text-[11px] font-bold text-rose-400">
+              <span class="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block shadow-sm"></span>
+              <span id="shipyardBloodText">0</span>
+            </div>
+          </div>
+          <button id="btnCloseUpgrade" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-sm font-bold text-white transition"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        </div>
       </div>
-      <div class="overflow-y-auto py-3 space-y-2.5 flex-1 pr-1" id="upgradeList"></div>
-      <div class="pt-3 border-t border-white/10 flex justify-between items-center text-xs">
-        <div class="flex items-center gap-1.5">
-          <span class="text-amber-400 font-bold">Total Max:</span>
-          <span id="maxProgressLabel" class="text-slate-300">0/36 Tingkat</span>
+
+      <!-- Main Body: Cutaway Viewport + Compartment Selector + Detail Card -->
+      <div class="flex-1 overflow-y-auto pr-1 py-2 space-y-2.5">
+        <!-- Canvas Viewport for Ship Cross-Section Cutaway -->
+        <div class="relative w-full aspect-[16/9] sm:aspect-[21/9] max-h-[35vh] sm:max-h-[40vh] bg-[#080d19] rounded-2xl border-2 border-amber-900/60 overflow-hidden shadow-2xl flex items-center justify-center select-none">
+          <canvas id="shipCutawayCanvas" class="w-full h-full block cursor-pointer touch-none"></canvas>
+          
+          <!-- Cutaway Viewport Overlay Badges -->
+          <div class="absolute top-2 left-2 flex items-center gap-1.5 pointer-events-none z-10">
+            <span class="bg-black/85 backdrop-blur px-2 py-0.5 rounded-lg border border-amber-500/40 text-[9px] font-mono font-bold text-amber-300 shadow">ANATOMI POTONGAN KAPAL</span>
+            <span id="cutawayHoverLabel" class="bg-slate-900/90 backdrop-blur px-2 py-0.5 rounded-lg border border-white/10 text-[9px] font-bold text-slate-300 shadow hidden sm:inline-block">Pilih Kompartemen</span>
+          </div>
         </div>
-        <button id="btnRepairShip" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-1.5 rounded-xl active:scale-95 transition flex items-center gap-1.5">
-          <span>Perbaiki (15 Koin)</span>
-          <kbd class="kbd-badge bg-black/40 text-[9px]">R</kbd>
+
+        <!-- Compartment Selector Quick Chips (Touch Friendly) -->
+        <div id="compartmentChipsBar" class="flex items-center gap-1.5 overflow-x-auto py-0.5 px-0.5 select-none text-xs">
+          <!-- Dynamically populated chips -->
+        </div>
+
+        <!-- Selected Compartment Detail & Upgrade Action Panel -->
+        <div id="compartmentDetailPanel" class="bg-slate-950/85 rounded-2xl border border-amber-500/30 p-3 sm:p-4 shadow-lg flex flex-col gap-2">
+          <!-- Dynamically populated detail card -->
+        </div>
+
+        <!-- Fallback hidden container for legacy references -->
+        <div id="upgradeList" class="hidden"></div>
+      </div>
+
+      <!-- Footer: Total Max Progress & Quick Repair Action -->
+      <div class="pt-2 border-t border-white/10 flex justify-between items-center text-xs shrink-0">
+        <div class="flex items-center gap-2">
+          <span class="text-amber-400 font-bold">Total Peningkatan:</span>
+          <span id="maxProgressLabel" class="text-slate-300 font-mono font-bold">0/36 Tingkat</span>
+          <span id="shipOverallTierTitle" class="text-slate-400 hidden sm:inline-block">• Sekoci Pemburu</span>
+        </div>
+        <button id="btnRepairShip" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-1.5 rounded-xl active:scale-95 transition flex items-center gap-1.5 shadow-md">
+          <span>Perbaiki Lambung (15 Koin)</span>
+          <kbd class="kbd-badge bg-black/40 text-[9px] hidden sm:inline-block">R</kbd>
         </button>
       </div>
     </div>
@@ -320,7 +373,7 @@
           </div>
           <p class="text-[11px] text-slate-400">Navigasi kepulauan, batas kabut, pulau kekuasaan & rute niaga</p>
         </div>
-        <button id="btnCloseSeaMap" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-sm font-bold text-white transition">✕</button>
+        <button id="btnCloseSeaMap" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-sm font-bold text-white transition"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>
 
       <!-- Map Viewport Canvas with Interactive Touch/Mouse Pan & Zoom Controls -->
@@ -385,7 +438,7 @@
             <p class="text-[10px] text-slate-400">Kemudi kapal, laju layar, dan persenjataan keyboard & mouse</p>
           </div>
         </div>
-        <button id="btnCloseHelp" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-sm font-bold cursor-pointer">✕</button>
+        <button id="btnCloseHelp" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-sm font-bold cursor-pointer"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>
 
       <div class="overflow-y-auto py-3 space-y-2 text-xs flex-1 pr-1">
@@ -674,7 +727,7 @@
             <p class="text-[10px] text-slate-400">Sesuaikan volume audio & tampilan visual</p>
           </div>
         </div>
-        <button id="btnCloseSettings" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-sm font-bold cursor-pointer">✕</button>
+        <button id="btnCloseSettings" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-sm font-bold cursor-pointer"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>
 
       <div class="overflow-y-auto py-3 space-y-3.5 text-xs flex-1 pr-1">

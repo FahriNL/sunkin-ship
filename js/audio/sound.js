@@ -881,6 +881,91 @@ class SoundFX {
     osc.onended = () => { osc.disconnect(); gain.disconnect(); };
   }
 
+  playFrostThrow(x, y) {
+    if (this._muted) return;
+    this.init();
+    if (!this.ctx) return;
+    const gain = this.getSpatialVolume(x, y, 1400, 0.5);
+    if (gain <= 0.01) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(650, now);
+    osc.frequency.exponentialRampToValueAtTime(180, now + 0.25);
+    g.gain.setValueAtTime(gain * 0.4, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+    osc.connect(g);
+    g.connect(this.destinationNode);
+    osc.start(now);
+    osc.stop(now + 0.25);
+    osc.onended = () => { try { osc.disconnect(); g.disconnect(); } catch (e) {} };
+  }
+
+  playRocketBarrage(x, y) {
+    if (this._muted) return;
+    this.init();
+    if (!this.ctx) return;
+    const gain = this.getSpatialVolume(x, y, 1500, 0.55);
+    if (gain <= 0.01) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(420, now);
+    osc.frequency.linearRampToValueAtTime(980, now + 0.18);
+    g.gain.setValueAtTime(gain * 0.35, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+    osc.connect(g);
+    g.connect(this.destinationNode);
+    osc.start(now);
+    osc.stop(now + 0.22);
+    osc.onended = () => { try { osc.disconnect(); g.disconnect(); } catch (e) {} };
+  }
+
+  playInkSpit(x, y) {
+    if (this._muted) return;
+    this.init();
+    if (!this.ctx) return;
+    const gain = this.getSpatialVolume(x, y, 1800, 0.7);
+    if (gain <= 0.01) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(140, now);
+    osc.frequency.exponentialRampToValueAtTime(45, now + 0.45);
+    g.gain.setValueAtTime(gain * 0.6, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+    osc.connect(g);
+    g.connect(this.destinationNode);
+    osc.start(now);
+    osc.stop(now + 0.45);
+    osc.onended = () => { try { osc.disconnect(); g.disconnect(); } catch (e) {} };
+  }
+
+  playWhirlpool(x, y) {
+    if (this._muted) return;
+    this.init();
+    if (!this.ctx) return;
+    const gain = this.getSpatialVolume(x, y, 2000, 0.65);
+    if (gain <= 0.01) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(80, now);
+    osc.frequency.linearRampToValueAtTime(120, now + 0.4);
+    osc.frequency.linearRampToValueAtTime(60, now + 0.9);
+    g.gain.setValueAtTime(gain * 0.45, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
+    osc.connect(g);
+    g.connect(this.destinationNode);
+    osc.start(now);
+    osc.stop(now + 0.9);
+    osc.onended = () => { try { osc.disconnect(); g.disconnect(); } catch (e) {} };
+  }
+
   playSeaShantyWhistle() {
     if (this._muted) return;
     this.init();
