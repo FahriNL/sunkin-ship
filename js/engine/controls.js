@@ -171,6 +171,10 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   if (e.code === 'KeyM') {
+    if (isGameStarted) toggleMapModal();
+    return;
+  }
+  if (e.code === 'KeyN') {
     toggleSound();
     return;
   }

@@ -14,6 +14,11 @@ let playerState = {
   salvages: 0,
   maxDistanceReached: 0,
   speedSnareTimer: 0, // Iron harpoon snare debuff timer
+  conqueredIslands: ['haven', 'shop_haven_senja', 'shop_karang_tengah', 'shop_ambang_kabut'],
+  mapLevel: 1, // 1 to 4
+  exploredSectors: {}, // { "x,y": true }
+  isDockedAtPort: true,
+  dockedPort: null,
   upgrades: {
     hull: 1,
     speed: 1,
@@ -27,9 +32,10 @@ let playerState = {
 // Global entities pool
 const entities = {
   enemies: [],
+  merchants: [],    // Peaceful merchant cogs and escorts sailing trade routes
   sinkingShips: [], // Ships currently sinking into the deep with bubbles & rotation
   spikedMines: [],  // Floating spiked sea mines around Iron island
-  towers: [],       // Mysterious shooting occult towers around Mist Atoll
+  towers: [],       // Island defense bastions, turrets, spires, tentacles, and peranakans
   projectiles: [],
   mines: [],        // Player dropped gunpowder barrels
   sunkenShips: [],  // Ancient wrecked hulls to salvage
@@ -142,90 +148,161 @@ function initTerritorialDefenses() {
   }
 
   // 2. Territorial Active Defenses for ALL Islands across the world
+  entities.towers = [];
   WORLD_ISLANDS.forEach(isl => {
-    let defenseType = 'cannon_bastion';
-    let count = 2;
-    let baseOffsets = [-0.65, 0.65];
-
-    if (isl.id === 'haven') {
-      defenseType = 'haven_bastion';
-      count = 2;
-      baseOffsets = [-0.45, 0.45];
-    } else if (isl.clan === 'blood' || isl.isFlesh || isl.isSkullIsland) {
-      defenseType = 'tentacle';
-      count = (isl.id === 'hive_nest' || (isl.radius && isl.radius > 400)) ? 3 : 2;
-      baseOffsets = count === 3 ? [-0.85, 0, 0.85] : [-0.65, 0.65];
-    } else if (isl.clan === 'mist') {
-      defenseType = 'mist_spire';
-      count = 2;
-      baseOffsets = [-0.55, 0.55];
-    } else if (isl.clan === 'iron') {
-      defenseType = 'steam_harpoon';
-      count = 2;
-      baseOffsets = [-0.55, 0.55];
-    } else { // gold or neutral merchant
-      defenseType = 'cannon_bastion';
-      count = (isl.id === 'batavia_outpost' || (isl.radius && isl.radius > 350)) ? 3 : 2;
-      baseOffsets = count === 3 ? [-0.75, 0, 0.75] : [-0.6, 0.6];
+    // 0. Peaceful zones: Shop Islands & Conquered Islands have no hostile defenses
+    if (isl.isShopIsland || isl.isConquered) {
+      return;
     }
 
-    baseOffsets.forEach((offsetAngle, idx) => {
-      const baseFacing = (isl.dockAngle !== undefined ? isl.dockAngle : 0) + Math.PI;
-      const angle = baseFacing + offsetAngle;
-      const rAtAng = typeof getIslandRadiusAt === 'function' ? getIslandRadiusAt(isl, angle) : (isl.radius || 300);
-      const dist = rAtAng + (defenseType === 'tentacle' ? 24 : 18);
+    // Haven Peacekeeper Bastions
+    if (isl.id === 'haven') {
+      [-0.45, 0.45].forEach((offsetAngle, idx) => {
+        const baseFacing = (isl.dockAngle !== undefined ? isl.dockAngle : 0) + Math.PI;
+        const angle = baseFacing + offsetAngle;
+        const dist = (typeof getIslandRadiusAt === 'function' ? getIslandRadiusAt(isl, angle) : (isl.radius || 300)) + 18;
+        entities.towers.push({
+          id: Math.random(),
+          islandId: isl.id,
+          tier: 0,
+          isPeranakan: false,
+          defenseType: 'haven_bastion',
+          name: idx === 0 ? "Meriam Penjaga Damai Barat" : "Meriam Penjaga Damai Timur",
+          x: isl.x + Math.cos(angle) * dist,
+          y: isl.y + Math.sin(angle) * dist,
+          baseAngle: angle,
+          aimAngle: angle,
+          radius: 28,
+          hp: 520,
+          maxHp: 520,
+          clan: 'neutral',
+          damage: 30,
+          shootCooldown: 1.2 + idx * 0.6
+        });
+      });
+      return;
+    }
 
-      let name = "Pertahanan Karang";
-      let hp = 360;
-      let damage = 24;
-      let radius = 28;
+    // 1. Build Asymmetric Defense Formations (1 Induk Primary + 1-3 Peranakan Secondary)
+    const tier = isl.tier || 4;
+    const diffCfg = (typeof getDifficultyConfig === 'function') ? getDifficultyConfig() : { enemyHpMultiplier: 1.0 };
+    const hpMult = diffCfg.enemyHpMultiplier || 1.0;
 
-      if (defenseType === 'haven_bastion') {
-        name = idx === 0 ? "Meriam Penjaga Damai Barat" : "Meriam Penjaga Damai Timur";
-        hp = 520;
-        damage = 30;
-        radius = 28;
-      } else if (defenseType === 'cannon_bastion') {
-        name = `${isl.name} - Bastion Meriam ${idx + 1}`;
-        hp = 380;
-        damage = 25;
-        radius = 28;
-      } else if (defenseType === 'steam_harpoon') {
-        name = `${isl.name} - Turret Harpoon Baja ${idx + 1}`;
-        hp = 440;
-        damage = 28;
-        radius = 30;
-      } else if (defenseType === 'mist_spire') {
-        name = idx === 0 ? "Menara Jiwa Abisal Utara" : "Menara Arwah Pualam Selatan";
-        hp = 320;
-        damage = 20;
-        radius = 30;
-      } else if (defenseType === 'tentacle') {
-        name = `Tentakel Abisal Penjaga ${idx + 1}`;
-        hp = 390;
-        damage = 34;
-        radius = 26;
+    const defenseSquad = [];
+
+    if (isl.clan === 'blood' || isl.isFlesh || isl.isSkullIsland) {
+      // TIER 1: Laut Darah - Sarang Induk / Pulau Tengkorak
+      // 1-2 Colossal Kraken Tentacles (Induk) + 2-3 Minor Parasite Flesh Spitters (Peranakan)
+      const primaryCount = isl.id === 'hive_nest' ? 2 : 1;
+      if (primaryCount === 1) {
+        defenseSquad.push({ type: 'tentacle', isPeranakan: false, offset: 0, hp: 520, dmg: 38, rad: 26, name: `${isl.name} - Tentakel Induk Leviathan` });
+        defenseSquad.push({ type: 'flesh_spitter', isPeranakan: true, offset: -0.65, hp: 170, dmg: 16, rad: 18, name: `Kantung Parasit Pembusuk Barat` });
+        defenseSquad.push({ type: 'flesh_spitter', isPeranakan: true, offset: 0.65, hp: 170, dmg: 16, rad: 18, name: `Kantung Parasit Pembusuk Timur` });
+      } else {
+        defenseSquad.push({ type: 'tentacle', isPeranakan: false, offset: -0.4, hp: 520, dmg: 38, rad: 26, name: `Tentakel Induk Abisal I` });
+        defenseSquad.push({ type: 'tentacle', isPeranakan: false, offset: 0.4, hp: 520, dmg: 38, rad: 26, name: `Tentakel Induk Abisal II` });
+        defenseSquad.push({ type: 'flesh_spitter', isPeranakan: true, offset: -0.85, hp: 170, dmg: 16, rad: 18, name: `Kantung Parasit Penjaga` });
+        defenseSquad.push({ type: 'flesh_spitter', isPeranakan: true, offset: 0.85, hp: 170, dmg: 16, rad: 18, name: `Tentakel Cambuk Lendir` });
       }
 
-      // Scale tower HP according to difficulty settings
-      const diffCfg = (typeof getDifficultyConfig === 'function') ? getDifficultyConfig() : { enemyHpMultiplier: 1.0 };
-      const scaledTowerHp = Math.round(hp * (diffCfg.enemyHpMultiplier || 1.0));
+    } else if (isl.clan === 'mist') {
+      // TIER 2: Sekte Kabut
+      // 1 Menara Spire Okultis Marmer (Induk) + 2 Pylon Arwah Tengkorak Melayang (Peranakan)
+      defenseSquad.push({ type: 'mist_spire', isPeranakan: false, offset: 0, hp: 420, dmg: 28, rad: 30, name: `${isl.name} - Spire Okultis Utama` });
+      defenseSquad.push({ type: 'skull_pylon', isPeranakan: true, offset: -0.65, hp: 160, dmg: 15, rad: 18, name: `Pylon Tengkorak Arwah Barat` });
+      defenseSquad.push({ type: 'skull_pylon', isPeranakan: true, offset: 0.65, hp: 160, dmg: 15, rad: 18, name: `Pylon Tengkorak Arwah Timur` });
+
+    } else if (isl.clan === 'iron') {
+      // TIER 2 or 3: Pemburu Besi Hitam
+      const isTier2 = tier <= 2;
+      defenseSquad.push({
+        type: 'steam_harpoon',
+        isPeranakan: false,
+        offset: 0,
+        hp: isTier2 ? 420 : 340,
+        dmg: isTier2 ? 30 : 25,
+        rad: 28,
+        name: `${isl.name} - Turret Harpoon Baja Uap`
+      });
+      defenseSquad.push({
+        type: 'steam_vent',
+        isPeranakan: true,
+        offset: -0.6,
+        hp: isTier2 ? 160 : 135,
+        dmg: 14,
+        rad: 18,
+        name: `Tungku Cerobong Uap Kiri`
+      });
+      defenseSquad.push({
+        type: 'steam_vent',
+        isPeranakan: true,
+        offset: 0.6,
+        hp: isTier2 ? 160 : 135,
+        dmg: 14,
+        rad: 18,
+        name: `Tungku Cerobong Uap Kanan`
+      });
+
+    } else {
+      // TIER 3 or 4: Sindikat Emas Batavia / Neutral
+      const isTier4 = tier >= 4;
+      defenseSquad.push({
+        type: 'cannon_bastion',
+        isPeranakan: false,
+        offset: isTier4 ? 0.3 : 0,
+        hp: isTier4 ? 220 : 320,
+        dmg: isTier4 ? 18 : 24,
+        rad: 26,
+        name: `${isl.name} - Bastion Meriam Emas`
+      });
+
+      defenseSquad.push({
+        type: 'swivel_outpost',
+        isPeranakan: true,
+        offset: isTier4 ? -0.45 : -0.65,
+        hp: isTier4 ? 110 : 130,
+        dmg: 10,
+        rad: 18,
+        name: `Gardu Pengintai Senapan Putar I`
+      });
+
+      if (!isTier4) {
+        defenseSquad.push({
+          type: 'swivel_outpost',
+          isPeranakan: true,
+          offset: 0.65,
+          hp: 130,
+          dmg: 10,
+          rad: 18,
+          name: `Gardu Pengintai Senapan Putar II`
+        });
+      }
+    }
+
+    defenseSquad.forEach((def, idx) => {
+      const baseFacing = (isl.dockAngle !== undefined ? isl.dockAngle : 0) + Math.PI;
+      const angle = baseFacing + def.offset;
+      const rAtAng = typeof getIslandRadiusAt === 'function' ? getIslandRadiusAt(isl, angle) : (isl.radius || 300);
+      const dist = rAtAng + (def.type === 'tentacle' ? 24 : 18);
+      const scaledHp = Math.round(def.hp * hpMult);
 
       entities.towers.push({
         id: Math.random(),
         islandId: isl.id,
-        defenseType: defenseType,
-        name: name,
+        tier: tier,
+        isPeranakan: def.isPeranakan,
+        defenseType: def.type,
+        name: def.name,
         x: isl.x + Math.cos(angle) * dist,
         y: isl.y + Math.sin(angle) * dist,
         baseAngle: angle,
         aimAngle: angle,
-        radius: radius,
-        hp: scaledTowerHp,
-        maxHp: scaledTowerHp,
+        radius: def.rad,
+        hp: scaledHp,
+        maxHp: scaledHp,
         clan: isl.clan || 'neutral',
-        damage: damage,
-        shootCooldown: 1.0 + idx * 0.8,
+        damage: def.dmg,
+        shootCooldown: 0.8 + idx * 0.5,
         // Specialized states:
         orbAngle: 0,
         glowPulse: 0,
@@ -239,6 +316,85 @@ function initTerritorialDefenses() {
       });
     });
   });
+}
+
+// Entity Factory for Merchant Ships
+function createMerchantEntity(type, x, y, angle, waypoints = []) {
+  const cfg = (typeof MERCHANT_CONFIG !== 'undefined' && MERCHANT_CONFIG[type]) 
+    ? MERCHANT_CONFIG[type] 
+    : { name: "Kapal Niaga", hp: 180, speed: 1.9, radius: 20, cargoLoot: 40 };
+
+  return {
+    id: 'merch_' + Math.random().toString(36).substring(2, 9),
+    type: type, // 'cargo' or 'escort'
+    clan: 'merchant',
+    isMerchant: true,
+    name: cfg.name,
+    x: x,
+    y: y,
+    prevX: x,
+    prevY: y,
+    vx: 0,
+    vy: 0,
+    angle: angle,
+    targetAngle: angle,
+    hp: cfg.hp,
+    maxHp: cfg.hp,
+    speed: cfg.speed,
+    radius: cfg.radius,
+    damage: cfg.damage || 14,
+    cargoLoot: cfg.cargoLoot || 40,
+    shootCooldown: 2.0,
+    isMoving: true,
+    state: 'sailing', // 'sailing', 'docked', 'fleeing', 'retaliating'
+    stateTimer: 0,
+    dockTimer: 0,
+    waypoints: waypoints,
+    currentWpIdx: 0,
+    fleeTimer: 0,
+    retaliateTarget: null
+  };
+}
+
+// Seed world merchant shipping trade convoys
+function seedWorldMerchants() {
+  entities.merchants = [];
+
+  // Filter friendly or neutral trade harbors: Haven, Shop Islands, and Conquered Islands
+  const safePorts = WORLD_ISLANDS.filter(isl => isl.isHomePort || isl.isShopIsland || isl.isConquered);
+  if (safePorts.length < 2) return;
+
+  // Convoy 1: Trade run between Haven and Shop Island 1 & 2
+  const haven = safePorts.find(i => i.isHomePort) || safePorts[0];
+  const shop1 = safePorts.find(i => i.id === 'shop_haven_senja') || safePorts[1 % safePorts.length];
+  const shop2 = safePorts.find(i => i.id === 'shop_karang_tengah') || safePorts[safePorts.length - 1];
+
+  const wpRoute1 = [haven, shop1, shop2];
+  const wpRoute2 = [shop2, shop1, haven];
+
+  // Cargo Cog 1
+  const spawn1X = haven.x + Math.cos(haven.dockAngle) * (haven.dockDist + 120);
+  const spawn1Y = haven.y + Math.sin(haven.dockAngle) * (haven.dockDist + 120);
+  entities.merchants.push(createMerchantEntity('cargo', spawn1X, spawn1Y, haven.dockAngle, wpRoute1));
+
+  // Escort Cutter 1
+  const spawn2X = spawn1X + Math.cos(haven.dockAngle + 1.2) * 55;
+  const spawn2Y = spawn1Y + Math.sin(haven.dockAngle + 1.2) * 55;
+  entities.merchants.push(createMerchantEntity('escort', spawn2X, spawn2Y, haven.dockAngle, wpRoute1));
+
+  // Cargo Cog 2 (Sailing reverse route)
+  const spawn3X = shop1.x + Math.cos(shop1.dockAngle) * (shop1.dockDist + 110);
+  const spawn3Y = shop1.y + Math.sin(shop1.dockAngle) * (shop1.dockDist + 110);
+  entities.merchants.push(createMerchantEntity('cargo', spawn3X, spawn3Y, shop1.dockAngle, wpRoute2));
+
+  // Armed Merchant 3 in outer waters if Ring 3 shop exists
+  const shop3 = safePorts.find(i => i.id === 'shop_ambang_kabut');
+  if (shop3) {
+    const wpRoute3 = [shop2, shop3];
+    const spawn4X = shop2.x + Math.cos(shop2.dockAngle) * (shop2.dockDist + 120);
+    const spawn4Y = shop2.y + Math.sin(shop2.dockAngle) * (shop2.dockDist + 120);
+    entities.merchants.push(createMerchantEntity('escort', spawn4X, spawn4Y, shop2.dockAngle, wpRoute3));
+  }
 }
 
 // Entity Factory for Ships and Abyssal Sea Monsters
@@ -599,11 +755,25 @@ function resetRoguelikeRun() {
   playerState.hp = getStatValue('hull', 1);
   playerState.speedSnareTimer = 0;
 
+  playerState.conqueredIslands = ['haven', 'shop_haven_senja', 'shop_karang_tengah', 'shop_ambang_kabut'];
+  playerState.mapLevel = 1;
+  playerState.exploredSectors = {};
+  playerState.isDockedAtPort = true;
+  playerState.dockedPort = null;
+
+  // Reset conquered state on world islands
+  WORLD_ISLANDS.forEach(isl => {
+    if (!isl.isHomePort && !isl.isShopIsland) {
+      isl.isConquered = false;
+    }
+  });
+
   // 2. Re-initialize spiked sea mines & occult towers around the new island locations
   initTerritorialDefenses();
 
   // 3. Clear all dynamic sea entities
   entities.enemies = [];
+  entities.merchants = [];
   entities.sinkingShips = [];
   entities.projectiles = [];
   entities.mines = [];
@@ -615,6 +785,7 @@ function resetRoguelikeRun() {
 
   // Seed live starting world formations across the ocean rings
   seedWorldFormations();
+  seedWorldMerchants();
 
   // Re-seed seagulls around the new haven
   entities.seagulls = [];
@@ -669,10 +840,6 @@ function loadSavedGame() {
       generateGenerationalWorld(currentWorldGenSeed, currentWorldGenNumber);
       saveWorldGeneration();
     }
-    initTerritorialDefenses();
-    if (entities.enemies.length === 0) {
-      seedWorldFormations();
-    }
 
     const data = localStorage.getItem(SAVE_KEY);
     if (data) {
@@ -682,12 +849,31 @@ function loadSavedGame() {
         ...parsed, 
         upgrades: { ...playerState.upgrades, ...(parsed.upgrades || {}) } 
       };
+      if (!Array.isArray(playerState.conqueredIslands)) {
+        playerState.conqueredIslands = ['haven', 'shop_haven_senja', 'shop_karang_tengah', 'shop_ambang_kabut'];
+      }
+      if (!playerState.mapLevel) playerState.mapLevel = 1;
+      if (!playerState.exploredSectors) playerState.exploredSectors = {};
+
+      // Sync conquered state to world islands
+      WORLD_ISLANDS.forEach(isl => {
+        if (playerState.conqueredIslands.includes(isl.id)) {
+          isl.isConquered = true;
+        }
+      });
+
       // Always embark fresh from Home Port dock on session load
       playerState.x = PLAYER_SPAWN.x;
       playerState.y = PLAYER_SPAWN.y;
       playerState.angle = PLAYER_SPAWN.angle;
       playerState.hp = getStatValue('hull', playerState.upgrades.hull);
     }
+
+    initTerritorialDefenses();
+    if (entities.enemies.length === 0) {
+      seedWorldFormations();
+    }
+    seedWorldMerchants();
   } catch (e) {
     console.warn("Save load failed:", e);
   }

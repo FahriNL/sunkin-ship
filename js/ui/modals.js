@@ -261,8 +261,15 @@ function renderUpgradeUI() {
 
 function openUpgradeModal() {
   sound.init();
+  // SHOP OVERHAUL RESTRICTION: Upgrades only available when docked at Haven, Shop Island, or Conquered Island
+  if (!playerState.isDockedAtPort) {
+    showToast("⚓ Galangan Kapal tidak melayani di laut lepas! Berlabuhlah di Pelabuhan Asal, Pulau Pasar, atau Pulau Kekuasaanmu.", "alert");
+    return;
+  }
+
   closeLoreModal();
   closeHelpModal();
+  closeMapModal();
   renderUpgradeUI();
   upgradeModal.classList.remove('modal-enter', 'hidden');
   upgradeModal.classList.add('modal-active');
@@ -290,6 +297,312 @@ if (btnCloseUpgrade) btnCloseUpgrade.addEventListener('click', closeUpgradeModal
 if (upgradeModal) {
   upgradeModal.addEventListener('click', (e) => {
     if (e.target === upgradeModal) closeUpgradeModal();
+  });
+}
+
+// Sea Chart / Oceanic Map Modal Elements
+const seaMapModal = document.getElementById('seaMapModal');
+const seaMapCanvas = document.getElementById('seaMapCanvas');
+const btnOpenMap = document.getElementById('btnOpenMap');
+const btnCloseSeaMap = document.getElementById('btnCloseSeaMap');
+const btnUpgradeMap = document.getElementById('btnUpgradeMap');
+const mapLevelBadge = document.getElementById('mapLevelBadge');
+const mapNameLabel = document.getElementById('mapNameLabel');
+const mapDescLabel = document.getElementById('mapDescLabel');
+const mapUpgradeBtnText = document.getElementById('mapUpgradeBtnText');
+
+function renderSeaMapUI() {
+  const curLevel = playerState.mapLevel || 1;
+  const cfg = (typeof MAP_UPGRADE_CONFIG !== 'undefined' && MAP_UPGRADE_CONFIG[curLevel]) 
+    ? MAP_UPGRADE_CONFIG[curLevel] 
+    : { name: "Peta Nelayan", desc: "Bagan laut dasar" };
+  const nextCfg = (typeof MAP_UPGRADE_CONFIG !== 'undefined') ? MAP_UPGRADE_CONFIG[curLevel + 1] : null;
+
+  if (mapLevelBadge) mapLevelBadge.innerText = `Lv.${curLevel}`;
+  if (mapNameLabel) mapNameLabel.innerText = cfg.name;
+  if (mapDescLabel) mapDescLabel.innerText = cfg.desc;
+
+  if (btnUpgradeMap && mapUpgradeBtnText) {
+    if (!nextCfg) {
+      mapUpgradeBtnText.innerText = "Peta Samudra Maksimal";
+      btnUpgradeMap.classList.add('opacity-50', 'cursor-not-allowed');
+    } else {
+      mapUpgradeBtnText.innerText = `Tingkatkan Peta (${nextCfg.cost} 🪙)`;
+      if (playerState.gold >= nextCfg.cost) {
+        btnUpgradeMap.classList.remove('opacity-50', 'cursor-not-allowed');
+      } else {
+        btnUpgradeMap.classList.add('opacity-50', 'cursor-not-allowed');
+      }
+    }
+  }
+
+  renderSeaMapCanvas();
+}
+
+function renderSeaMapCanvas() {
+  if (!seaMapCanvas) return;
+  const dprMap = Math.min(window.devicePixelRatio || 1, 2);
+  const rect = seaMapCanvas.getBoundingClientRect();
+  const w = rect.width || 540;
+  const h = rect.height || 400;
+
+  seaMapCanvas.width = Math.floor(w * dprMap);
+  seaMapCanvas.height = Math.floor(h * dprMap);
+
+  const mctx = seaMapCanvas.getContext('2d');
+  mctx.save();
+  mctx.scale(dprMap, dprMap);
+
+  // Background Parchment & Ocean Tone
+  mctx.fillStyle = '#090f1d';
+  mctx.fillRect(0, 0, w, h);
+
+  const curLevel = playerState.mapLevel || 1;
+  const cfg = (typeof MAP_UPGRADE_CONFIG !== 'undefined' && MAP_UPGRADE_CONFIG[curLevel]) ? MAP_UPGRADE_CONFIG[curLevel] : { maxRadius: 3000 };
+  const maxVisionRadius = cfg.maxRadius || 3000;
+
+  // Center coordinate
+  const cx = w / 2;
+  const cy = h / 2;
+  const scale = (Math.min(w, h) * 0.45) / maxVisionRadius;
+
+  // 1. Concentric Ocean Rings
+  const rings = [
+    { r: 1600, label: "Ring 1: Perairan Senja", color: 'rgba(56, 189, 248, 0.15)' },
+    { r: 3200, label: "Ring 2: Karang Besi", color: 'rgba(234, 88, 12, 0.15)' },
+    { r: 5000, label: "Ring 3: Sekte Kabut", color: 'rgba(168, 85, 247, 0.15)' },
+    { r: 7500, label: "Ring 4: Laut Darah Abisal", color: 'rgba(225, 29, 72, 0.18)' }
+  ];
+
+  rings.forEach(ring => {
+    if (ring.r <= maxVisionRadius * 1.3) {
+      mctx.strokeStyle = ring.color;
+      mctx.lineWidth = 1;
+      mctx.setLineDash([4, 6]);
+      mctx.beginPath();
+      mctx.arc(cx, cy, ring.r * scale, 0, Math.PI * 2);
+      mctx.stroke();
+
+      mctx.font = '8px sans-serif';
+      mctx.fillStyle = ring.color.replace('0.15', '0.5').replace('0.18', '0.6');
+      mctx.fillText(ring.label, cx + 6, cy - ring.r * scale - 3);
+    }
+  });
+  mctx.setLineDash([]);
+
+  // 2. Graticule / Coordinate Grid Lines
+  mctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+  mctx.lineWidth = 0.8;
+  for (let gridX = 40; gridX < w; gridX += 45) {
+    mctx.beginPath(); mctx.moveTo(gridX, 0); mctx.lineTo(gridX, h); mctx.stroke();
+  }
+  for (let gridY = 40; gridY < h; gridY += 45) {
+    mctx.beginPath(); mctx.moveTo(0, gridY); mctx.lineTo(w, gridY); mctx.stroke();
+  }
+
+  // 3. Explored Sectors (Fog of War)
+  const sectorSize = 180;
+  if (playerState.exploredSectors) {
+    mctx.fillStyle = 'rgba(14, 165, 233, 0.08)';
+    for (const secKey in playerState.exploredSectors) {
+      const parts = secKey.split(',');
+      const sx = parseInt(parts[0], 10) * sectorSize;
+      const sy = parseInt(parts[1], 10) * sectorSize;
+      const mapX = cx + sx * scale;
+      const mapY = cy + sy * scale;
+      if (mapX >= -20 && mapX <= w + 20 && mapY >= -20 && mapY <= h + 20) {
+        mctx.beginPath();
+        mctx.arc(mapX, mapY, sectorSize * scale * 1.15, 0, Math.PI * 2);
+        mctx.fill();
+      }
+    }
+  }
+
+  // 4. World Islands
+  WORLD_ISLANDS.forEach(isl => {
+    const mapX = cx + isl.x * scale;
+    const mapY = cy + isl.y * scale;
+
+    const secKey = `${Math.round(isl.x / sectorSize)},${Math.round(isl.y / sectorSize)}`;
+    const isExplored = (playerState.exploredSectors && playerState.exploredSectors[secKey]) || isl.isHomePort;
+    const isRevealedByLevel = cfg.showTiers && cfg.showTiers.includes(isl.tier);
+
+    if (!isExplored && !isRevealedByLevel && !isl.isShopIsland && !isl.isHomePort) {
+      if (Math.hypot(isl.x, isl.y) <= maxVisionRadius) {
+        mctx.fillStyle = 'rgba(100, 116, 139, 0.4)';
+        mctx.font = 'bold 9px sans-serif';
+        mctx.fillText("?", mapX - 2, mapY + 3);
+      }
+      return;
+    }
+
+    let dotColor = '#ca8a04';
+    if (isl.isHomePort) {
+      dotColor = '#38bdf8';
+    } else if (isl.isShopIsland) {
+      dotColor = '#10b981';
+    } else if (isl.isConquered) {
+      dotColor = '#facc15';
+    } else if (isl.clan === 'blood' || isl.isFlesh) {
+      dotColor = '#ef4444';
+    } else if (isl.clan === 'mist') {
+      dotColor = '#c084fc';
+    } else if (isl.clan === 'iron') {
+      dotColor = '#94a3b8';
+    }
+
+    const dotRadius = Math.max(5, (isl.radius || 200) * scale);
+    mctx.fillStyle = dotColor;
+    mctx.beginPath();
+    mctx.arc(mapX, mapY, dotRadius, 0, Math.PI * 2);
+    mctx.fill();
+
+    mctx.strokeStyle = '#ffffff';
+    mctx.lineWidth = 1;
+    mctx.stroke();
+
+    // Island Name
+    mctx.font = 'bold 8px "Cinzel", sans-serif';
+    mctx.fillStyle = '#f8fafc';
+    mctx.textAlign = 'center';
+    mctx.fillText(isl.name, mapX, mapY - dotRadius - 3);
+
+    // Conquered Tag
+    if (isl.isConquered && !isl.isHomePort) {
+      mctx.font = '7px sans-serif';
+      mctx.fillStyle = '#facc15';
+      mctx.fillText("✓ Takluk", mapX, mapY + dotRadius + 8);
+    }
+  });
+
+  // 5. Merchant Ships (if Map Level >= 3)
+  if (curLevel >= 3 && entities.merchants) {
+    entities.merchants.forEach(m => {
+      const mx = cx + m.x * scale;
+      const my = cy + m.y * scale;
+      mctx.fillStyle = m.type === 'cargo' ? '#38bdf8' : '#0284c7';
+      mctx.beginPath();
+      mctx.arc(mx, my, 3, 0, Math.PI * 2);
+      mctx.fill();
+    });
+  }
+
+  // 6. Player Vessel & Direction Triangle
+  const px = cx + playerState.x * scale;
+  const py = cy + playerState.y * scale;
+
+  const ping = (_now * 0.003) % 1;
+  mctx.strokeStyle = `rgba(251, 191, 36, ${0.7 - ping * 0.6})`;
+  mctx.lineWidth = 1.5;
+  mctx.beginPath();
+  mctx.arc(px, py, 6 + ping * 18, 0, Math.PI * 2);
+  mctx.stroke();
+
+  mctx.save();
+  mctx.translate(px, py);
+  mctx.rotate(playerState.angle);
+  mctx.fillStyle = '#fbbf24';
+  mctx.strokeStyle = '#000000';
+  mctx.lineWidth = 1;
+  mctx.beginPath();
+  mctx.moveTo(8, 0);
+  mctx.lineTo(-5, -5);
+  mctx.lineTo(-3, 0);
+  mctx.lineTo(-5, 5);
+  mctx.closePath();
+  mctx.fill();
+  mctx.stroke();
+  mctx.restore();
+
+  // 7. Decorative Compass Rose
+  const compassX = w - 35;
+  const compassY = 35;
+  mctx.strokeStyle = 'rgba(251, 191, 36, 0.4)';
+  mctx.lineWidth = 1;
+  mctx.beginPath();
+  mctx.arc(compassX, compassY, 16, 0, Math.PI * 2);
+  mctx.stroke();
+
+  mctx.fillStyle = '#ef4444';
+  mctx.beginPath();
+  mctx.moveTo(compassX, compassY - 16);
+  mctx.lineTo(compassX - 3.5, compassY);
+  mctx.lineTo(compassX + 3.5, compassY);
+  mctx.closePath();
+  mctx.fill();
+
+  mctx.fillStyle = '#94a3b8';
+  mctx.beginPath();
+  mctx.moveTo(compassX, compassY + 16);
+  mctx.lineTo(compassX - 3.5, compassY);
+  mctx.lineTo(compassX + 3.5, compassY);
+  mctx.closePath();
+  mctx.fill();
+
+  mctx.font = 'bold 8px sans-serif';
+  mctx.fillStyle = '#fbbf24';
+  mctx.textAlign = 'center';
+  mctx.fillText("U", compassX, compassY - 19);
+
+  mctx.restore();
+}
+
+function openMapModal() {
+  sound.init();
+  closeUpgradeModal();
+  closeLoreModal();
+  closeHelpModal();
+  renderSeaMapUI();
+  if (seaMapModal) {
+    seaMapModal.classList.remove('modal-enter', 'hidden');
+    seaMapModal.classList.add('modal-active');
+  }
+  isGamePaused = true;
+}
+
+function closeMapModal() {
+  if (!seaMapModal) return;
+  seaMapModal.classList.remove('modal-active');
+  seaMapModal.classList.add('modal-enter', 'hidden');
+  isGamePaused = false;
+  lastTime = performance.now();
+}
+
+function toggleMapModal() {
+  if (seaMapModal && seaMapModal.classList.contains('modal-active')) {
+    closeMapModal();
+  } else {
+    openMapModal();
+  }
+}
+
+function upgradeMap() {
+  const curLevel = playerState.mapLevel || 1;
+  const nextCfg = (typeof MAP_UPGRADE_CONFIG !== 'undefined') ? MAP_UPGRADE_CONFIG[curLevel + 1] : null;
+  if (!nextCfg) {
+    showToast("Peta samudra telah mencapai tingkat kartografi tertinggi!", "compass");
+    return;
+  }
+  if (playerState.gold >= nextCfg.cost) {
+    playerState.gold -= nextCfg.cost;
+    playerState.mapLevel = nextCfg.level;
+    sound.playCoin();
+    sound.playLoot();
+    showToast(`Peta Samudra ditingkatkan ke ${nextCfg.name}!`, "compass");
+    saveGame();
+    updateHUD();
+    renderSeaMapUI();
+  } else {
+    showToast(`Emas tidak cukup untuk peningkatan peta (Butuh ${nextCfg.cost} 🪙).`, "alert");
+  }
+}
+
+if (btnOpenMap) btnOpenMap.addEventListener('click', openMapModal);
+if (btnCloseSeaMap) btnCloseSeaMap.addEventListener('click', closeMapModal);
+if (btnUpgradeMap) btnUpgradeMap.addEventListener('click', upgradeMap);
+if (seaMapModal) {
+  seaMapModal.addEventListener('click', (e) => {
+    if (e.target === seaMapModal) closeMapModal();
   });
 }
 
@@ -699,6 +1012,10 @@ function closeAllModals() {
   }
   if (pauseModal && pauseModal.classList.contains('modal-active')) {
     closePauseModal();
+    closedAny = true;
+  }
+  if (seaMapModal && seaMapModal.classList.contains('modal-active')) {
+    closeMapModal();
     closedAny = true;
   }
   return closedAny;

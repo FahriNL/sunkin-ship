@@ -277,7 +277,7 @@ function drawWorldIsland(ctx, isl) {
     ctx.fillRect(pLen * 0.3 - 2, 8, 4, 3);
     ctx.fillRect(pLen * 0.7 - 2, 8, 4, 3);
 
-    // Home Port welcome pennant flag
+    // Pennant flags for Haven, Conquered Islands, and Shop Islands
     if (isl.id === 'haven') {
       ctx.fillStyle = '#38bdf8';
       ctx.beginPath();
@@ -286,17 +286,38 @@ function drawWorldIsland(ctx, isl) {
       ctx.lineTo(pLen - 2, -12);
       ctx.closePath();
       ctx.fill();
+    } else if (isl.isConquered) {
+      // Golden Player Armada Pennant Flag fluttering on conquered pier
+      ctx.fillStyle = '#f59e0b';
+      ctx.beginPath();
+      ctx.moveTo(pLen - 2, 0);
+      ctx.lineTo(pLen + 16, -6);
+      ctx.lineTo(pLen - 2, -12);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#fef08a';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    } else if (isl.isShopIsland) {
+      // Emerald Trade Flag for Shop Islands
+      ctx.fillStyle = '#10b981';
+      ctx.beginPath();
+      ctx.moveTo(pLen - 2, 0);
+      ctx.lineTo(pLen + 15, -6);
+      ctx.lineTo(pLen - 2, -12);
+      ctx.closePath();
+      ctx.fill();
     }
 
     // Dock lanterns & ambient glow
-    ctx.fillStyle = '#fbbf24';
+    ctx.fillStyle = isl.isConquered ? '#fde047' : '#fbbf24';
     ctx.beginPath();
     ctx.arc(pLen - 4, -7, 3.5, 0, Math.PI * 2);
     ctx.arc(pLen - 4, 7, 3.5, 0, Math.PI * 2);
     ctx.fill();
 
     const pierGlow = ctx.createRadialGradient(pLen - 4, 0, 4, pLen - 4, 0, 34);
-    pierGlow.addColorStop(0, 'rgba(251, 191, 36, 0.35)');
+    pierGlow.addColorStop(0, isl.isConquered ? 'rgba(253, 224, 71, 0.45)' : 'rgba(251, 191, 36, 0.35)');
     pierGlow.addColorStop(1, 'rgba(251, 191, 36, 0)');
     ctx.fillStyle = pierGlow;
     ctx.beginPath();
@@ -317,8 +338,23 @@ function drawWorldIsland(ctx, isl) {
   ctx.fillText(isl.name, 0, -10);
 
   ctx.font = 'bold 9px sans-serif';
-  ctx.fillStyle = isl.id === 'haven' ? '#38bdf8' : (isl.clan === 'neutral' ? '#86efac' : (CLAN_LORE[isl.clan]?.badgeColor || '#fbbf24'));
-  ctx.fillText(isl.id === 'haven' ? "PANGKALAN UTAMA ARMADA (HOME PORT)" : (isl.clan === 'neutral' ? "PELABUHAN AMAN" : `WILAYAH: ${CLAN_LORE[isl.clan]?.name || 'PIRATE'}`), 0, 8);
+  let subtitle = "";
+  let subColor = "#fbbf24";
+  if (isl.id === 'haven') {
+    subtitle = "PANGKALAN UTAMA ARMADA (HOME PORT)";
+    subColor = '#38bdf8';
+  } else if (isl.isShopIsland) {
+    subtitle = "PASAR APUNG NIAGA & GALANGAN KAPAL";
+    subColor = '#34d399';
+  } else if (isl.isConquered) {
+    subtitle = `PULAU KEKUASAAN (TIER ${isl.tier || 4}) • TERLINDUNGI`;
+    subColor = '#fde047';
+  } else {
+    subtitle = `[TIER ${isl.tier || 4}] WILAYAH: ${CLAN_LORE[isl.clan]?.name || 'PIRATE'}`;
+    subColor = CLAN_LORE[isl.clan]?.badgeColor || '#fbbf24';
+  }
+  ctx.fillStyle = subColor;
+  ctx.fillText(subtitle, 0, 8);
 
   ctx.restore();
 }
@@ -1363,17 +1399,412 @@ function drawAbyssalTentacle(ctx, tw) {
   ctx.restore();
 }
 
+// Gold Clan Peranakan: Swivel Gun Outpost
+function drawSwivelOutpost(ctx, tw) {
+  ctx.save();
+  ctx.translate(tw.x, tw.y);
+
+  // Stilt platform on ocean water
+  ctx.fillStyle = '#451a03';
+  ctx.strokeStyle = '#78350f';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  for (let h = 0; h < 6; h++) {
+    const hang = (h / 6) * Math.PI * 2;
+    const hx = Math.cos(hang) * tw.radius;
+    const hy = Math.sin(hang) * tw.radius;
+    if (h === 0) ctx.moveTo(hx, hy);
+    else ctx.lineTo(hx, hy);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Wooden plank flooring
+  ctx.fillStyle = '#b45309';
+  ctx.beginPath();
+  ctx.arc(0, 0, tw.radius * 0.7, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Swivel gun mount & barrel
+  ctx.save();
+  ctx.rotate(tw.aimAngle || 0);
+  ctx.fillStyle = '#0f172a';
+  ctx.strokeStyle = '#ca8a04';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.arc(0, 0, 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Single sleek swivel barrel
+  ctx.fillStyle = '#1e293b';
+  ctx.fillRect(2, -2, 16, 4);
+  ctx.fillStyle = '#eab308';
+  ctx.fillRect(15, -2.5, 3, 5);
+  ctx.restore();
+
+  // HP Bar & Title
+  const barW = 38;
+  const barH = 3.5;
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+  ctx.fillRect(-barW / 2 - 2, -32, barW + 4, barH + 9);
+
+  ctx.font = 'bold 7px "Cinzel", serif';
+  ctx.fillStyle = '#fde047';
+  ctx.textAlign = 'center';
+  ctx.fillText("GARDU PUTAR", 0, -25);
+
+  ctx.fillStyle = '#1e293b';
+  ctx.fillRect(-barW / 2, -23, barW, barH);
+
+  ctx.fillStyle = '#f59e0b';
+  const hpRatio = Math.max(0, tw.hp / tw.maxHp);
+  ctx.fillRect(-barW / 2, -23, barW * hpRatio, barH);
+
+  ctx.restore();
+}
+
+// Iron Clan Peranakan: Steam Furnace Vent
+function drawSteamVent(ctx, tw) {
+  ctx.save();
+  ctx.translate(tw.x, tw.y);
+
+  // Riveted boiler base
+  ctx.fillStyle = '#1e293b';
+  ctx.strokeStyle = '#475569';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(0, 0, tw.radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Glowing furnace fire grate
+  ctx.fillStyle = '#ea580c';
+  ctx.beginPath();
+  ctx.arc(0, 0, tw.radius * 0.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Twin chimney vents
+  ctx.save();
+  ctx.rotate(tw.aimAngle || 0);
+  ctx.fillStyle = '#0f172a';
+  ctx.strokeStyle = '#f97316';
+  ctx.lineWidth = 1;
+  ctx.fillRect(2, -6, 14, 4);
+  ctx.fillRect(2, 2, 14, 4);
+  ctx.strokeRect(2, -6, 14, 4);
+  ctx.strokeRect(2, 2, 14, 4);
+  ctx.restore();
+
+  // Steam puff particles around vent
+  ctx.fillStyle = 'rgba(226, 232, 240, 0.6)';
+  ctx.beginPath();
+  ctx.arc(Math.sin(_now * 0.005) * 4, -4, 3.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // HP Bar & Title
+  const barW = 38;
+  const barH = 3.5;
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+  ctx.fillRect(-barW / 2 - 2, -32, barW + 4, barH + 9);
+
+  ctx.font = 'bold 7px "Cinzel", serif';
+  ctx.fillStyle = '#cbd5e1';
+  ctx.textAlign = 'center';
+  ctx.fillText("CEROBONG UAP", 0, -25);
+
+  ctx.fillStyle = '#1e293b';
+  ctx.fillRect(-barW / 2, -23, barW, barH);
+
+  ctx.fillStyle = '#94a3b8';
+  const hpRatio = Math.max(0, tw.hp / tw.maxHp);
+  ctx.fillRect(-barW / 2, -23, barW * hpRatio, barH);
+
+  ctx.restore();
+}
+
+// Mist Clan Peranakan: Occult Skull Pylon
+function drawSkullPylon(ctx, tw) {
+  ctx.save();
+  ctx.translate(tw.x, tw.y);
+
+  // Arcane water ripple
+  ctx.fillStyle = 'rgba(6, 182, 212, 0.18)';
+  ctx.beginPath();
+  ctx.arc(0, 0, tw.radius + 6, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Dark obsidian needle spire
+  ctx.fillStyle = '#090d16';
+  ctx.strokeStyle = '#06b6d4';
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  ctx.moveTo(0, -18);
+  ctx.lineTo(8, 8);
+  ctx.lineTo(-8, 8);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Levitating glowing skull above pylon tip
+  const skullBob = Math.sin(_now * 0.004 + (tw.id || 0)) * 3;
+  ctx.save();
+  ctx.translate(0, -24 + skullBob);
+  ctx.fillStyle = '#e2e8f0';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 5, 4.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Cyan glowing eyes
+  ctx.fillStyle = '#22d3ee';
+  ctx.beginPath();
+  ctx.arc(-1.8, -0.5, 1, 0, Math.PI * 2);
+  ctx.arc(1.8, -0.5, 1, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // HP Bar & Title
+  const barW = 38;
+  const barH = 3.5;
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+  ctx.fillRect(-barW / 2 - 2, -38, barW + 4, barH + 9);
+
+  ctx.font = 'bold 7px "Cinzel", serif';
+  ctx.fillStyle = '#67e8f9';
+  ctx.textAlign = 'center';
+  ctx.fillText("PYLON ARWAH", 0, -31);
+
+  ctx.fillStyle = '#1e293b';
+  ctx.fillRect(-barW / 2, -29, barW, barH);
+
+  ctx.fillStyle = '#22d3ee';
+  const hpRatio = Math.max(0, tw.hp / tw.maxHp);
+  ctx.fillRect(-barW / 2, -29, barW * hpRatio, barH);
+
+  ctx.restore();
+}
+
+// Blood Clan Peranakan: Parasitic Flesh Spitter
+function drawFleshSpitter(ctx, tw) {
+  ctx.save();
+  ctx.translate(tw.x, tw.y);
+
+  // Blood pool ripple
+  const pulse = Math.sin(_now * 0.006 + (tw.id || 0)) * 2;
+  ctx.fillStyle = 'rgba(153, 27, 27, 0.4)';
+  ctx.beginPath();
+  ctx.arc(0, 0, tw.radius + 4 + pulse, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Pulsating fleshy bio-pod
+  ctx.fillStyle = '#881337';
+  ctx.strokeStyle = '#f43f5e';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, tw.radius + pulse * 0.6, (tw.radius - 2) + pulse * 0.4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Gaping acidic mouth / orifice aiming at target
+  ctx.save();
+  ctx.rotate(tw.aimAngle || 0);
+  ctx.fillStyle = '#4c0519';
+  ctx.beginPath();
+  ctx.ellipse(8, 0, 6, 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Sharp yellowed bone teeth
+  ctx.fillStyle = '#fef08a';
+  ctx.beginPath();
+  ctx.moveTo(11, -3); ctx.lineTo(13, 0); ctx.lineTo(11, 3);
+  ctx.fill();
+  ctx.restore();
+
+  // HP Bar & Title
+  const barW = 38;
+  const barH = 3.5;
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+  ctx.fillRect(-barW / 2 - 2, -32, barW + 4, barH + 9);
+
+  ctx.font = 'bold 7px "Cinzel", serif';
+  ctx.fillStyle = '#fda4af';
+  ctx.textAlign = 'center';
+  ctx.fillText("KANTUNG PARASIT", 0, -25);
+
+  ctx.fillStyle = '#1e293b';
+  ctx.fillRect(-barW / 2, -23, barW, barH);
+
+  ctx.fillStyle = '#f43f5e';
+  const hpRatio = Math.max(0, tw.hp / tw.maxHp);
+  ctx.fillRect(-barW / 2, -23, barW * hpRatio, barH);
+
+  ctx.restore();
+}
+
 // Master Dispatcher for Island Defenses
 function drawIslandDefense(ctx, tw) {
   if (tw.defenseType === 'tentacle') {
     drawAbyssalTentacle(ctx, tw);
+  } else if (tw.defenseType === 'flesh_spitter') {
+    drawFleshSpitter(ctx, tw);
   } else if (tw.defenseType === 'steam_harpoon') {
     drawSteamHarpoonTurret(ctx, tw);
+  } else if (tw.defenseType === 'steam_vent') {
+    drawSteamVent(ctx, tw);
+  } else if (tw.defenseType === 'swivel_outpost') {
+    drawSwivelOutpost(ctx, tw);
+  } else if (tw.defenseType === 'skull_pylon') {
+    drawSkullPylon(ctx, tw);
   } else if (tw.defenseType === 'cannon_bastion' || tw.defenseType === 'haven_bastion') {
     drawCannonBastion(ctx, tw);
   } else {
     drawOccultTower(ctx, tw);
   }
+}
+
+// Render Peaceful Merchant Ships & Trade Convoys
+function drawMerchantShip(ctx, m) {
+  ctx.save();
+  ctx.translate(m.x, m.y);
+  ctx.rotate(m.angle);
+
+  const isCargo = m.type === 'cargo';
+  const len = isCargo ? 32 : 28;
+  const wid = isCargo ? 18 : 14;
+
+  // Water displacement / shadow
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
+  ctx.beginPath();
+  ctx.ellipse(1.5, 2.5, len * 0.5, wid * 0.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  if (isCargo) {
+    // 1. Cargo Cog / Pinisi Dagang Hull
+    ctx.fillStyle = '#78350f'; // Warm teak wood
+    ctx.strokeStyle = '#451a03';
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.moveTo(len * 0.52, 0); // Bow
+    ctx.bezierCurveTo(len * 0.35, -wid * 0.55, -len * 0.3, -wid * 0.52, -len * 0.48, -wid * 0.35);
+    ctx.lineTo(-len * 0.48, wid * 0.35);
+    ctx.bezierCurveTo(-len * 0.3, wid * 0.52, len * 0.35, wid * 0.55, len * 0.52, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Wooden deck
+    ctx.fillStyle = '#b45309';
+    ctx.beginPath();
+    ctx.ellipse(-len * 0.05, 0, len * 0.36, wid * 0.34, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Cargo Crates & Spice Barrels on Deck
+    ctx.fillStyle = '#d97706';
+    ctx.strokeStyle = '#78350f';
+    ctx.lineWidth = 1;
+    ctx.fillRect(-6, -5, 6, 5);
+    ctx.strokeRect(-6, -5, 6, 5);
+    ctx.fillRect(-6, 1, 6, 5);
+    ctx.strokeRect(-6, 1, 6, 5);
+    ctx.fillStyle = '#f59e0b';
+    ctx.fillRect(2, -3, 6, 6);
+    ctx.strokeRect(2, -3, 6, 6);
+
+    // Main Mast & Striped Merchant Sail
+    ctx.fillStyle = '#fef3c7'; // Cream cloth
+    ctx.strokeStyle = '#b45309';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(-2, -wid * 0.85);
+    ctx.quadraticCurveTo(len * 0.25, 0, -2, wid * 0.85);
+    ctx.quadraticCurveTo(0, 0, -2, -wid * 0.85);
+    ctx.fill();
+    ctx.stroke();
+
+    // Merchant Emerald Trade Stripe
+    ctx.strokeStyle = '#059669';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-1, -wid * 0.45);
+    ctx.lineTo(len * 0.12, 0);
+    ctx.lineTo(-1, wid * 0.45);
+    ctx.stroke();
+
+    // Bow Gold Lantern
+    ctx.fillStyle = '#fbbf24';
+    ctx.beginPath();
+    ctx.arc(len * 0.48, 0, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+
+  } else {
+    // 2. Armed Escort Cutter
+    ctx.fillStyle = '#1e293b'; // Slate dark hull
+    ctx.strokeStyle = '#0284c7'; // Cyan trim
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(len * 0.55, 0);
+    ctx.bezierCurveTo(len * 0.3, -wid * 0.5, -len * 0.35, -wid * 0.45, -len * 0.48, -wid * 0.28);
+    ctx.lineTo(-len * 0.48, wid * 0.28);
+    ctx.bezierCurveTo(-len * 0.35, wid * 0.45, len * 0.3, wid * 0.5, len * 0.55, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Deck
+    ctx.fillStyle = '#334155';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, len * 0.35, wid * 0.3, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Port & Starboard Swivel Guns
+    ctx.fillStyle = '#f59e0b';
+    ctx.fillRect(-2, -wid * 0.5 - 2, 4, 3);
+    ctx.fillRect(-2, wid * 0.5 - 1, 4, 3);
+
+    // Escort Chevron Sails
+    ctx.fillStyle = '#f8fafc';
+    ctx.strokeStyle = '#0284c7';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(-4, -wid * 0.8);
+    ctx.quadraticCurveTo(len * 0.22, 0, -4, wid * 0.8);
+    ctx.quadraticCurveTo(-1, 0, -4, -wid * 0.8);
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  // Anchor emblem when docked
+  if (m.isAnchored || m.state === 'docked') {
+    ctx.fillStyle = '#38bdf8';
+    ctx.font = 'bold 9px sans-serif';
+    ctx.fillText("⚓", 0, -wid - 4);
+  }
+
+  ctx.restore();
+
+  // Floating HP bar above merchant ship
+  const barW = 36;
+  const barH = 3;
+  ctx.save();
+  ctx.translate(m.x, m.y);
+
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+  ctx.fillRect(-barW / 2 - 2, -26, barW + 4, barH + 9);
+
+  ctx.font = 'bold 7px sans-serif';
+  ctx.fillStyle = isCargo ? '#34d399' : '#38bdf8';
+  ctx.textAlign = 'center';
+  ctx.fillText(m.name, 0, -19);
+
+  ctx.fillStyle = '#1e293b';
+  ctx.fillRect(-barW / 2, -18, barW, barH);
+
+  ctx.fillStyle = isCargo ? '#10b981' : '#0ea5e9';
+  const hpRatio = Math.max(0, m.hp / m.maxHp);
+  ctx.fillRect(-barW / 2, -18, barW * hpRatio, barH);
+
+  ctx.restore();
 }
 
 // Render Ships Currently Sinking into the Deep
@@ -1798,15 +2229,46 @@ function render() {
   // Render Mist Occult Ritual Circles
   renderMistRituals(ctx);
 
+  // Render Merchant Shipping Vessels & Convoys
+  if (entities.merchants) {
+    entities.merchants.forEach(m => {
+      if (!isVisible(m.x, m.y, 300)) return;
+      drawMerchantShip(ctx, m);
+    });
+  }
+
   // Render Enemy Ships
   entities.enemies.forEach(e => {
     if (!isVisible(e.x, e.y, 300)) return;
-    drawVectorShip(ctx, e, false)
+    drawVectorShip(ctx, e, false);
   });
 
   // Render Player Ship
   const tierInfo = getShipTier();
   drawVectorShip(ctx, playerState, true, tierInfo.rank);
+
+  // Render Harbor Docking Aura & Prompt
+  if (playerState.isDockedAtPort && playerState.dockedPort) {
+    const port = playerState.dockedPort;
+    ctx.save();
+    ctx.translate(playerState.x, playerState.y);
+    const auraPulse = Math.sin(_now * 0.004) * 4 + 36;
+    ctx.strokeStyle = 'rgba(251, 191, 36, 0.4)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 6]);
+    ctx.beginPath();
+    ctx.arc(0, 0, auraPulse, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.font = 'bold 9px "Cinzel", sans-serif';
+    ctx.fillStyle = '#fde047';
+    ctx.textAlign = 'center';
+    ctx.fillText(`⚓ BERLABUH DI ${port.name.toUpperCase()}`, 0, -40);
+    ctx.font = '8px sans-serif';
+    ctx.fillStyle = '#cbd5e1';
+    ctx.fillText("Galangan Kapal Siap [U]", 0, -30);
+    ctx.restore();
+  }
 
   // Render Projectiles
   entities.projectiles.forEach(p => {

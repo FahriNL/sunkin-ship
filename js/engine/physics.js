@@ -493,6 +493,367 @@ function spawnWorldEntities() {
   }
 }
 
+// Destroy an Island Tower/Defense & Check if Island is fully Conquered
+function destroyTowerAndCheckConquer(tw, tIndex) {
+  if (tIndex !== undefined && tIndex >= 0 && tIndex < entities.towers.length) {
+    entities.towers.splice(tIndex, 1);
+  } else {
+    const idx = entities.towers.indexOf(tw);
+    if (idx !== -1) entities.towers.splice(idx, 1);
+  }
+
+  // Audio & Visual Destruction FX
+  screenShake = Math.max(screenShake, tw.isPeranakan ? 7 : 14);
+  if (tw.defenseType === 'tentacle' || tw.defenseType === 'flesh_spitter') {
+    sound.playMonsterRoar(tw.x, tw.y);
+  } else if (tw.defenseType === 'steam_harpoon' || tw.defenseType === 'steam_vent') {
+    sound.playIronHit(tw.x, tw.y);
+    sound.playMineExplosion(tw.x, tw.y);
+  } else {
+    sound.playCannon(tw.x, tw.y);
+    sound.playMineExplosion(tw.x, tw.y);
+  }
+
+  // Destruction Debris Particles
+  const partCount = tw.isPeranakan ? 14 : 26;
+  for (let p = 0; p < partCount; p++) {
+    const pAng = Math.random() * Math.PI * 2;
+    const pSpd = 1.5 + Math.random() * 4.5;
+    let pColor = '#f59e0b';
+    if (tw.defenseType === 'tentacle' || tw.defenseType === 'flesh_spitter') {
+      pColor = p % 2 === 0 ? '#e11d48' : '#881337';
+    } else if (tw.defenseType === 'mist_spire' || tw.defenseType === 'skull_pylon') {
+      pColor = p % 2 === 0 ? '#22d3ee' : '#0f766e';
+    } else if (tw.defenseType === 'steam_harpoon' || tw.defenseType === 'steam_vent') {
+      pColor = p % 2 === 0 ? '#94a3b8' : '#f97316';
+    }
+    entities.particles.push({
+      x: tw.x,
+      y: tw.y,
+      vx: Math.cos(pAng) * pSpd,
+      vy: Math.sin(pAng) * pSpd,
+      life: 0.6,
+      maxLife: 0.6,
+      size: 3 + Math.random() * 4,
+      color: pColor
+    });
+  }
+
+  // Loot Bounty for Destroying Defense
+  const diffCfg = (typeof getDifficultyConfig === 'function') ? getDifficultyConfig() : { rewardMultiplier: 1.0 };
+  const rMult = diffCfg.rewardMultiplier || 1.0;
+  const bountyGold = tw.isPeranakan ? Math.floor((30 + Math.random() * 25) * rMult) : Math.floor((90 + Math.random() * 60) * rMult);
+  const bountyBlood = (tw.clan === 'blood' || tw.defenseType === 'tentacle' || tw.defenseType === 'flesh_spitter')
+    ? (tw.isPeranakan ? 3 : 8) : 0;
+
+  playerState.gold += bountyGold;
+  if (bountyBlood > 0) playerState.bloodEssence += bountyBlood;
+
+  if (bountyBlood > 0) {
+    showToast(`Hancur! +${bountyGold} Koin +${bountyBlood} Darah: ${tw.name}`, "blood");
+  } else {
+    showToast(`Hancur! +${bountyGold} Koin: ${tw.name}`, "gold");
+  }
+  addFloatingText(`HANCUR! +${bountyGold} Koin`, tw.x, tw.y - 25, '#fbbf24', true);
+  sound.playCoin();
+
+  // Check Island Conquer Condition!
+  if (!tw.islandId) return;
+  const remaining = entities.towers.filter(t => t.islandId === tw.islandId);
+  if (remaining.length === 0) {
+    const isl = WORLD_ISLANDS.find(i => i.id === tw.islandId);
+    if (isl && !isl.isConquered) {
+      isl.isConquered = true;
+      if (!playerState.conqueredIslands.includes(isl.id)) {
+        playerState.conqueredIslands.push(isl.id);
+      }
+
+      // Conquest Rewards based on Tier
+      const tier = isl.tier || 4;
+      let conquestGold = 200;
+      let conquestBlood = 0;
+      if (tier === 1) {
+        conquestGold = 850;
+        conquestBlood = 25;
+      } else if (tier === 2) {
+        conquestGold = 500;
+        conquestBlood = 10;
+      } else if (tier === 3) {
+        conquestGold = 320;
+        conquestBlood = 4;
+      } else {
+        conquestGold = 180;
+      }
+      conquestGold = Math.floor(conquestGold * rMult);
+      conquestBlood = Math.floor(conquestBlood * rMult);
+
+      playerState.gold += conquestGold;
+      if (conquestBlood > 0) playerState.bloodEssence += conquestBlood;
+
+      screenShake = 22;
+      sound.playLoot();
+
+      showToast(`🏆 PULAU DITAKLUKKAN: ${isl.name}! Bendera armada berkibar! (+${conquestGold} Koin)`, "trophy");
+      addFloatingText(`PULAU DITAKLUKKAN!`, isl.x, isl.y - 40, '#fde047', true);
+
+      // Save game on conquest
+      saveGame();
+
+      // Dispatch a celebratory merchant trade convoy to the newly conquered island
+      setTimeout(() => {
+        if (typeof seedWorldMerchants === 'function') {
+          seedWorldMerchants();
+        }
+      }, 1500);
+    }
+  }
+}
+
+// Check safe harbor port docking for player
+function checkPlayerPortDocking(pState) {
+  let nearPort = null;
+  for (let i = 0; i < WORLD_ISLANDS.length; i++) {
+    const isl = WORLD_ISLANDS[i];
+    if (!isl.isHomePort && !isl.isShopIsland && !isl.isConquered) continue;
+
+    const dx = pState.x - isl.x;
+    const dy = pState.y - isl.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const harborRadius = (isl.radius || 200) + 140;
+
+    if (dist < harborRadius) {
+      nearPort = isl;
+      break;
+    }
+  }
+
+  if (nearPort) {
+    if (!pState.isDockedAtPort) {
+      pState.isDockedAtPort = true;
+      pState.dockedPort = nearPort;
+      showToast(`⚓ Berlabuh di ${nearPort.name}: Galangan kapal siap melayani!`, "anchor");
+      if (sound.playSplash) sound.playSplash();
+    }
+    pState.dockedPort = nearPort;
+
+    // Passive gentle harbor repair (+1.5 HP/sec at safe dock)
+    const maxHp = getStatValue('hull', pState.upgrades.hull);
+    if (pState.hp < maxHp) {
+      pState.hp = Math.min(maxHp, pState.hp + 0.05);
+    }
+  } else {
+    if (pState.isDockedAtPort) {
+      pState.isDockedAtPort = false;
+      pState.dockedPort = null;
+    }
+  }
+}
+
+// Dynamic Map Exploration & Fog of War Sector Tracking
+function recordMapExploration(x, y, mapLevel = 1) {
+  if (!playerState.exploredSectors) playerState.exploredSectors = {};
+  const cfg = (typeof MAP_UPGRADE_CONFIG !== 'undefined' && MAP_UPGRADE_CONFIG[mapLevel])
+    ? MAP_UPGRADE_CONFIG[mapLevel]
+    : { fogClearanceRadius: 650 };
+
+  const clearRadius = cfg.fogClearanceRadius || 650;
+  const sectorSize = 180;
+  const secRadius = Math.ceil(clearRadius / sectorSize);
+  const centerSecX = Math.round(x / sectorSize);
+  const centerSecY = Math.round(y / sectorSize);
+
+  for (let dx = -secRadius; dx <= secRadius; dx++) {
+    for (let dy = -secRadius; dy <= secRadius; dy++) {
+      if (dx * dx + dy * dy <= secRadius * secRadius) {
+        const sx = centerSecX + dx;
+        const sy = centerSecY + dy;
+        playerState.exploredSectors[`${sx},${sy}`] = 1;
+      }
+    }
+  }
+}
+
+// Merchant Shipping Convoys AI & Navigation
+function updateMerchants(dt) {
+  if (!entities.merchants || entities.merchants.length === 0) return;
+
+  const safePorts = WORLD_ISLANDS.filter(i => i.isHomePort || i.isShopIsland || i.isConquered);
+  if (safePorts.length === 0) return;
+
+  for (let i = entities.merchants.length - 1; i >= 0; i--) {
+    const m = entities.merchants[i];
+
+    // 1. Sinking Check
+    if (m.hp <= 0) {
+      sound.playMineExplosion(m.x, m.y);
+      screenShake = Math.max(screenShake, 8);
+      for (let c = 0; c < 3; c++) {
+        entities.floatingLoots.push({
+          id: Math.random(),
+          x: m.x + (Math.random() - 0.5) * 40,
+          y: m.y + (Math.random() - 0.5) * 40,
+          type: 'gold',
+          value: Math.floor(35 + Math.random() * 30),
+          bobOffset: Math.random() * 10
+        });
+      }
+      addFloatingText("KAPAL NIAGA KARAM!", m.x, m.y - 25, '#fbbf24', true);
+      showToast("Kapal Niaga karam! Muatan kargo rempah & emas mengapung!", "gold");
+
+      entities.sinkingShips.push({
+        x: m.x,
+        y: m.y,
+        angle: m.angle,
+        clan: 'merchant',
+        tier: 1,
+        name: m.name,
+        isMonster: false,
+        rotSpeed: (Math.random() - 0.5) * 1.5,
+        progress: 0,
+        maxLife: 2.2,
+        life: 2.2
+      });
+
+      entities.merchants.splice(i, 1);
+      continue;
+    }
+
+    // 2. Fleeing state (Cargo ships when attacked)
+    if (m.state === 'fleeing') {
+      m.fleeTimer -= dt;
+      if (m.fleeTimer <= 0) {
+        m.state = 'sailing';
+      } else {
+        const fleeAngle = Math.atan2(m.y - playerState.y, m.x - playerState.x);
+        let safeAngle = avoidIslandObstacles(m, fleeAngle, 140);
+        let diff = normAngle(safeAngle - m.angle);
+        m.angle += Math.sign(diff) * Math.min(Math.abs(diff), 2.8 * dt);
+
+        const fleeSpeed = m.speed * 1.35;
+        m.x += Math.cos(m.angle) * fleeSpeed;
+        m.y += Math.sin(m.angle) * fleeSpeed;
+
+        if (Math.random() < 0.008 && entities.floatingLoots.length < 5) {
+          entities.floatingLoots.push({
+            id: Math.random(),
+            x: m.x,
+            y: m.y,
+            type: 'gold',
+            value: Math.floor(25 + Math.random() * 20),
+            bobOffset: 0
+          });
+          addFloatingText("Kargo Dibuang!", m.x, m.y - 18, '#fbbf24');
+        }
+        continue;
+      }
+    }
+
+    // 3. Retaliating state (Escort Cutters when attacked)
+    if (m.state === 'retaliating') {
+      m.shootCooldown -= dt;
+      const dToP = Math.hypot(playerState.x - m.x, playerState.y - m.y);
+      if (dToP > 750) {
+        m.state = 'sailing';
+      } else {
+        const angToP = Math.atan2(playerState.y - m.y, playerState.x - m.x);
+        const broadsideAng = angToP + Math.PI * 0.5;
+        let safeAng = avoidIslandObstacles(m, broadsideAng, 140);
+        let diff = normAngle(safeAng - m.angle);
+        m.angle += Math.sign(diff) * Math.min(Math.abs(diff), 2.6 * dt);
+
+        const cruise = m.speed * 0.85;
+        m.x += Math.cos(m.angle) * cruise;
+        m.y += Math.sin(m.angle) * cruise;
+
+        if (m.shootCooldown <= 0 && dToP < 420 && hasLineOfSight(m.x, m.y, playerState.x, playerState.y)) {
+          m.shootCooldown = 1.6 + Math.random() * 0.8;
+          sound.playCannon(m.x, m.y);
+          const fAngle = Math.atan2(playerState.y - m.y, playerState.x - m.x);
+          entities.projectiles.push({
+            type: 'cannonball',
+            sourceClan: 'merchant',
+            x: m.x + Math.cos(fAngle) * 20,
+            y: m.y + Math.sin(fAngle) * 20,
+            vx: Math.cos(fAngle) * 7.5,
+            vy: Math.sin(fAngle) * 7.5,
+            radius: 5,
+            damage: m.damage || 14,
+            isPlayer: false,
+            life: 1.2
+          });
+        }
+        continue;
+      }
+    }
+
+    // 4. Normal Shipping Trade Route navigation between friendly ports
+    if (m.state === 'docked') {
+      m.dockTimer -= dt;
+      m.angle += Math.sin(Date.now() * 0.0015 + (m.id ? m.id.charCodeAt(0) : 0)) * 0.0015;
+
+      if (m.dockTimer <= 0) {
+        m.state = 'sailing';
+        m.isAnchored = false;
+        m.taxPaid = false;
+        m.currentWpIdx = (m.currentWpIdx + 1) % (m.waypoints && m.waypoints.length > 0 ? m.waypoints.length : safePorts.length);
+      }
+      continue;
+    }
+
+    // Sailing towards current waypoint island
+    let targetPort = null;
+    if (m.waypoints && m.waypoints.length > 0) {
+      targetPort = m.waypoints[m.currentWpIdx % m.waypoints.length];
+    }
+    if (!targetPort || !safePorts.some(p => p.id === targetPort.id)) {
+      targetPort = safePorts[Math.floor(Math.random() * safePorts.length)];
+      if (m.waypoints) m.waypoints = safePorts;
+    }
+
+    const harbor = getIslandHarborAnchor(targetPort);
+    const dx = harbor.x - m.x;
+    const dy = harbor.y - m.y;
+    const distToHarbor = Math.hypot(dx, dy);
+
+    if (distToHarbor < 90) {
+      m.state = 'docked';
+      m.isAnchored = true;
+      m.dockTimer = 16 + Math.random() * 14;
+
+      if (!m.taxPaid && (playerState.conqueredIslands.includes(targetPort.id) || targetPort.id === 'haven')) {
+        m.taxPaid = true;
+        const tax = m.type === 'cargo' ? Math.floor(18 + Math.random() * 16) : Math.floor(8 + Math.random() * 8);
+        playerState.gold += tax;
+        addFloatingText(`+${tax} Pajak Niaga!`, m.x, m.y - 25, '#fbbf24');
+        showToast(`Saudagar berlabuh di ${targetPort.name}! Membayar pajak niaga +${tax} Koin`, "gold");
+        sound.playCoin();
+      }
+      continue;
+    }
+
+    let desiredHeading = Math.atan2(dy, dx);
+    desiredHeading = avoidIslandObstacles(m, desiredHeading, 175);
+
+    let diff = normAngle(desiredHeading - m.angle);
+    m.angle += Math.sign(diff) * Math.min(Math.abs(diff), 2.2 * dt);
+
+    const speed = m.speed * 0.75;
+    m.x += Math.cos(m.angle) * speed;
+    m.y += Math.sin(m.angle) * speed;
+
+    if (Math.random() < 0.35) {
+      entities.seaRipples.push({
+        x: m.x - Math.cos(m.angle) * (m.radius * 0.8),
+        y: m.y - Math.sin(m.angle) * (m.radius * 0.8),
+        radius: 3,
+        maxRadius: 16,
+        alpha: 0.45,
+        color: 'rgba(255, 255, 255, '
+      });
+    }
+  }
+}
+
 function updateGame(dt) {
   const currentMaxHp = getStatValue('hull', playerState.upgrades.hull);
   const moveSpeed = getStatValue('speed', playerState.upgrades.speed);
@@ -559,6 +920,12 @@ function updateGame(dt) {
   if (distFromStart > playerState.maxDistanceReached) {
     playerState.maxDistanceReached = distFromStart;
   }
+
+  // Safe Harbor & Port Docking Verification
+  checkPlayerPortDocking(playerState);
+
+  // Dynamic Map Exploration & Fog of War Sector Tracking
+  recordMapExploration(playerState.x, playerState.y, playerState.mapLevel);
 
   // Active Treasure Map proximity check
   if (activeTreasureHint) {
@@ -748,6 +1115,37 @@ function updateGame(dt) {
         }
         mine.life = 0;
         break;
+      }
+    }
+
+    // Check hit against island defense bastions & peranakans
+    if (mine.life > 0) {
+      for (let t = entities.towers.length - 1; t >= 0; t--) {
+        const tw = entities.towers[t];
+        if (tw.clan === 'neutral' || tw.defenseType === 'haven_bastion') continue;
+        const dx = tw.x - mine.x, dy = tw.y - mine.y;
+        if (dx * dx + dy * dy < (tw.radius + mine.radius + 16) * (tw.radius + mine.radius + 16)) {
+          tw.hp -= mine.damage * 1.5;
+          sound.playMineExplosion(mine.x, mine.y);
+          screenShake = Math.max(screenShake, 8);
+          addFloatingText(`RANJAU! -${Math.round(mine.damage * 1.5)}`, tw.x, tw.y - 20, '#f97316', true);
+          for (let k = 0; k < 18; k++) {
+            entities.particles.push({
+              x: mine.x,
+              y: mine.y,
+              vx: (Math.random() - 0.5) * 5,
+              vy: (Math.random() - 0.5) * 5,
+              life: 0.5,
+              color: k % 2 === 0 ? '#f97316' : '#78350f',
+              size: 3 + Math.random() * 3
+            });
+          }
+          if (tw.hp <= 0) {
+            destroyTowerAndCheckConquer(tw, t);
+          }
+          mine.life = 0;
+          break;
+        }
       }
     }
 
@@ -1035,6 +1433,27 @@ function updateGame(dt) {
             life: 3.8,
             clan: 'mist'
           });
+        } else if (tw.defenseType === 'skull_pylon') {
+          // Mist Peranakan: Occult spirit bolt
+          tw.shootCooldown = (1.9 + Math.random() * 0.4) * reloadMult;
+          sound.playMistCast(tw.x, tw.y);
+          entities.projectiles.push({
+            type: 'spirit',
+            sourceClan: 'mist',
+            target: target,
+            x: tw.x,
+            y: tw.y - 10,
+            vx: Math.cos(fireAngle) * (projSpeed * 0.9),
+            vy: Math.sin(fireAngle) * (projSpeed * 0.9),
+            angle: fireAngle,
+            speed: projSpeed * 0.9,
+            turnRate: 2.6,
+            radius: 5,
+            damage: tw.damage,
+            isPlayer: false,
+            life: 2.8,
+            clan: 'mist'
+          });
         } else if (tw.defenseType === 'steam_harpoon') {
           tw.shootCooldown = (2.6 + Math.random() * 0.4) * reloadMult;
           sound.playIronHit(tw.x, tw.y);
@@ -1063,6 +1482,57 @@ function updateGame(dt) {
             damage: tw.damage,
             isPlayer: false,
             life: 1.3
+          });
+        } else if (tw.defenseType === 'steam_vent') {
+          // Iron Peranakan: High-pressure shrapnel blast
+          tw.shootCooldown = (1.7 + Math.random() * 0.3) * reloadMult;
+          sound.playIronHit(tw.x, tw.y);
+          for (let sp of [-0.08, 0.08]) {
+            entities.projectiles.push({
+              type: 'iron_harpoon',
+              sourceClan: 'iron',
+              x: tw.x + Math.cos(fireAngle + sp) * 20,
+              y: tw.y + Math.sin(fireAngle + sp) * 20,
+              vx: Math.cos(fireAngle + sp) * (projSpeed * 0.9),
+              vy: Math.sin(fireAngle + sp) * (projSpeed * 0.9),
+              angle: fireAngle + sp,
+              radius: 4,
+              damage: tw.damage * 0.6,
+              isPlayer: false,
+              life: 1.1
+            });
+          }
+        } else if (tw.defenseType === 'flesh_spitter') {
+          // Blood Peranakan: Parasitic bile spitter
+          tw.shootCooldown = (1.8 + Math.random() * 0.4) * reloadMult;
+          sound.playMonsterAttack(tw.x, tw.y);
+          entities.projectiles.push({
+            type: 'blood_bile',
+            sourceClan: 'blood',
+            x: tw.x,
+            y: tw.y,
+            vx: Math.cos(fireAngle) * (projSpeed * 0.9),
+            vy: Math.sin(fireAngle) * (projSpeed * 0.9),
+            radius: 5,
+            damage: tw.damage,
+            isPlayer: false,
+            life: 1.3
+          });
+        } else if (tw.defenseType === 'swivel_outpost') {
+          // Gold Peranakan: Rapid swivel battery
+          tw.shootCooldown = (1.3 + Math.random() * 0.3) * reloadMult;
+          sound.playCannon(tw.x, tw.y);
+          entities.projectiles.push({
+            type: 'cannonball',
+            sourceClan: tw.clan,
+            x: tw.x + Math.cos(fireAngle) * 20,
+            y: tw.y + Math.sin(fireAngle) * 20,
+            vx: Math.cos(fireAngle) * (projSpeed * 1.05),
+            vy: Math.sin(fireAngle) * (projSpeed * 1.05),
+            radius: 4.5,
+            damage: tw.damage,
+            isPlayer: false,
+            life: 1.25
           });
         } else {
           // Cannon Bastion & Haven Bastion
@@ -1145,13 +1615,11 @@ function updateGame(dt) {
     p.y += p.vy;
     p.life -= dt;
 
-    // 1. Check hit against Occult Towers & Spiked Sea Mines (Checked BEFORE island terrain clipping)
+    // 1. Check hit against Active Island Defenses (Checked BEFORE island terrain clipping)
     let hitObstacle = false;
     if (p.isPlayer) {
-      // Check hit against Active Island Defenses
       for (let t = entities.towers.length - 1; t >= 0; t--) {
         const tw = entities.towers[t];
-        // Friendly fire check: Player cannot attack Haven's friendly peacekeepers
         if (tw.clan === 'neutral' || tw.defenseType === 'haven_bastion') continue;
 
         const hitRadius = tw.radius + 32;
@@ -1160,13 +1628,13 @@ function updateGame(dt) {
           p.life = 0;
 
           let hitColor = '#22d3ee';
-          if (tw.defenseType === 'tentacle') {
+          if (tw.defenseType === 'tentacle' || tw.defenseType === 'flesh_spitter') {
             hitColor = '#f43f5e';
             sound.playMonsterHit(tw.x, tw.y);
-          } else if (tw.defenseType === 'steam_harpoon') {
+          } else if (tw.defenseType === 'steam_harpoon' || tw.defenseType === 'steam_vent') {
             hitColor = '#94a3b8';
             sound.playIronHit(tw.x, tw.y);
-          } else if (tw.defenseType === 'cannon_bastion') {
+          } else if (tw.defenseType === 'cannon_bastion' || tw.defenseType === 'swivel_outpost') {
             hitColor = '#f59e0b';
             sound.playIronHit(tw.x, tw.y);
           } else {
@@ -1188,104 +1656,59 @@ function updateGame(dt) {
           }
 
           if (tw.hp <= 0) {
-            const diffCfg = (typeof getDifficultyConfig === 'function') ? getDifficultyConfig() : { rewardMultiplier: 1.0 };
-            const rMult = diffCfg.rewardMultiplier || 1.0;
-
-            if (tw.defenseType === 'tentacle') {
-              sound.playMonsterRoar(tw.x, tw.y);
-              screenShake = 14;
-              const gRew = Math.round(25 * rMult);
-              const bRew = Math.round(5 * rMult);
-              playerState.gold += gRew;
-              playerState.bloodEssence += bRew;
-              showToast(`Tentakel Abisal Ditumbangkan! +${gRew} Koin +${bRew} Darah`, "skull");
-              for (let b = 0; b < 24; b++) {
-                const bang = (b / 24) * Math.PI * 2;
-                entities.particles.push({
-                  x: tw.x,
-                  y: tw.y,
-                  vx: Math.cos(bang) * (2.5 + Math.random() * 4),
-                  vy: Math.sin(bang) * (2.5 + Math.random() * 4),
-                  life: 0.8,
-                  color: '#e11d48',
-                  size: 5 + Math.random() * 4
-                });
-              }
-            } else if (tw.defenseType === 'cannon_bastion') {
-              sound.playCannon(tw.x, tw.y);
-              screenShake = 11;
-              const gRew = Math.round(45 * rMult);
-              playerState.gold += gRew;
-              showToast(`Benteng Meriam Pesisir Diratakan! +${gRew} Koin`, "gold");
-              for (let b = 0; b < 24; b++) {
-                const bang = (b / 24) * Math.PI * 2;
-                entities.particles.push({
-                  x: tw.x,
-                  y: tw.y,
-                  vx: Math.cos(bang) * (3 + Math.random() * 3),
-                  vy: Math.sin(bang) * (3 + Math.random() * 3),
-                  life: 0.75,
-                  color: b % 2 === 0 ? '#f59e0b' : '#78716c',
-                  size: 4 + Math.random() * 3
-                });
-              }
-            } else if (tw.defenseType === 'steam_harpoon') {
-              sound.playExplosion(tw.x, tw.y);
-              screenShake = 12;
-              const gRew = Math.round(35 * rMult);
-              playerState.gold += gRew;
-              showToast(`Menara Harpoon Uap Baja Meledak! +${gRew} Koin`, "iron");
-              for (let b = 0; b < 24; b++) {
-                const bang = (b / 24) * Math.PI * 2;
-                entities.particles.push({
-                  x: tw.x,
-                  y: tw.y,
-                  vx: Math.cos(bang) * (3 + Math.random() * 4),
-                  vy: Math.sin(bang) * (3 + Math.random() * 4),
-                  life: 0.8,
-                  color: b % 2 === 0 ? '#94a3b8' : '#f59e0b',
-                  size: 4 + Math.random() * 3
-                });
-              }
-            } else {
-              sound.playEerieRoar();
-              screenShake = 12;
-              const gRew = Math.round(70 * rMult);
-              const bRew = Math.round(15 * rMult);
-              playerState.gold += gRew;
-              playerState.bloodEssence += bRew;
-              showToast(`Menara Okultis Diruntuhkan! +${gRew} Koin +${bRew} Darah`, "scroll");
-              for (let b = 0; b < 30; b++) {
-                const bang = (b / 30) * Math.PI * 2;
-                entities.particles.push({
-                  x: tw.x,
-                  y: tw.y,
-                  vx: Math.cos(bang) * (3 + Math.random() * 4),
-                  vy: Math.sin(bang) * (3 + Math.random() * 4),
-                  life: 0.8,
-                  color: '#22d3ee',
-                  size: 4 + Math.random() * 3
-                });
-              }
-            }
-            entities.towers.splice(t, 1);
+            destroyTowerAndCheckConquer(tw, t);
           }
           hitObstacle = true;
           break;
         }
       }
 
-      if (!hitObstacle) {
-        for (let k = 0; k < entities.spikedMines.length; k++) {
-          const sm = entities.spikedMines[k];
-          const dx = p.x - sm.x, dy = p.y - sm.y;
-          if (dx * dx + dy * dy < (sm.radius + 10) * (sm.radius + 10)) {
-            sm.detonating = true;
-            sm.detonateTimer = 0.05; // Detonate immediately!
+      // Check hit against Merchant Trade Ships
+      if (!hitObstacle && entities.merchants) {
+        for (let m = entities.merchants.length - 1; m >= 0; m--) {
+          const merch = entities.merchants[m];
+          const dxM = p.x - merch.x, dyM = p.y - merch.y;
+          if (dxM * dxM + dyM * dyM < (merch.radius + 12) * (merch.radius + 12)) {
+            merch.hp -= p.damage;
             p.life = 0;
+            sound.playIronHit(merch.x, merch.y);
+            addFloatingText(`-${Math.round(p.damage)}`, merch.x, merch.y - 18, '#fbbf24', true);
+
+            // Retaliation / Panic response
+            if (merch.type === 'escort') {
+              merch.state = 'retaliating';
+              merch.shootCooldown = 0.4;
+              showToast("Pengawal Niaga membalas tembakan meriam!", "alert");
+            } else {
+              merch.state = 'fleeing';
+              merch.fleeTimer = 12.0;
+              showToast("Kapal Niaga panik dan melarikan diri!", "alert");
+            }
+
+            // Alert escorts in vicinity
+            entities.merchants.forEach(other => {
+              if (other.type === 'escort' && Math.hypot(other.x - merch.x, other.y - merch.y) < 450) {
+                other.state = 'retaliating';
+              }
+            });
+
             hitObstacle = true;
             break;
           }
+        }
+      }
+    }
+
+    if (!hitObstacle) {
+      for (let k = 0; k < entities.spikedMines.length; k++) {
+        const sm = entities.spikedMines[k];
+        const dx = p.x - sm.x, dy = p.y - sm.y;
+        if (dx * dx + dy * dy < (sm.radius + 10) * (sm.radius + 10)) {
+          sm.detonating = true;
+          sm.detonateTimer = 0.05; // Detonate immediately!
+          p.life = 0;
+          hitObstacle = true;
+          break;
         }
       }
     }
@@ -1546,6 +1969,9 @@ function updateGame(dt) {
       entities.sinkingShips.splice(i, 1);
     }
   }
+
+  // Merchant Shipping Convoys & Trade Routes
+  updateMerchants(dt);
 
   // Stealth & Detection Logic
   highestDetectionLevel = 0;

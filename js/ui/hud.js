@@ -212,4 +212,16 @@ function updateHUD() {
       }
     }
   }
+
+  // Update Upgrade Button Docked Status Indicator
+  const btnUpgrade = document.getElementById('btnOpenUpgrade');
+  if (btnUpgrade) {
+    if (playerState.isDockedAtPort) {
+      btnUpgrade.className = "bg-gradient-to-br from-amber-400 to-amber-600 hover:from-amber-300 hover:to-amber-500 active:scale-95 text-slate-950 p-1.5 sm:px-3 sm:py-2 rounded-xl text-[11px] font-cinzel font-black shadow-[0_0_12px_rgba(245,158,11,0.7)] transition-all flex items-center gap-1.5 border border-amber-200 animate-pulse";
+      btnUpgrade.title = "Galangan Kapal Siap [U] (Sedang Berlabuh di Pelabuhan)";
+    } else {
+      btnUpgrade.className = "bg-slate-800/80 hover:bg-slate-800 active:scale-95 text-slate-400 p-1.5 sm:px-3 sm:py-2 rounded-xl text-[11px] font-cinzel font-bold shadow-md transition-all flex items-center gap-1.5 border border-white/10 opacity-75";
+      btnUpgrade.title = "Galangan Kapal [U] (Harus Berlabuh di Pelabuhan)";
+    }
+  }
 }

@@ -132,6 +132,64 @@ const UPGRADE_CONFIG = {
   }
 };
 
+const MAP_UPGRADE_CONFIG = {
+  1: {
+    level: 1,
+    name: "Peta Sketsa Nelayan",
+    cost: 0,
+    maxRadius: 2600,
+    fogClearanceRadius: 650,
+    showTiers: [4],
+    desc: "Bagan navigasi dasar mencatat perairan awal di sekitar Nusa Damai dan pulau Tier 4."
+  },
+  2: {
+    level: 2,
+    name: "Peta Pandu Perwira",
+    cost: 120,
+    maxRadius: 4600,
+    fogClearanceRadius: 950,
+    showTiers: [3, 4],
+    desc: "Bagan laut perwira menembus Selat Senja dan mencatat posisi benteng pulau Tier 3 & 4."
+  },
+  3: {
+    level: 3,
+    name: "Peta Samudra Kerajaan",
+    cost: 300,
+    maxRadius: 7000,
+    fogClearanceRadius: 1300,
+    showTiers: [2, 3, 4],
+    desc: "Bagan resmi kerajaan melacak konvoi kapal pedagang dan pulau sekte kabut (Tier 2)."
+  },
+  4: {
+    level: 4,
+    name: "Peta Kartografi Abisal",
+    cost: 650,
+    maxRadius: 9800,
+    fogClearanceRadius: 1750,
+    showTiers: [1, 2, 3, 4],
+    desc: "Gulungan navigasi terlarang membuka seluruh batas Laut Darah dan Pulau Tengkorak (Tier 1)."
+  }
+};
+
+const MERCHANT_CONFIG = {
+  cargo: {
+    name: "Kapal Kargo Niaga",
+    hp: 170,
+    speed: 1.85,
+    radius: 20,
+    cargoLoot: 45
+  },
+  escort: {
+    name: "Sekoci Pengawal Niaga",
+    hp: 250,
+    speed: 2.25,
+    radius: 22,
+    damage: 18,
+    cargoLoot: 35
+  }
+};
+
+
 const CLAN_LORE = {
   gold: {
     id: 'gold',
@@ -291,6 +349,10 @@ function generateGenerationalWorld(seed, genNumber) {
       id: template.id,
       name: template.name,
       clan: template.clan,
+      tier: template.tier !== undefined ? template.tier : 4,
+      isShopIsland: Boolean(template.isShopIsland),
+      isHomePort: Boolean(template.isHomePort),
+      isConquered: Boolean(template.isConquered),
       x: Math.round(bestX),
       y: Math.round(bestY),
       radius: bestRadius,
@@ -332,6 +394,9 @@ function generateGenerationalWorld(seed, genNumber) {
     id: 'haven',
     name: "Nusa Damai - Pelabuhan Asal",
     clan: 'neutral',
+    tier: 0,
+    isHomePort: true,
+    isConquered: true,
     x: Math.round(Math.cos(havenAng) * havenDist),
     y: Math.round(Math.sin(havenAng) * havenDist),
     radius: havenRad,
@@ -355,11 +420,27 @@ function generateGenerationalWorld(seed, genNumber) {
   PLAYER_SPAWN.angle = haven.dockAngle;
 
   // 2. RING 1: Perairan Senja Berombak (1400 - 3200m)
-  // Batavia Outpost (Gold Clan, NE quadrant)
+  // Shop Island 1: Pasar Apung Senja (Trading Outpost Ring 1)
+  placeIsland({
+    id: 'shop_haven_senja',
+    name: "Pasar Apung Senja",
+    clan: 'merchant',
+    tier: 0,
+    isShopIsland: true,
+    isConquered: true,
+    minRadius: 155,
+    maxRadius: 185,
+    color: '#15803d',
+    sandColor: '#fde047',
+    desc: "Bandar terapung para saudagar rempah dengan galangan kapal & perbekalan lengkap."
+  }, 1600, 2350, Math.PI * 0.95, Math.PI * 0.7);
+
+  // Batavia Outpost (Gold Clan, Tier 3)
   placeIsland({
     id: 'batavia_outpost',
     name: "Benteng Niaga Batavia",
     clan: 'gold',
+    tier: 3,
     minRadius: 310,
     maxRadius: 360,
     color: '#1e3a1e',
@@ -368,11 +449,12 @@ function generateGenerationalWorld(seed, genNumber) {
     desc: "Pangkalan markas Klan Sindikat Emas dengan gudang rempah megah."
   }, 1400, 2100, Math.PI * 0.25, Math.PI * 0.7);
 
-  // Iron Forge Isle (Iron Clan, SW quadrant)
+  // Iron Forge Isle (Iron Clan, Tier 3)
   placeIsland({
     id: 'iron_forge_isle',
     name: "Pulau Peleburan Besi Hitam",
     clan: 'iron',
+    tier: 3,
     minRadius: 320,
     maxRadius: 370,
     color: '#334155',
@@ -381,12 +463,13 @@ function generateGenerationalWorld(seed, genNumber) {
     desc: "Pabrik taji besi klan pemburu berbatu tajam dengan dermaga berjelaga."
   }, 1500, 2200, Math.PI * 1.25, Math.PI * 0.7);
 
-  // Merchant Key / Free Trading Atoll
+  // Merchant Key / Free Trading Atoll (Tier 4)
   const innerKeyNames = ["Pos Cukai Selat Batavia", "Karang Saudagar Bebas", "Dermaga Rempah Emas"];
   placeIsland({
     id: 'merchant_key',
     name: innerKeyNames[Math.floor(rng() * innerKeyNames.length)],
     clan: rng() > 0.4 ? 'gold' : 'neutral',
+    tier: 4,
     minRadius: 210,
     maxRadius: 260,
     color: '#1e3a1e',
@@ -394,11 +477,12 @@ function generateGenerationalWorld(seed, genNumber) {
     desc: "Pos niaga persinggahan kapal dagang di perairan senja."
   }, 1700, 2600, Math.PI * 1.85, Math.PI * 0.8);
 
-  // Additional Ring 1 Island: Batavia Spice Cove
+  // Batavia Spice Cove (Tier 4)
   placeIsland({
     id: 'batavia_cove',
     name: "Teluk Rempah Batavia",
     clan: 'gold',
+    tier: 4,
     minRadius: 230,
     maxRadius: 280,
     color: '#166534',
@@ -407,11 +491,27 @@ function generateGenerationalWorld(seed, genNumber) {
   }, 1900, 2700, rng() * Math.PI * 2, Math.PI * 0.85);
 
   // 3. RING 2 & 3: Selat Badai & Perairan Kutukan Kabut (3200 - 5500m)
-  // Mist Atoll (Mist Clan Occult Sanctuary)
+  // Shop Island 2: Bandar Dagang Karang Tengah (Trading Outpost Ring 2)
+  placeIsland({
+    id: 'shop_karang_tengah',
+    name: "Bandar Dagang Karang Tengah",
+    clan: 'merchant',
+    tier: 0,
+    isShopIsland: true,
+    isConquered: true,
+    minRadius: 160,
+    maxRadius: 190,
+    color: '#0d9488',
+    sandColor: '#facc15',
+    desc: "Pos niaga persinggahan bebas di selat badai. Tempat berlabuh aman bagi para pengembara."
+  }, 3300, 4300, -Math.PI * 0.25, Math.PI * 0.8);
+
+  // Mist Atoll (Mist Clan Occult Sanctuary, Tier 2)
   placeIsland({
     id: 'mist_atoll',
     name: "Atol Tulang Belulang Kabut",
     clan: 'mist',
+    tier: 2,
     minRadius: 340,
     maxRadius: 400,
     color: '#134e4a',
@@ -420,11 +520,12 @@ function generateGenerationalWorld(seed, genNumber) {
     desc: "Lingkaran karang mistis tempat Sekte Kabut merapalkan kutukan arwah."
   }, 3400, 4600, Math.PI * 0.8, Math.PI * 0.9);
 
-  // Shark Reef (Iron Clan Forward Outpost)
+  // Shark Reef (Iron Clan Forward Outpost, Tier 2)
   placeIsland({
     id: 'shark_reef',
     name: "Karang Gigi Hiu",
     clan: 'iron',
+    tier: 2,
     minRadius: 280,
     maxRadius: 330,
     color: '#1e293b',
@@ -433,12 +534,13 @@ function generateGenerationalWorld(seed, genNumber) {
     desc: "Pos depan penjaga selat barat berkarang curam dan berombak ganas."
   }, 3200, 4500, -Math.PI * 0.6, Math.PI * 0.8);
 
-  // Pirate Stronghold / Ghost Key
+  // Pirate Stronghold (Tier 2)
   const pirateNames = ["Karang Badai Tengkorak", "Teluk Penyamun Gelap", "Atol Arwah Kelabu", "Karang Pembakar Laut"];
   placeIsland({
     id: 'pirate_stronghold',
     name: pirateNames[Math.floor(rng() * pirateNames.length)],
     clan: rng() > 0.5 ? 'mist' : 'iron',
+    tier: 2,
     minRadius: 260,
     maxRadius: 310,
     color: '#1e293b',
@@ -446,11 +548,27 @@ function generateGenerationalWorld(seed, genNumber) {
     desc: "Tempat persembunyian rahasia armada perompak samudra."
   }, 3800, 5200, Math.PI * 1.5, Math.PI * 0.9);
 
-  // Additional Ring 3 Island: Ghost Reef (Atol Arwah Kabut)
+  // Shop Island 3: Pos Niaga Ambang Kabut (Trading Outpost Ring 3)
+  placeIsland({
+    id: 'shop_ambang_kabut',
+    name: "Pos Niaga Ambang Kabut",
+    clan: 'merchant',
+    tier: 0,
+    isShopIsland: true,
+    isConquered: true,
+    minRadius: 150,
+    maxRadius: 180,
+    color: '#334155',
+    sandColor: '#cbd5e1',
+    desc: "Bazar terapung terakhir para penyelundup sebelum menembus batas Laut Darah."
+  }, 4900, 5700, Math.PI * 1.8, Math.PI * 0.8);
+
+  // Ghost Reef (Atol Arwah Kabut, Tier 2)
   placeIsland({
     id: 'ghost_atoll',
     name: "Karang Arwah Berkabut",
     clan: 'mist',
+    tier: 2,
     minRadius: 240,
     maxRadius: 290,
     color: '#0f2926',
@@ -459,25 +577,26 @@ function generateGenerationalWorld(seed, genNumber) {
   }, 3900, 5100, rng() * Math.PI * 2, Math.PI * 0.85);
 
   // 4. RING 4 & 5: Gerbang Palung Abisal & LAUT DARAH (5500 - 9000px)
-  // SKULL ISLAND (Pulau Tengkorak) - Formed from giant ossuary mounds and leviathan bones
-  // Positioned right at the entrance threshold of Blood Sea (5600 - 6400px) for quick discovery!
+  // SKULL ISLAND (Tier 1) - Formed from giant ossuary mounds and leviathan bones
   placeIsland({
     id: 'skull_island',
     name: "Pulau Tengkorak (Skull Island)",
     clan: 'blood',
+    tier: 1,
     minRadius: 380,
     maxRadius: 440,
     color: '#1c1917',
-    sandColor: '#f1f5f9', // Ivory bone-white shoreline!
+    sandColor: '#f1f5f9',
     isSkullIsland: true,
     desc: "Pulau terkutuk yang terbentuk dari jutaan tumpukan tengkorak dan kerangka paus purba di tengah Laut Darah."
   }, 5600, 6400, rng() * Math.PI * 2, Math.PI * 0.85);
 
-  // Bone Reef (Gugusan Karang Belulang - Ivory bone-white outer shoals)
+  // Bone Reef (Tier 1)
   placeIsland({
     id: 'bone_reef',
     name: "Gugusan Karang Belulang",
     clan: 'blood',
+    tier: 1,
     minRadius: 270,
     maxRadius: 330,
     color: '#1c1917',
@@ -486,11 +605,12 @@ function generateGenerationalWorld(seed, genNumber) {
     desc: "Gugusan karang tulang gading purba yang menjulang di batas awal Laut Darah."
   }, 5900, 6900, rng() * Math.PI * 2, Math.PI * 0.85);
 
-  // Hive Nest (Blood Clan Leviathan Mothership Spire)
+  // Hive Nest (Tier 1)
   placeIsland({
     id: 'hive_nest',
     name: "Sarang Induk Sang Pemangsa",
     clan: 'blood',
+    tier: 1,
     minRadius: 430,
     maxRadius: 490,
     color: '#450a0a',
@@ -499,12 +619,13 @@ function generateGenerationalWorld(seed, genNumber) {
     desc: "Jantung terdalam Laut Darah tempat bertenggernya para raksasa abisal purba."
   }, 7800, 9200, rng() * Math.PI * 2, Math.PI * 0.8);
 
-  // Additional Abyssal Monolith
+  // Abyssal Monolith (Tier 1)
   const abyssalNames = ["Palung Daging Menganga", "Altar Karang Berdarah", "Monolit Purba Abisal"];
   placeIsland({
     id: 'abyssal_monolith',
     name: abyssalNames[Math.floor(rng() * abyssalNames.length)],
     clan: 'blood',
+    tier: 1,
     minRadius: 330,
     maxRadius: 380,
     color: '#3f0713',
