@@ -593,7 +593,7 @@ function destroyTowerAndCheckConquer(tw, tIndex) {
       screenShake = 22;
       sound.playLoot();
 
-      showToast(`🏆 PULAU DITAKLUKKAN: ${isl.name}! Bendera armada berkibar! (+${conquestGold} Koin)`, "trophy");
+      showToast(`PULAU DITAKLUKKAN: ${isl.name}! Bendera armada berkibar! (+${conquestGold} Koin)`, "trophy");
       addFloatingText(`PULAU DITAKLUKKAN!`, isl.x, isl.y - 40, '#fde047', true);
 
       // Save game on conquest
@@ -631,7 +631,7 @@ function checkPlayerPortDocking(pState) {
     if (!pState.isDockedAtPort) {
       pState.isDockedAtPort = true;
       pState.dockedPort = nearPort;
-      showToast(`⚓ Berlabuh di ${nearPort.name}: Galangan kapal siap melayani!`, "anchor");
+      showToast(`Berlabuh di ${nearPort.name}: Galangan kapal siap melayani!`, "anchor");
       if (sound.playSplash) sound.playSplash();
     }
     pState.dockedPort = nearPort;
@@ -869,9 +869,41 @@ function updateGame(dt) {
   }
   const snareMultiplier = (playerState.speedSnareTimer > 0) ? 0.65 : 1.0;
 
-  // Joystick / Keyboard Steering & Movement
+  // Player Naval Steering & Movement (Dedicated PC Rudder/Throttle OR Mobile Touch Joystick)
   let isPlayerMoving = false;
-  if (joystickState.active && joystickState.magnitude > 0.08) {
+
+  if (typeof pcNavalState !== 'undefined' && pcNavalState.active) {
+    // 1. DEDICATED PC NAVAL CONTROLS (A/D Rudder, W/S Throttle)
+    isPlayerMoving = true;
+
+    // Rudder Rotation
+    const navalTurnSpeed = 2.4 * dt;
+    playerState.angle += pcNavalState.rudder * navalTurnSpeed;
+
+    // Speed modifiers (Shift Boost / Ctrl Stealth)
+    let speedMult = 0.9;
+    if (pcNavalState.boost) speedMult = 1.25;
+    else if (pcNavalState.stealth) speedMult = 0.38;
+
+    const currentSpeed = moveSpeed * pcNavalState.throttle * speedMult * tailwindBonus * snareMultiplier;
+    playerState.x += Math.cos(playerState.angle) * currentSpeed;
+    playerState.y += Math.sin(playerState.angle) * currentSpeed;
+
+    // Player Water Trail Wake (Only when sailing forward!)
+    if (pcNavalState.throttle > 0 && Math.random() < 0.65) {
+      const sternX = playerState.x - Math.cos(playerState.angle) * 20;
+      const sternY = playerState.y - Math.sin(playerState.angle) * 20;
+      entities.seaRipples.push({
+        x: sternX,
+        y: sternY,
+        radius: 4,
+        maxRadius: 26,
+        alpha: 0.55,
+        color: 'rgba(255, 255, 255, '
+      });
+    }
+  } else if (joystickState.active && joystickState.magnitude > 0.08) {
+    // 2. MOBILE TOUCH VIRTUAL HELM JOYSTICK
     isPlayerMoving = true;
     const targetAngle = joystickState.angle;
     let diff = targetAngle - playerState.angle;

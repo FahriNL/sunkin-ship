@@ -46,6 +46,15 @@ const mainMenuDiffText = document.getElementById('mainMenuDiffText');
 const pauseDiffBadge = document.getElementById('pauseDiffBadge');
 
 let settingsReturnTarget = 'mainMenu'; // 'mainMenu' | 'pause' | 'game'
+let pauseReturnTarget = null; // null | 'pause'
+
+const btnPauseToggleSound = document.getElementById('btnPauseToggleSound');
+const pauseSoundIcon = document.getElementById('pauseSoundIcon');
+const pauseSoundLabel = document.getElementById('pauseSoundLabel');
+const btnPauseLore = document.getElementById('btnPauseLore');
+const btnPauseMap = document.getElementById('btnPauseMap');
+const btnPauseHelp = document.getElementById('btnPauseHelp');
+const btnDockShop = document.getElementById('btnDockShop');
 
 const upgradeModal = document.getElementById('upgradeModal');
 const upgradeList = document.getElementById('upgradeList');
@@ -129,8 +138,15 @@ function closeLoreModal() {
   if (!loreModal) return;
   loreModal.classList.remove('modal-active');
   loreModal.classList.add('modal-enter', 'hidden');
-  isGamePaused = false;
-  lastTime = performance.now();
+  if (pauseReturnTarget === 'pause') {
+    pauseReturnTarget = null;
+    openPauseModal();
+    return;
+  }
+  if (isGameStarted) {
+    isGamePaused = false;
+    lastTime = performance.now();
+  }
 }
 
 function toggleLoreModal() {
@@ -164,8 +180,15 @@ function closeHelpModal() {
   if (!helpModal) return;
   helpModal.classList.remove('modal-active');
   helpModal.classList.add('modal-enter', 'hidden');
-  isGamePaused = false;
-  lastTime = performance.now();
+  if (pauseReturnTarget === 'pause') {
+    pauseReturnTarget = null;
+    openPauseModal();
+    return;
+  }
+  if (isGameStarted) {
+    isGamePaused = false;
+    lastTime = performance.now();
+  }
 }
 
 function toggleHelpModal() {
@@ -223,7 +246,7 @@ function renderUpgradeUI() {
         canAfford ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 active:scale-95' :
         'bg-slate-800/80 text-slate-500 cursor-not-allowed'
       }">
-        ${isMax ? 'TERKUAT' : `${goldCost} 🪙 ${bloodCost > 0 ? `+ ${bloodCost} 🩸` : ''}`}
+        ${isMax ? 'TERKUAT' : `${goldCost} Koin ${bloodCost > 0 ? `+ ${bloodCost} Darah` : ''}`}
       </button>
     `;
     upgradeList.appendChild(row);
@@ -263,7 +286,7 @@ function openUpgradeModal() {
   sound.init();
   // SHOP OVERHAUL RESTRICTION: Upgrades only available when docked at Haven, Shop Island, or Conquered Island
   if (!playerState.isDockedAtPort) {
-    showToast("⚓ Galangan Kapal tidak melayani di laut lepas! Berlabuhlah di Pelabuhan Asal, Pulau Pasar, atau Pulau Kekuasaanmu.", "alert");
+    showToast("Galangan Kapal hanya melayani di dermaga pelabuhan! Berlabuhlah di Nusa Damai, Pasar, atau Pulau Taklukan.", "alert");
     return;
   }
 
@@ -327,7 +350,7 @@ function renderSeaMapUI() {
       mapUpgradeBtnText.innerText = "Peta Samudra Maksimal";
       btnUpgradeMap.classList.add('opacity-50', 'cursor-not-allowed');
     } else {
-      mapUpgradeBtnText.innerText = `Tingkatkan Peta (${nextCfg.cost} 🪙)`;
+      mapUpgradeBtnText.innerText = `Tingkatkan Peta (${nextCfg.cost} Koin)`;
       if (playerState.gold >= nextCfg.cost) {
         btnUpgradeMap.classList.remove('opacity-50', 'cursor-not-allowed');
       } else {
@@ -337,6 +360,292 @@ function renderSeaMapUI() {
   }
 
   renderSeaMapCanvas();
+}
+
+/* ==========================================================================
+   PROCEDURAL VECTOR EMBLEMS FOR SEA MAP (100% VECTOR PATHS - NO EMOJIS)
+   ========================================================================== */
+
+function drawMapAnchorIcon(ctx, x, y, r = 8) {
+  ctx.save();
+  ctx.translate(x, y);
+
+  // Background disc
+  ctx.fillStyle = 'rgba(2, 132, 199, 0.4)';
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#38bdf8';
+  ctx.lineWidth = 1.4;
+  ctx.stroke();
+
+  // Anchor Vector
+  ctx.strokeStyle = '#fef08a';
+  ctx.lineWidth = 1.4;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  // Ring
+  ctx.beginPath();
+  ctx.arc(0, -r * 0.42, r * 0.18, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Shank
+  ctx.beginPath();
+  ctx.moveTo(0, -r * 0.24);
+  ctx.lineTo(0, r * 0.45);
+  ctx.stroke();
+
+  // Stock
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.35, -r * 0.1);
+  ctx.lineTo(r * 0.35, -r * 0.1);
+  ctx.stroke();
+
+  // Fluke crescent
+  ctx.beginPath();
+  ctx.arc(0, r * 0.15, r * 0.42, 0.25 * Math.PI, 0.75 * Math.PI, false);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawMapScalesIcon(ctx, x, y, r = 8) {
+  ctx.save();
+  ctx.translate(x, y);
+
+  // Background disc
+  ctx.fillStyle = 'rgba(5, 150, 105, 0.4)';
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#10b981';
+  ctx.lineWidth = 1.4;
+  ctx.stroke();
+
+  // Scales Vector
+  ctx.strokeStyle = '#fef08a';
+  ctx.lineWidth = 1.3;
+  ctx.lineCap = 'round';
+
+  // Pillar
+  ctx.beginPath();
+  ctx.moveTo(0, -r * 0.45);
+  ctx.lineTo(0, r * 0.45);
+  ctx.stroke();
+
+  // Balance beam
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.42, -r * 0.2);
+  ctx.lineTo(r * 0.42, -r * 0.2);
+  ctx.stroke();
+
+  // Left pan
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.42, -r * 0.2);
+  ctx.lineTo(-r * 0.42, r * 0.1);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(-r * 0.42, r * 0.18, r * 0.18, 0, Math.PI, false);
+  ctx.stroke();
+
+  // Right pan
+  ctx.beginPath();
+  ctx.moveTo(r * 0.42, -r * 0.2);
+  ctx.lineTo(r * 0.42, r * 0.1);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(r * 0.42, r * 0.18, r * 0.18, 0, Math.PI, false);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawMapConqueredFlagIcon(ctx, x, y, r = 8) {
+  ctx.save();
+  ctx.translate(x, y);
+
+  // Background disc
+  ctx.fillStyle = 'rgba(180, 83, 9, 0.45)';
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#facc15';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Pennant Pole
+  ctx.strokeStyle = '#fef08a';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.25, -r * 0.55);
+  ctx.lineTo(-r * 0.25, r * 0.55);
+  ctx.stroke();
+
+  // Golden Victory Pennant
+  ctx.fillStyle = '#facc15';
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.25, -r * 0.5);
+  ctx.lineTo(r * 0.45, -r * 0.18);
+  ctx.lineTo(-r * 0.25, r * 0.1);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawMapGoldClanIcon(ctx, x, y, r = 8) {
+  ctx.save();
+  ctx.translate(x, y);
+
+  // Background disc
+  ctx.fillStyle = 'rgba(217, 119, 6, 0.4)';
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#fbbf24';
+  ctx.lineWidth = 1.4;
+  ctx.stroke();
+
+  // Lion / Doubloons Sigil
+  ctx.fillStyle = '#fef08a';
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.45, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Cross crown
+  ctx.strokeStyle = '#92400e';
+  ctx.lineWidth = 1.1;
+  ctx.beginPath();
+  ctx.moveTo(0, -r * 0.35);
+  ctx.lineTo(0, r * 0.35);
+  ctx.moveTo(-r * 0.35, 0);
+  ctx.lineTo(r * 0.35, 0);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawMapIronClanIcon(ctx, x, y, r = 8) {
+  ctx.save();
+  ctx.translate(x, y);
+
+  // Background disc
+  ctx.fillStyle = 'rgba(71, 85, 105, 0.45)';
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#94a3b8';
+  ctx.lineWidth = 1.4;
+  ctx.stroke();
+
+  // Crossed Hammers
+  ctx.strokeStyle = '#e2e8f0';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.38, -r * 0.38); ctx.lineTo(r * 0.38, r * 0.38);
+  ctx.moveTo(r * 0.38, -r * 0.38); ctx.lineTo(-r * 0.38, r * 0.38);
+  ctx.stroke();
+
+  // Anvil core
+  ctx.fillStyle = '#cbd5e1';
+  ctx.fillRect(-r * 0.25, -r * 0.12, r * 0.5, r * 0.25);
+
+  ctx.restore();
+}
+
+function drawMapMistClanIcon(ctx, x, y, r = 8) {
+  ctx.save();
+  ctx.translate(x, y);
+
+  // Background disc
+  ctx.fillStyle = 'rgba(107, 33, 168, 0.4)';
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#c084fc';
+  ctx.lineWidth = 1.4;
+  ctx.stroke();
+
+  // Occult Eye
+  ctx.strokeStyle = '#f5d0fe';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.42, 0);
+  ctx.quadraticCurveTo(0, -r * 0.35, r * 0.42, 0);
+  ctx.quadraticCurveTo(0, r * 0.35, -r * 0.42, 0);
+  ctx.stroke();
+
+  // Slit Pupil
+  ctx.fillStyle = '#e879f9';
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.16, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawMapBloodClanIcon(ctx, x, y, r = 8) {
+  ctx.save();
+  ctx.translate(x, y);
+
+  // Background disc
+  ctx.fillStyle = 'rgba(159, 18, 57, 0.45)';
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#f43f5e';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Tentacles / Kraken Maw
+  ctx.strokeStyle = '#fecdd3';
+  ctx.lineWidth = 1.3;
+  ctx.lineCap = 'round';
+
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.1, r * 0.4);
+  ctx.quadraticCurveTo(-r * 0.45, 0, -r * 0.28, -r * 0.35);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(r * 0.1, r * 0.4);
+  ctx.quadraticCurveTo(r * 0.45, 0, r * 0.28, -r * 0.35);
+  ctx.stroke();
+
+  // Maw core
+  ctx.fillStyle = '#e11d48';
+  ctx.beginPath();
+  ctx.arc(0, r * 0.05, r * 0.16, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawMapMerchantShipIcon(ctx, x, y, angle = 0) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+
+  // Wooden Hull
+  ctx.fillStyle = '#b45309';
+  ctx.strokeStyle = '#fde68a';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(6.5, 0);
+  ctx.lineTo(-3.5, -3.2);
+  ctx.lineTo(-3.5, 3.2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Billowing White Sail
+  ctx.fillStyle = '#f8fafc';
+  ctx.beginPath();
+  ctx.arc(0, 0, 3, -Math.PI * 0.45, Math.PI * 0.45, false);
+  ctx.fill();
+
+  ctx.restore();
 }
 
 function renderSeaMapCanvas() {
@@ -418,7 +727,7 @@ function renderSeaMapCanvas() {
     }
   }
 
-  // 4. World Islands
+  // 4. World Islands with Procedural Vector Emblems (NO EMOJIS!)
   WORLD_ISLANDS.forEach(isl => {
     const mapX = cx + isl.x * scale;
     const mapY = cy + isl.y * scale;
@@ -436,42 +745,36 @@ function renderSeaMapCanvas() {
       return;
     }
 
-    let dotColor = '#ca8a04';
+    const dotRadius = Math.max(7, Math.min(13, (isl.radius || 200) * scale * 1.2));
+
+    // Render Distinct Vector Emblem per Faction / Clan
     if (isl.isHomePort) {
-      dotColor = '#38bdf8';
+      drawMapAnchorIcon(mctx, mapX, mapY, dotRadius);
     } else if (isl.isShopIsland) {
-      dotColor = '#10b981';
+      drawMapScalesIcon(mctx, mapX, mapY, dotRadius);
     } else if (isl.isConquered) {
-      dotColor = '#facc15';
+      drawMapConqueredFlagIcon(mctx, mapX, mapY, dotRadius);
     } else if (isl.clan === 'blood' || isl.isFlesh) {
-      dotColor = '#ef4444';
+      drawMapBloodClanIcon(mctx, mapX, mapY, dotRadius);
     } else if (isl.clan === 'mist') {
-      dotColor = '#c084fc';
+      drawMapMistClanIcon(mctx, mapX, mapY, dotRadius);
     } else if (isl.clan === 'iron') {
-      dotColor = '#94a3b8';
+      drawMapIronClanIcon(mctx, mapX, mapY, dotRadius);
+    } else {
+      drawMapGoldClanIcon(mctx, mapX, mapY, dotRadius);
     }
 
-    const dotRadius = Math.max(5, (isl.radius || 200) * scale);
-    mctx.fillStyle = dotColor;
-    mctx.beginPath();
-    mctx.arc(mapX, mapY, dotRadius, 0, Math.PI * 2);
-    mctx.fill();
-
-    mctx.strokeStyle = '#ffffff';
-    mctx.lineWidth = 1;
-    mctx.stroke();
-
     // Island Name
-    mctx.font = 'bold 8px "Cinzel", sans-serif';
+    mctx.font = 'bold 7.5px "Cinzel", sans-serif';
     mctx.fillStyle = '#f8fafc';
     mctx.textAlign = 'center';
     mctx.fillText(isl.name, mapX, mapY - dotRadius - 3);
 
     // Conquered Tag
     if (isl.isConquered && !isl.isHomePort) {
-      mctx.font = '7px sans-serif';
+      mctx.font = 'bold 7px "Cinzel", sans-serif';
       mctx.fillStyle = '#facc15';
-      mctx.fillText("✓ Takluk", mapX, mapY + dotRadius + 8);
+      mctx.fillText("Takluk", mapX, mapY + dotRadius + 8);
     }
   });
 
@@ -480,10 +783,7 @@ function renderSeaMapCanvas() {
     entities.merchants.forEach(m => {
       const mx = cx + m.x * scale;
       const my = cy + m.y * scale;
-      mctx.fillStyle = m.type === 'cargo' ? '#38bdf8' : '#0284c7';
-      mctx.beginPath();
-      mctx.arc(mx, my, 3, 0, Math.PI * 2);
-      mctx.fill();
+      drawMapMerchantShipIcon(mctx, mx, my, m.angle || 0);
     });
   }
 
@@ -564,8 +864,15 @@ function closeMapModal() {
   if (!seaMapModal) return;
   seaMapModal.classList.remove('modal-active');
   seaMapModal.classList.add('modal-enter', 'hidden');
-  isGamePaused = false;
-  lastTime = performance.now();
+  if (pauseReturnTarget === 'pause') {
+    pauseReturnTarget = null;
+    openPauseModal();
+    return;
+  }
+  if (isGameStarted) {
+    isGamePaused = false;
+    lastTime = performance.now();
+  }
 }
 
 function toggleMapModal() {
@@ -593,7 +900,7 @@ function upgradeMap() {
     updateHUD();
     renderSeaMapUI();
   } else {
-    showToast(`Emas tidak cukup untuk peningkatan peta (Butuh ${nextCfg.cost} 🪙).`, "alert");
+    showToast(`Emas tidak cukup untuk peningkatan peta (Butuh ${nextCfg.cost} Koin).`, "alert");
   }
 }
 
@@ -918,6 +1225,15 @@ if (btnMainMenuSettings) btnMainMenuSettings.addEventListener('click', () => ope
 if (btnMainMenuCodex) btnMainMenuCodex.addEventListener('click', openLoreModal);
 if (btnMainMenuControls) btnMainMenuControls.addEventListener('click', openHelpModal);
 
+function updatePauseSoundUI() {
+  if (pauseSoundIcon) {
+    pauseSoundIcon.innerHTML = sound.muted ? SVG_ICONS.soundOff : SVG_ICONS.soundOn;
+  }
+  if (pauseSoundLabel) {
+    pauseSoundLabel.innerText = sound.muted ? "SUARA: MATI" : "SUARA: AKTIF";
+  }
+}
+
 // Pause Menu Handlers
 function openPauseModal() {
   if (!isGameStarted || (gameOverModal && gameOverModal.classList.contains('modal-active'))) return;
@@ -932,6 +1248,7 @@ function openPauseModal() {
 
   if (pauseModal) {
     updateDifficultyUI();
+    updatePauseSoundUI();
     const elPauseGen = document.getElementById('pauseWorldGenLabel');
     if (elPauseGen) {
       elPauseGen.innerText = `Peta Samudra: Generasi #${currentWorldGenNumber || 1} (Seed: ${currentWorldGenSeed || 'Default'})`;
@@ -973,11 +1290,38 @@ function restartExpedition() {
 if (btnPauseGame) btnPauseGame.addEventListener('click', openPauseModal);
 if (btnResumeGame) btnResumeGame.addEventListener('click', closePauseModal);
 if (btnRestartGame) btnRestartGame.addEventListener('click', restartExpedition);
+if (btnPauseToggleSound) {
+  btnPauseToggleSound.addEventListener('click', () => {
+    toggleSound();
+  });
+}
+if (btnPauseLore) {
+  btnPauseLore.addEventListener('click', () => {
+    closePauseModal();
+    pauseReturnTarget = 'pause';
+    openLoreModal();
+  });
+}
+if (btnPauseMap) {
+  btnPauseMap.addEventListener('click', () => {
+    closePauseModal();
+    pauseReturnTarget = 'pause';
+    openMapModal();
+  });
+}
+if (btnPauseHelp) {
+  btnPauseHelp.addEventListener('click', () => {
+    closePauseModal();
+    pauseReturnTarget = 'pause';
+    openHelpModal();
+  });
+}
 if (btnPauseSettings) btnPauseSettings.addEventListener('click', () => {
   closePauseModal();
   openSettingsModal('pause');
 });
 if (btnReturnToMainMenu) btnReturnToMainMenu.addEventListener('click', returnToMainMenu);
+if (btnDockShop) btnDockShop.addEventListener('click', openUpgradeModal);
 if (pauseModal) {
   pauseModal.addEventListener('click', (e) => {
     if (e.target === pauseModal) closePauseModal();
@@ -1076,6 +1420,7 @@ function toggleSound() {
   if (chkMuteAll) {
     chkMuteAll.checked = sound.muted;
   }
+  updatePauseSoundUI();
   showToast(sound.muted ? "Suara Dimatikan (Mute)" : "Suara Diaktifkan", sound.muted ? "alert" : "check");
 }
 

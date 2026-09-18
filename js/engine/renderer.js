@@ -1774,11 +1774,23 @@ function drawMerchantShip(ctx, m) {
     ctx.stroke();
   }
 
-  // Anchor emblem when docked
+  // Anchor emblem when docked (Vector)
   if (m.isAnchored || m.state === 'docked') {
-    ctx.fillStyle = '#38bdf8';
-    ctx.font = 'bold 9px sans-serif';
-    ctx.fillText("⚓", 0, -wid - 4);
+    ctx.save();
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = 1.2;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(0, -wid - 9, 2, 0, Math.PI * 2);
+    ctx.moveTo(0, -wid - 7);
+    ctx.lineTo(0, -wid - 2);
+    ctx.moveTo(-3, -wid - 5);
+    ctx.lineTo(3, -wid - 5);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, -wid - 4, 3, 0.25 * Math.PI, 0.75 * Math.PI, false);
+    ctx.stroke();
+    ctx.restore();
   }
 
   ctx.restore();
@@ -2263,7 +2275,7 @@ function render() {
     ctx.font = 'bold 9px "Cinzel", sans-serif';
     ctx.fillStyle = '#fde047';
     ctx.textAlign = 'center';
-    ctx.fillText(`⚓ BERLABUH DI ${port.name.toUpperCase()}`, 0, -40);
+    ctx.fillText(`BERLABUH DI ${port.name.toUpperCase()}`, 0, -40);
     ctx.font = '8px sans-serif';
     ctx.fillStyle = '#cbd5e1';
     ctx.fillText("Galangan Kapal Siap [U]", 0, -30);

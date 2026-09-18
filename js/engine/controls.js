@@ -214,47 +214,68 @@ window.addEventListener('keyup', (e) => {
   }
 });
 
+/* ==========================================================================
+   AUTHENTIC PC NAVAL CONTROLS (RUDDER & THROTTLE SYSTEM)
+   ========================================================================== */
+const pcNavalState = {
+  active: false,
+  rudder: 0,      // -1 (Port / Belok Kiri), +1 (Starboard / Belok Kanan), 0 (Lurus)
+  throttle: 0,    // 1 (Layar Penuh Maju), 0 (Netral), -0.35 (Rem / Mundur Perlahan)
+  boost: false,   // Shift (Laju Cepat)
+  stealth: false  // Ctrl / Alt (Layar Senyap)
+};
+
 function updateKeyboardSteering() {
-  let kx = 0;
-  let ky = 0;
+  // Rudder turning: A/D or Arrow Left/Right
+  let r = 0;
+  if (activeKeys.KeyA || activeKeys.ArrowLeft) r -= 1;
+  if (activeKeys.KeyD || activeKeys.ArrowRight) r += 1;
+  pcNavalState.rudder = r;
 
-  if (activeKeys.KeyW || activeKeys.ArrowUp) ky -= 1;
-  if (activeKeys.KeyS || activeKeys.ArrowDown) ky += 1;
-  if (activeKeys.KeyA || activeKeys.ArrowLeft) kx -= 1;
-  if (activeKeys.KeyD || activeKeys.ArrowRight) kx += 1;
+  // Throttle forward/brake: W/S or Arrow Up/Down
+  let t = 0;
+  if (activeKeys.KeyW || activeKeys.ArrowUp) t += 1;
+  if (activeKeys.KeyS || activeKeys.ArrowDown) t -= 0.35;
+  pcNavalState.throttle = t;
 
-  if (kx !== 0 || ky !== 0) {
-    const angle = Math.atan2(ky, kx);
-    joystickState.active = true;
-    
-    // Check speed modifiers:
-    // Shift = Full Sail (1.0x magnitude)
-    // Ctrl / Alt = Stealth Crawl (0.35x magnitude - slow movement for stealth)
-    let speedMagnitude = 0.85;
-    if (activeKeys.ShiftLeft || activeKeys.ShiftRight) {
-      speedMagnitude = 1.0;
-    } else if (activeKeys.ControlLeft || activeKeys.ControlRight || activeKeys.AltLeft || activeKeys.AltRight) {
-      speedMagnitude = 0.35;
+  // Modifiers: Shift = boost, Ctrl/Alt = stealth
+  pcNavalState.boost = !!(activeKeys.ShiftLeft || activeKeys.ShiftRight);
+  pcNavalState.stealth = !!(activeKeys.ControlLeft || activeKeys.ControlRight || activeKeys.AltLeft || activeKeys.AltRight);
+
+  pcNavalState.active = (r !== 0 || t !== 0);
+}
+
+// Mouse aiming & shooting for PC
+const canvasGameEl = document.getElementById('gameCanvas');
+if (canvasGameEl) {
+  // Prevent context menu so right click can be used for rear mines
+  canvasGameEl.addEventListener('contextmenu', (e) => {
+    if (isGameStarted && !isGamePaused) {
+      e.preventDefault();
     }
+  });
 
-    joystickState.magnitude = speedMagnitude;
-    joystickState.angle = angle;
-    joystickState.dx = Math.cos(angle) * speedMagnitude;
-    joystickState.dy = Math.sin(angle) * speedMagnitude;
+  canvasGameEl.addEventListener('mousedown', (e) => {
+    if (!isGameStarted || isGamePaused || isMobileDevice()) return;
+    sound.init();
 
-    if (joystickKnob) {
-      const visualDist = maxRadius * speedMagnitude;
-      const visualX = Math.cos(angle) * visualDist;
-      const visualY = Math.sin(angle) * visualDist;
-      joystickKnob.style.transform = `translate(${visualX}px, ${visualY}px)`;
+    if (e.button === 0) {
+      // Left click: Fire broadside/bow cannons
+      if (playerState.upgrades.rearDefense > 0 && e.shiftKey) {
+        triggerPlayerRearDefense();
+      } else {
+        fireCannons(playerState, null, true);
+      }
+    } else if (e.button === 2) {
+      // Right click: Deploy rear mine / defense
+      e.preventDefault();
+      if (playerState.upgrades.rearDefense > 0) {
+        triggerPlayerRearDefense();
+      } else {
+        fireCannons(playerState, null, true);
+      }
     }
-  } else if (!joystickState.pointerId) {
-    joystickState.active = false;
-    joystickState.magnitude = 0;
-    joystickState.dx = 0;
-    joystickState.dy = 0;
-    if (joystickKnob) joystickKnob.style.transform = `translate(0px, 0px)`;
-  }
+  });
 }
 
 /* ==========================================================================
