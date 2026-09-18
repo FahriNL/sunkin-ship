@@ -17,7 +17,7 @@ const joystickState = {
   magnitude: 0
 };
 
-const maxRadius = 40;
+const maxRadius = 26;
 let pendingKnobX = 0;
 let pendingKnobY = 0;
 let knobDirty = false;

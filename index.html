@@ -170,20 +170,20 @@
   </div>
 
   <!-- Unified Nautical Controls Dock (Mobile Centered: [SERANG] (KEMUDI + CIRCULAR HP) [REPAIR] | Desktop: Hidden) -->
-  <div id="mobileControlsDock" class="fixed bottom-2.5 sm:bottom-4 left-0 right-0 z-20 flex items-center justify-center gap-3.5 sm:gap-6 pointer-events-none transition-all duration-300">
+  <div id="mobileControlsDock" class="fixed bottom-2 sm:bottom-3.5 left-0 right-0 z-20 flex items-center justify-center gap-3 sm:gap-6 pointer-events-none transition-all duration-300">
     
     <!-- 1. LEFT: Attack / Cannons & Mine Action Button -->
     <div class="flex flex-col items-center pointer-events-auto lg:hidden">
-      <button id="btnMobileFire" type="button" class="relative w-13 h-13 sm:w-14 sm:h-14 rounded-full bg-gradient-to-br from-rose-600 via-rose-700 to-red-900 border-2 border-amber-400/80 active:scale-90 flex items-center justify-center shadow-2xl transition-all touch-manipulation cursor-pointer" title="Tembak Meriam / Ranjau Mesiu [Space]">
-        <svg class="w-6 h-6 sm:w-7 sm:h-7 text-amber-200 drop-shadow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="9"/>
-          <line x1="12" y1="3" x2="12" y2="7"/>
-          <line x1="12" y1="17" x2="12" y2="21"/>
-          <line x1="3" y1="12" x2="7" y2="12"/>
-          <line x1="17" y1="12" x2="21" y2="12"/>
+      <button id="btnMobileFire" type="button" class="relative w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-br from-rose-600 via-rose-700 to-red-900 border-2 border-amber-400/80 active:scale-90 flex flex-col items-center justify-center shadow-2xl transition-all touch-manipulation cursor-pointer" title="Tembak Meriam / Ranjau Mesiu [Space]">
+        <svg class="w-[18px] h-[18px] sm:w-[22px] sm:h-[22px] text-amber-200 drop-shadow mb-1 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="8"/>
+          <line x1="12" y1="2" x2="12" y2="6"/>
+          <line x1="12" y1="18" x2="12" y2="22"/>
+          <line x1="2" y1="12" x2="6" y2="12"/>
+          <line x1="18" y1="12" x2="22" y2="12"/>
           <circle cx="12" cy="12" r="2" fill="currentColor"/>
         </svg>
-        <span class="absolute -bottom-1 text-[7.5px] sm:text-[8px] font-cinzel font-black px-1.5 py-0.2 rounded-full bg-black/85 text-amber-300 border border-amber-500/50 shadow-md">SERANG</span>
+        <span class="absolute -bottom-1.5 text-[7px] sm:text-[8px] font-cinzel font-black px-1.5 py-0.2 rounded-full bg-black/90 text-amber-300 border border-amber-500/50 shadow-md">SERANG</span>
       </button>
     </div>
 
@@ -200,7 +200,7 @@
         </svg>
 
         <!-- Helm wheel sits symmetrically inside the circular HP ring -->
-        <div id="joystickZone" class="pointer-events-auto relative w-[98px] h-[98px] sm:w-[112px] sm:h-[112px] rounded-full helm-base flex items-center justify-center touch-none shadow-2xl opacity-95 hover:opacity-100 transition-opacity">
+        <div id="joystickZone" class="pointer-events-auto relative w-[100px] h-[100px] sm:w-[114px] sm:h-[114px] rounded-full helm-base flex items-center justify-center touch-none shadow-2xl opacity-95 hover:opacity-100 transition-opacity">
           <svg class="absolute inset-0 w-full h-full text-amber-500/35 pointer-events-none p-1" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="3">
             <circle cx="50" cy="50" r="42" stroke-width="2" stroke-dasharray="3, 5" opacity="0.6"/>
             <line x1="50" y1="2" x2="50" y2="98" />
@@ -208,8 +208,8 @@
             <line x1="16" y1="16" x2="84" y2="84" />
             <line x1="16" y1="84" x2="84" y2="16" />
           </svg>
-          <div id="joystickKnob" class="absolute w-11 h-11 sm:w-13 sm:h-13 rounded-full helm-knob transform translate-x-0 translate-y-0 flex items-center justify-center shadow-lg">
-            <svg class="w-5 h-5 sm:w-6 sm:h-6 text-amber-200 pointer-events-none drop-shadow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <div id="joystickKnob" class="absolute w-8 h-8 sm:w-9 sm:h-9 rounded-full helm-knob transform translate-x-0 translate-y-0 flex items-center justify-center shadow-lg">
+            <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-200 pointer-events-none drop-shadow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="5" r="3"></circle>
               <line x1="12" y1="8" x2="12" y2="22"></line>
               <path d="M5 12H2a10 10 0 0 0 20 0h-3"></path>
@@ -226,11 +226,11 @@
 
     <!-- 3. RIGHT: Quick Repair Action Button -->
     <div class="flex flex-col items-center pointer-events-auto lg:hidden">
-      <button id="btnMobileRepair" type="button" class="relative w-13 h-13 sm:w-14 sm:h-14 rounded-full pirate-panel border-2 border-emerald-500/60 hover:border-emerald-400 active:scale-90 flex items-center justify-center shadow-2xl transition-all opacity-85 hover:opacity-100 touch-manipulation cursor-pointer" title="Reparasi Lambung (15 Koin) [R]">
-        <svg class="w-6 h-6 text-emerald-400 drop-shadow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <button id="btnMobileRepair" type="button" class="relative w-12 h-12 sm:w-14 sm:h-14 rounded-full pirate-panel border-2 border-emerald-500/60 hover:border-emerald-400 active:scale-90 flex flex-col items-center justify-center shadow-2xl transition-all opacity-85 hover:opacity-100 touch-manipulation cursor-pointer" title="Reparasi Lambung (15 Koin) [R]">
+        <svg class="w-[18px] h-[18px] sm:w-[22px] sm:h-[22px] text-emerald-400 drop-shadow mb-1 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
         </svg>
-        <span class="absolute -bottom-1 text-[7.5px] sm:text-[8px] font-cinzel font-black px-1.5 py-0.2 rounded-full bg-black/85 text-emerald-300 border border-emerald-500/50 shadow-md">REPAIR</span>
+        <span class="absolute -bottom-1.5 text-[7px] sm:text-[8px] font-cinzel font-black px-1.5 py-0.2 rounded-full bg-black/90 text-emerald-300 border border-emerald-500/50 shadow-md">REPAIR</span>
       </button>
     </div>
 
@@ -308,7 +308,7 @@
     </div>
   </div>
 
-  <!-- Modal: Bagan Peta Samudra & Fog of War -->
+  <!-- Modal: Bagan Peta Samudra & Fog of War (With Interactive Pan & Pinch-to-Zoom) -->
   <div id="seaMapModal" class="fixed inset-0 z-40 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 modal-enter hidden">
     <div class="pirate-panel w-full max-w-2xl rounded-3xl p-4 sm:p-5 border border-sky-500/30 flex flex-col max-h-[92vh] shadow-2xl">
       <!-- Header -->
@@ -323,10 +323,30 @@
         <button id="btnCloseSeaMap" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-sm font-bold text-white transition">✕</button>
       </div>
 
-      <!-- Map Viewport Canvas -->
-      <div class="relative w-full aspect-square sm:aspect-[4/3] max-h-[50vh] sm:max-h-[55vh] bg-[#0c1322] rounded-2xl border-2 border-amber-900/60 overflow-hidden my-3 shadow-inner flex items-center justify-center">
-        <canvas id="seaMapCanvas" class="w-full h-full block touch-none"></canvas>
-        <div class="absolute bottom-2 left-2 bg-black/75 backdrop-blur px-2 py-1 rounded-lg border border-white/10 text-[9px] text-slate-300 flex flex-wrap items-center gap-2 pointer-events-none">
+      <!-- Map Viewport Canvas with Interactive Touch/Mouse Pan & Zoom Controls -->
+      <div class="relative w-full aspect-square sm:aspect-[4/3] max-h-[50vh] sm:max-h-[55vh] bg-[#0c1322] rounded-2xl border-2 border-amber-900/60 overflow-hidden my-3 shadow-inner flex items-center justify-center select-none">
+        <canvas id="seaMapCanvas" class="w-full h-full block touch-none cursor-grab active:cursor-grabbing"></canvas>
+        
+        <!-- Top-Right: Map Interactive Controls Cluster (Zoom In, Zoom Out, Center Ship, Reset) -->
+        <div class="absolute top-2 right-2 flex flex-col gap-1.5 z-10 pointer-events-auto">
+          <button id="btnMapZoomIn" type="button" class="w-8 h-8 rounded-xl bg-slate-900/90 hover:bg-slate-800 active:scale-90 border border-sky-500/50 text-sky-300 font-black text-sm flex items-center justify-center shadow-lg cursor-pointer transition select-none" title="Perbesar Peta (Zoom In)">+</button>
+          <button id="btnMapZoomOut" type="button" class="w-8 h-8 rounded-xl bg-slate-900/90 hover:bg-slate-800 active:scale-90 border border-sky-500/50 text-sky-300 font-black text-sm flex items-center justify-center shadow-lg cursor-pointer transition select-none" title="Perkecil Peta (Zoom Out)">−</button>
+          <button id="btnMapCenterShip" type="button" class="w-8 h-8 rounded-xl bg-slate-900/90 hover:bg-slate-800 active:scale-90 border border-amber-500/50 text-amber-300 font-black text-xs flex items-center justify-center shadow-lg cursor-pointer transition select-none" title="Pusatkan Pada Kapal Anda">
+            <svg class="w-4 h-4 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/>
+            </svg>
+          </button>
+          <button id="btnMapResetView" type="button" class="w-8 h-8 rounded-xl bg-slate-900/90 hover:bg-slate-800 active:scale-90 border border-white/20 text-slate-300 font-mono font-bold text-[10px] flex items-center justify-center shadow-lg cursor-pointer transition select-none" title="Reset Zoom & Pan (100%)">1x</button>
+        </div>
+
+        <!-- Top-Left: Zoom Level Badge & Navigation Gesture Hint -->
+        <div class="absolute top-2 left-2 flex items-center gap-1.5 z-10 pointer-events-none">
+          <span id="mapZoomBadge" class="bg-black/85 backdrop-blur px-2 py-0.5 rounded-lg border border-sky-500/40 text-[9px] font-mono font-bold text-sky-300 shadow">100%</span>
+          <span class="bg-black/75 backdrop-blur px-2 py-0.5 rounded-lg border border-white/10 text-[8.5px] text-slate-300 shadow hidden sm:inline-block">Geser untuk pindah • Cubit / Scroll untuk zoom</span>
+        </div>
+
+        <!-- Bottom Legend Bar -->
+        <div class="absolute bottom-2 left-2 bg-black/80 backdrop-blur px-2 py-1 rounded-lg border border-white/10 text-[8.5px] sm:text-[9px] text-slate-300 flex flex-wrap items-center gap-2 pointer-events-none">
           <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-amber-400 inline-block"></span> Kapal Anda</span>
           <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-sky-400 inline-block"></span> Pelabuhan Nusa Damai</span>
           <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-400 inline-block"></span> Pasar Niaga</span>

@@ -334,6 +334,90 @@ const mapNameLabel = document.getElementById('mapNameLabel');
 const mapDescLabel = document.getElementById('mapDescLabel');
 const mapUpgradeBtnText = document.getElementById('mapUpgradeBtnText');
 
+// Interactive Sea Map Navigation Controls & State
+const btnMapZoomIn = document.getElementById('btnMapZoomIn');
+const btnMapZoomOut = document.getElementById('btnMapZoomOut');
+const btnMapCenterShip = document.getElementById('btnMapCenterShip');
+const btnMapResetView = document.getElementById('btnMapResetView');
+const mapZoomBadge = document.getElementById('mapZoomBadge');
+
+const seaMapState = {
+  zoom: 1.0,
+  minZoom: 0.5,
+  maxZoom: 4.5,
+  panX: 0,
+  panY: 0,
+  lastPanX: 0,
+  lastPanY: 0,
+  isDragging: false,
+  dragStartX: 0,
+  dragStartY: 0,
+  isPinching: false,
+  initialPinchDist: 0,
+  initialPinchZoom: 1.0,
+  pinchMidX: 0,
+  pinchMidY: 0,
+  pinchWorldX: 0,
+  pinchWorldY: 0
+};
+
+let mapAnimationId = null;
+
+function updateMapZoomBadge() {
+  if (mapZoomBadge) {
+    mapZoomBadge.innerText = `${Math.round(seaMapState.zoom * 100)}%`;
+  }
+}
+
+function getMapBaseScale(w, h) {
+  const curLevel = playerState.mapLevel || 1;
+  const cfg = (typeof MAP_UPGRADE_CONFIG !== 'undefined' && MAP_UPGRADE_CONFIG[curLevel]) 
+    ? MAP_UPGRADE_CONFIG[curLevel] 
+    : { maxRadius: 3000 };
+  const maxVisionRadius = cfg.maxRadius || 3000;
+  return (Math.min(w, h) * 0.45) / maxVisionRadius;
+}
+
+function centerMapOnPlayer() {
+  if (!seaMapCanvas) return;
+  const rect = seaMapCanvas.getBoundingClientRect();
+  const w = rect.width || 540;
+  const h = rect.height || 400;
+  const baseScale = getMapBaseScale(w, h);
+  const scale = baseScale * seaMapState.zoom;
+  seaMapState.panX = -playerState.x * scale;
+  seaMapState.panY = -playerState.y * scale;
+  seaMapState.lastPanX = seaMapState.panX;
+  seaMapState.lastPanY = seaMapState.panY;
+  renderSeaMapCanvas();
+}
+
+function resetMapView() {
+  seaMapState.zoom = 1.0;
+  seaMapState.panX = 0;
+  seaMapState.panY = 0;
+  seaMapState.lastPanX = 0;
+  seaMapState.lastPanY = 0;
+  updateMapZoomBadge();
+  renderSeaMapCanvas();
+}
+
+function zoomMapStep(factor) {
+  if (!seaMapCanvas) return;
+  const oldZoom = seaMapState.zoom;
+  const newZoom = Math.max(seaMapState.minZoom, Math.min(seaMapState.maxZoom, oldZoom * factor));
+  if (newZoom === oldZoom) return;
+
+  const ratio = newZoom / oldZoom;
+  seaMapState.panX = seaMapState.panX * ratio;
+  seaMapState.panY = seaMapState.panY * ratio;
+  seaMapState.lastPanX = seaMapState.panX;
+  seaMapState.lastPanY = seaMapState.panY;
+  seaMapState.zoom = newZoom;
+  updateMapZoomBadge();
+  renderSeaMapCanvas();
+}
+
 function renderSeaMapUI() {
   const curLevel = playerState.mapLevel || 1;
   const cfg = (typeof MAP_UPGRADE_CONFIG !== 'undefined' && MAP_UPGRADE_CONFIG[curLevel]) 
@@ -359,6 +443,7 @@ function renderSeaMapUI() {
     }
   }
 
+  updateMapZoomBadge();
   renderSeaMapCanvas();
 }
 
@@ -670,10 +755,10 @@ function renderSeaMapCanvas() {
   const cfg = (typeof MAP_UPGRADE_CONFIG !== 'undefined' && MAP_UPGRADE_CONFIG[curLevel]) ? MAP_UPGRADE_CONFIG[curLevel] : { maxRadius: 3000 };
   const maxVisionRadius = cfg.maxRadius || 3000;
 
-  // Center coordinate
-  const cx = w / 2;
-  const cy = h / 2;
-  const scale = (Math.min(w, h) * 0.45) / maxVisionRadius;
+  // Center coordinate offset by pan and scaled by zoom
+  const cx = w / 2 + (seaMapState.panX || 0);
+  const cy = h / 2 + (seaMapState.panY || 0);
+  const scale = ((Math.min(w, h) * 0.45) / maxVisionRadius) * (seaMapState.zoom || 1.0);
 
   // 1. Concentric Ocean Rings
   const rings = [
@@ -684,7 +769,7 @@ function renderSeaMapCanvas() {
   ];
 
   rings.forEach(ring => {
-    if (ring.r <= maxVisionRadius * 1.3) {
+    if (ring.r <= maxVisionRadius * 1.5) {
       mctx.strokeStyle = ring.color;
       mctx.lineWidth = 1;
       mctx.setLineDash([4, 6]);
@@ -719,7 +804,7 @@ function renderSeaMapCanvas() {
       const sy = parseInt(parts[1], 10) * sectorSize;
       const mapX = cx + sx * scale;
       const mapY = cy + sy * scale;
-      if (mapX >= -20 && mapX <= w + 20 && mapY >= -20 && mapY <= h + 20) {
+      if (mapX >= -30 && mapX <= w + 30 && mapY >= -30 && mapY <= h + 30) {
         mctx.beginPath();
         mctx.arc(mapX, mapY, sectorSize * scale * 1.15, 0, Math.PI * 2);
         mctx.fill();
@@ -738,14 +823,19 @@ function renderSeaMapCanvas() {
 
     if (!isExplored && !isRevealedByLevel && !isl.isShopIsland && !isl.isHomePort) {
       if (Math.hypot(isl.x, isl.y) <= maxVisionRadius) {
-        mctx.fillStyle = 'rgba(100, 116, 139, 0.4)';
-        mctx.font = 'bold 9px sans-serif';
-        mctx.fillText("?", mapX - 2, mapY + 3);
+        if (mapX >= -20 && mapX <= w + 20 && mapY >= -20 && mapY <= h + 20) {
+          mctx.fillStyle = 'rgba(100, 116, 139, 0.4)';
+          mctx.font = 'bold 9px sans-serif';
+          mctx.fillText("?", mapX - 2, mapY + 3);
+        }
       }
       return;
     }
 
-    const dotRadius = Math.max(7, Math.min(13, (isl.radius || 200) * scale * 1.2));
+    // Viewport Culling
+    if (mapX < -40 || mapX > w + 40 || mapY < -40 || mapY > h + 40) return;
+
+    const dotRadius = Math.max(7, Math.min(22, (isl.radius || 200) * scale * 1.2));
 
     // Render Distinct Vector Emblem per Faction / Clan
     if (isl.isHomePort) {
@@ -764,15 +854,16 @@ function renderSeaMapCanvas() {
       drawMapGoldClanIcon(mctx, mapX, mapY, dotRadius);
     }
 
-    // Island Name
-    mctx.font = 'bold 7.5px "Cinzel", sans-serif';
+    // Island Name (dynamically scaled font)
+    const fontPx = Math.max(7, Math.min(11, 7.5 * Math.sqrt(seaMapState.zoom || 1.0)));
+    mctx.font = `bold ${fontPx}px "Cinzel", sans-serif`;
     mctx.fillStyle = '#f8fafc';
     mctx.textAlign = 'center';
     mctx.fillText(isl.name, mapX, mapY - dotRadius - 3);
 
     // Conquered Tag
     if (isl.isConquered && !isl.isHomePort) {
-      mctx.font = 'bold 7px "Cinzel", sans-serif';
+      mctx.font = `bold ${Math.max(6, fontPx - 1)}px "Cinzel", sans-serif`;
       mctx.fillStyle = '#facc15';
       mctx.fillText("Takluk", mapX, mapY + dotRadius + 8);
     }
@@ -783,7 +874,9 @@ function renderSeaMapCanvas() {
     entities.merchants.forEach(m => {
       const mx = cx + m.x * scale;
       const my = cy + m.y * scale;
-      drawMapMerchantShipIcon(mctx, mx, my, m.angle || 0);
+      if (mx >= -20 && mx <= w + 20 && my >= -20 && my <= h + 20) {
+        drawMapMerchantShipIcon(mctx, mx, my, m.angle || 0);
+      }
     });
   }
 
@@ -791,7 +884,8 @@ function renderSeaMapCanvas() {
   const px = cx + playerState.x * scale;
   const py = cy + playerState.y * scale;
 
-  const ping = (_now * 0.003) % 1;
+  const nowMs = Date.now();
+  const ping = (nowMs * 0.003) % 1;
   mctx.strokeStyle = `rgba(251, 191, 36, ${0.7 - ping * 0.6})`;
   mctx.lineWidth = 1.5;
   mctx.beginPath();
@@ -814,7 +908,7 @@ function renderSeaMapCanvas() {
   mctx.stroke();
   mctx.restore();
 
-  // 7. Decorative Compass Rose
+  // 7. Decorative Compass Rose (Stationary HUD in top right)
   const compassX = w - 35;
   const compassY = 35;
   mctx.strokeStyle = 'rgba(251, 191, 36, 0.4)';
@@ -847,20 +941,44 @@ function renderSeaMapCanvas() {
   mctx.restore();
 }
 
+function startMapAnimationLoop() {
+  if (mapAnimationId) cancelAnimationFrame(mapAnimationId);
+  function loop() {
+    if (!seaMapModal || !seaMapModal.classList.contains('modal-active')) {
+      mapAnimationId = null;
+      return;
+    }
+    renderSeaMapCanvas();
+    mapAnimationId = requestAnimationFrame(loop);
+  }
+  mapAnimationId = requestAnimationFrame(loop);
+}
+
+function stopMapAnimationLoop() {
+  if (mapAnimationId) {
+    cancelAnimationFrame(mapAnimationId);
+    mapAnimationId = null;
+  }
+}
+
 function openMapModal() {
   sound.init();
   closeUpgradeModal();
   closeLoreModal();
   closeHelpModal();
   renderSeaMapUI();
+  centerMapOnPlayer();
+  updateMapZoomBadge();
   if (seaMapModal) {
     seaMapModal.classList.remove('modal-enter', 'hidden');
     seaMapModal.classList.add('modal-active');
   }
   isGamePaused = true;
+  startMapAnimationLoop();
 }
 
 function closeMapModal() {
+  stopMapAnimationLoop();
   if (!seaMapModal) return;
   seaMapModal.classList.remove('modal-active');
   seaMapModal.classList.add('modal-enter', 'hidden');
@@ -904,6 +1022,168 @@ function upgradeMap() {
   }
 }
 
+/* ==========================================================================
+   INTERACTIVE SEA MAP EVENT HANDLERS (Pinch-to-zoom, Pan, Mouse Drag & Wheel)
+   ========================================================================== */
+
+function initSeaMapInteractions() {
+  if (!seaMapCanvas) return;
+
+  // 1. Mouse Drag Pan
+  let isMouseDown = false;
+  let mouseStartX = 0;
+  let mouseStartY = 0;
+
+  seaMapCanvas.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    isMouseDown = true;
+    mouseStartX = e.clientX;
+    mouseStartY = e.clientY;
+    seaMapState.lastPanX = seaMapState.panX;
+    seaMapState.lastPanY = seaMapState.panY;
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (!isMouseDown) return;
+    seaMapState.panX = seaMapState.lastPanX + (e.clientX - mouseStartX);
+    seaMapState.panY = seaMapState.lastPanY + (e.clientY - mouseStartY);
+  });
+
+  window.addEventListener('mouseup', () => {
+    if (isMouseDown) {
+      isMouseDown = false;
+      seaMapState.lastPanX = seaMapState.panX;
+      seaMapState.lastPanY = seaMapState.panY;
+    }
+  });
+
+  // 2. Mouse Wheel Zoom (Anchored to Cursor Position)
+  seaMapCanvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    if (!seaMapCanvas) return;
+    const rect = seaMapCanvas.getBoundingClientRect();
+    const w = rect.width || 540;
+    const h = rect.height || 400;
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+
+    const baseScale = getMapBaseScale(w, h);
+    const oldZoom = seaMapState.zoom;
+    const factor = e.deltaY < 0 ? 1.15 : 0.87;
+    const newZoom = Math.max(seaMapState.minZoom, Math.min(seaMapState.maxZoom, oldZoom * factor));
+    if (newZoom === oldZoom) return;
+
+    const oldScale = baseScale * oldZoom;
+    const newScale = baseScale * newZoom;
+
+    // Convert mouse position to world coordinates
+    const worldX = (mx - (w / 2 + seaMapState.panX)) / oldScale;
+    const worldY = (my - (h / 2 + seaMapState.panY)) / oldScale;
+
+    seaMapState.zoom = newZoom;
+    seaMapState.panX = mx - w / 2 - worldX * newScale;
+    seaMapState.panY = my - h / 2 - worldY * newScale;
+    seaMapState.lastPanX = seaMapState.panX;
+    seaMapState.lastPanY = seaMapState.panY;
+
+    updateMapZoomBadge();
+  }, { passive: false });
+
+  // 3. Touch Drag (1 Finger) & Pinch-to-Zoom (2 Fingers)
+  seaMapCanvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    if (e.touches.length === 1) {
+      seaMapState.isDragging = true;
+      seaMapState.isPinching = false;
+      seaMapState.dragStartX = e.touches[0].clientX;
+      seaMapState.dragStartY = e.touches[0].clientY;
+      seaMapState.lastPanX = seaMapState.panX;
+      seaMapState.lastPanY = seaMapState.panY;
+    } else if (e.touches.length >= 2) {
+      seaMapState.isPinching = true;
+      seaMapState.isDragging = false;
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      seaMapState.initialPinchDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      seaMapState.initialPinchZoom = seaMapState.zoom;
+
+      const rect = seaMapCanvas.getBoundingClientRect();
+      const w = rect.width || 540;
+      const h = rect.height || 400;
+      const midX = (t1.clientX + t2.clientX) / 2 - rect.left;
+      const midY = (t1.clientY + t2.clientY) / 2 - rect.top;
+      const baseScale = getMapBaseScale(w, h);
+      const currentScale = baseScale * seaMapState.zoom;
+
+      seaMapState.pinchMidX = midX;
+      seaMapState.pinchMidY = midY;
+      seaMapState.pinchWorldX = (midX - (w / 2 + seaMapState.panX)) / currentScale;
+      seaMapState.pinchWorldY = (midY - (h / 2 + seaMapState.panY)) / currentScale;
+    }
+  }, { passive: false });
+
+  seaMapCanvas.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    if (seaMapState.isPinching && e.touches.length >= 2) {
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const currentDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      if (seaMapState.initialPinchDist > 5) {
+        const factor = currentDist / seaMapState.initialPinchDist;
+        const newZoom = Math.max(seaMapState.minZoom, Math.min(seaMapState.maxZoom, seaMapState.initialPinchZoom * factor));
+
+        const rect = seaMapCanvas.getBoundingClientRect();
+        const w = rect.width || 540;
+        const h = rect.height || 400;
+        const baseScale = getMapBaseScale(w, h);
+        const newScale = baseScale * newZoom;
+
+        const curMidX = (t1.clientX + t2.clientX) / 2 - rect.left;
+        const curMidY = (t1.clientY + t2.clientY) / 2 - rect.top;
+
+        seaMapState.zoom = newZoom;
+        seaMapState.panX = curMidX - w / 2 - seaMapState.pinchWorldX * newScale;
+        seaMapState.panY = curMidY - h / 2 - seaMapState.pinchWorldY * newScale;
+        seaMapState.lastPanX = seaMapState.panX;
+        seaMapState.lastPanY = seaMapState.panY;
+
+        updateMapZoomBadge();
+      }
+    } else if (seaMapState.isDragging && e.touches.length === 1) {
+      const curX = e.touches[0].clientX;
+      const curY = e.touches[0].clientY;
+      seaMapState.panX = seaMapState.lastPanX + (curX - seaMapState.dragStartX);
+      seaMapState.panY = seaMapState.lastPanY + (curY - seaMapState.dragStartY);
+    }
+  }, { passive: false });
+
+  const endTouch = (e) => {
+    if (e.touches.length === 0) {
+      seaMapState.isDragging = false;
+      seaMapState.isPinching = false;
+      seaMapState.lastPanX = seaMapState.panX;
+      seaMapState.lastPanY = seaMapState.panY;
+    } else if (e.touches.length === 1) {
+      seaMapState.isPinching = false;
+      seaMapState.isDragging = true;
+      seaMapState.dragStartX = e.touches[0].clientX;
+      seaMapState.dragStartY = e.touches[0].clientY;
+      seaMapState.lastPanX = seaMapState.panX;
+      seaMapState.lastPanY = seaMapState.panY;
+    }
+  };
+
+  seaMapCanvas.addEventListener('touchend', endTouch, { passive: true });
+  seaMapCanvas.addEventListener('touchcancel', endTouch, { passive: true });
+
+  // 4. Floating Map Navigation Button Listeners
+  if (btnMapZoomIn) btnMapZoomIn.addEventListener('click', (e) => { e.stopPropagation(); zoomMapStep(1.25); });
+  if (btnMapZoomOut) btnMapZoomOut.addEventListener('click', (e) => { e.stopPropagation(); zoomMapStep(0.8); });
+  if (btnMapCenterShip) btnMapCenterShip.addEventListener('click', (e) => { e.stopPropagation(); centerMapOnPlayer(); });
+  if (btnMapResetView) btnMapResetView.addEventListener('click', (e) => { e.stopPropagation(); resetMapView(); });
+}
+
+// Attach Map Modal Controls
 if (btnOpenMap) btnOpenMap.addEventListener('click', openMapModal);
 if (btnCloseSeaMap) btnCloseSeaMap.addEventListener('click', closeMapModal);
 if (btnUpgradeMap) btnUpgradeMap.addEventListener('click', upgradeMap);
@@ -912,6 +1192,9 @@ if (seaMapModal) {
     if (e.target === seaMapModal) closeMapModal();
   });
 }
+
+// Initialize Interactive Sea Map Listeners
+initSeaMapInteractions();
 
 // Quick Repair Ship (Shared by button & keyboard hotkey [R])
 function quickRepairShip() {
