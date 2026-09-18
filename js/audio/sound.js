@@ -48,7 +48,52 @@ class SoundFX {
     this.lastMonsterChargeTime = 0;
     this.lastMineExplosionTime = 0;
 
-    // Background Sea Ambience, Abyssal Ambience & Dynamic Battle Music
+    // Atmospheric & Weather Audio Buffers
+    this.galeBuffers = [];
+    this.thunderBuffers = [];
+    this.lightningSparkBuffers = [];
+    this.oceanSwellBuffers = [];
+    this.compassGlitchBuffer = null;
+    this.occultWhisperBuffer = null;
+
+    // Port & Navigation Audio Buffers
+    this.portDockingRopeBuffer = null;
+    this.portDockingWoodBuffer = null;
+    this.weighAnchorBuffer = null;
+
+    // Clan & Weapon Audio Buffers
+    this.frostThrowBuffer = null;
+    this.frostSnareBuffers = [];
+    this.rocketVolleyBuffer = null;
+    this.ironRamCollisionBuffer = null;
+
+    // Monster Specialized Audio Buffers
+    this.inkPlumeBuffer = null;
+    this.tentacleSlapBuffer = null;
+    this.leviathanBellowBuffer = null;
+    this.predatorySurgeBuffer = null;
+    this.biteCrunchBuffer = null;
+    this.whirlpoolBuffer = null;
+
+    // Island Conquest & Tower Audio Buffers
+    this.towerDestructionBuffer = null;
+    this.conquestFanfareBuffer = null;
+
+    // UI & Shipyard Audio Buffers
+    this.shipyardHammerBuffer = null;
+    this.compartmentInspectBuffer = null;
+    this.repairBuffer = null;
+    this.mapToggleBuffer = null;
+
+    // Audio Throttling Timers (anti-clipping / spam protection)
+    this.lastGaleTime = 0;
+    this.lastLightningSparkTime = 0;
+    this.lastOceanSwellTime = 0;
+    this.lastCompassGlitchTime = 0;
+    this.lastOccultWhisperTime = 0;
+    this.lastPredatorySurgeTime = 0;
+
+    // Streaming HTML5 Audio Elements (Memory-efficient, zero RAM spikes)
     this.seaAmbienceAudio = null;
     this.abyssalAmbienceAudio = null;
     this.abyssalAmbienceVolume = 0;
@@ -56,6 +101,13 @@ class SoundFX {
     this.battleMusicAudio = null;
     this.battleMusicVolume = 0;
     this.targetBattleVolume = 0;
+
+    this.rainAudio = null;
+    this.denseFogAudio = null;
+    this.bloodSeaAudio = null;
+    this.corrosiveSizzleAudio = null;
+    this.corrosiveSizzleActive = false;
+    this.corrosiveSizzleTimer = 0;
 
     this.loadSettings();
   }
@@ -103,14 +155,21 @@ class SoundFX {
       const effSfx = this._muted ? 0 : (this.masterVolume * this.sfxVolume);
       this.sfxMasterGain.gain.setValueAtTime(effSfx, this.ctx.currentTime);
     }
+    const effAmb = this._muted ? 0 : (this.masterVolume * this.ambienceVolume);
     if (this.seaAmbienceAudio) {
-      this.seaAmbienceAudio.volume = this._muted ? 0 : Math.max(0, Math.min(1, 0.28 * this.masterVolume * this.ambienceVolume));
+      this.seaAmbienceAudio.volume = Math.max(0, Math.min(1, 0.28 * effAmb));
     }
     if (this.abyssalAmbienceAudio) {
-      this.abyssalAmbienceAudio.volume = this._muted ? 0 : Math.max(0, Math.min(1, this.abyssalAmbienceVolume * this.masterVolume * this.ambienceVolume * 0.9));
+      this.abyssalAmbienceAudio.volume = Math.max(0, Math.min(1, this.abyssalAmbienceVolume * effAmb * 0.9));
     }
     if (this.battleMusicAudio) {
       this.battleMusicAudio.volume = this._muted ? 0 : Math.max(0, Math.min(1, this.battleMusicVolume * this.masterVolume * this.battleVolume * 0.92));
+    }
+    if (this._muted) {
+      if (this.rainAudio) this.rainAudio.volume = 0;
+      if (this.denseFogAudio) this.denseFogAudio.volume = 0;
+      if (this.bloodSeaAudio) this.bloodSeaAudio.volume = 0;
+      if (this.corrosiveSizzleAudio) this.corrosiveSizzleAudio.volume = 0;
     }
   }
 
@@ -223,6 +282,10 @@ class SoundFX {
     if (this.seaAmbienceAudio) this.seaAmbienceAudio.pause();
     if (this.abyssalAmbienceAudio) this.abyssalAmbienceAudio.pause();
     if (this.battleMusicAudio) this.battleMusicAudio.pause();
+    if (this.rainAudio) this.rainAudio.pause();
+    if (this.denseFogAudio) this.denseFogAudio.pause();
+    if (this.bloodSeaAudio) this.bloodSeaAudio.pause();
+    if (this.corrosiveSizzleAudio) this.corrosiveSizzleAudio.pause();
   }
 
   resumeAudio() {
@@ -264,6 +327,93 @@ class SoundFX {
       this.battleMusicAudio.loop = true;
       this.battleMusicAudio.volume = 0;
     }
+
+    if (!this.rainAudio) {
+      this.rainAudio = new Audio('./sound effect/Rain.mp3');
+      this.rainAudio.loop = true;
+      this.rainAudio.volume = 0;
+    }
+    if (!this.denseFogAudio) {
+      this.denseFogAudio = new Audio('./sound effect/Dense_Fog_Miasma_Drone.wav');
+      this.denseFogAudio.loop = true;
+      this.denseFogAudio.volume = 0;
+    }
+    if (!this.bloodSeaAudio) {
+      this.bloodSeaAudio = new Audio('./sound effect/Blood_Sea_Ambience.mp3');
+      this.bloodSeaAudio.loop = true;
+      this.bloodSeaAudio.volume = 0;
+    }
+    if (!this.corrosiveSizzleAudio) {
+      this.corrosiveSizzleAudio = new Audio('./sound effect/Corrosive_Blood_Sizzle.wav');
+      this.corrosiveSizzleAudio.loop = true;
+      this.corrosiveSizzleAudio.volume = 0;
+    }
+  }
+
+  _fadeAudioElement(audioEl, targetVol, dt, fadeDuration = 2.5) {
+    if (!audioEl) return;
+    const currentVol = audioEl.volume;
+    const step = (dt / fadeDuration);
+    let nextVol = currentVol;
+    if (currentVol < targetVol) {
+      nextVol = Math.min(targetVol, currentVol + step);
+    } else if (currentVol > targetVol) {
+      nextVol = Math.max(0, currentVol - step);
+    }
+    nextVol = Math.max(0, Math.min(1, nextVol));
+    if (Math.abs(audioEl.volume - nextVol) > 0.001) {
+      audioEl.volume = nextVol;
+    }
+    if (nextVol > 0.005 && audioEl.paused && !this._muted) {
+      audioEl.play().catch(() => {});
+    } else if (nextVol <= 0.005 && !audioEl.paused) {
+      audioEl.pause();
+    }
+  }
+
+  updateWeatherAmbience(weatherType, intensity, playerDist, dt) {
+    this.startAmbience();
+    if (this._muted) {
+      if (this.rainAudio && !this.rainAudio.paused) this.rainAudio.pause();
+      if (this.denseFogAudio && !this.denseFogAudio.paused) this.denseFogAudio.pause();
+      if (this.bloodSeaAudio && !this.bloodSeaAudio.paused) this.bloodSeaAudio.pause();
+      if (this.corrosiveSizzleAudio && !this.corrosiveSizzleAudio.paused) this.corrosiveSizzleAudio.pause();
+      return;
+    }
+
+    const effAmb = this.masterVolume * this.ambienceVolume;
+
+    // 1. Rain Ambience
+    const isRaining = ['rain', 'storm', 'thunderstorm', 'blood_tempest'].includes(weatherType);
+    const targetRainVol = isRaining ? Math.min(0.42, 0.42 * (intensity || 0.6)) : 0;
+    this._fadeAudioElement(this.rainAudio, targetRainVol * effAmb, dt, 2.5);
+
+    // 2. Dense Fog Miasma Drone (>=62,000m or dense_fog weather)
+    const isInDenseFog = (weatherType === 'dense_fog') || (playerDist >= 62000 && playerDist < 75000);
+    const targetFogVol = isInDenseFog ? Math.max(0.2, Math.min(0.45, 0.45 * (intensity || 0.7))) : 0;
+    this._fadeAudioElement(this.denseFogAudio, targetFogVol * effAmb, dt, 3.0);
+
+    // 3. Blood Sea Ambience (>=75,000m or blood_tempest weather)
+    const isInBloodSea = (weatherType === 'blood_tempest') || (playerDist >= 75000);
+    const targetBloodVol = isInBloodSea ? Math.max(0.25, Math.min(0.52, 0.52 * (intensity || 0.8))) : 0;
+    this._fadeAudioElement(this.bloodSeaAudio, targetBloodVol * effAmb, dt, 3.5);
+
+    // 4. Corrosive Blood Sizzle
+    if (this.corrosiveSizzleActive) {
+      this._fadeAudioElement(this.corrosiveSizzleAudio, 0.36 * effAmb, dt, 1.0);
+      this.corrosiveSizzleTimer -= dt;
+      if (this.corrosiveSizzleTimer <= 0) {
+        this.corrosiveSizzleActive = false;
+      }
+    } else {
+      this._fadeAudioElement(this.corrosiveSizzleAudio, 0, dt, 2.0);
+    }
+  }
+
+  triggerCorrosiveSizzle(dt) {
+    this.startAmbience();
+    this.corrosiveSizzleActive = true;
+    this.corrosiveSizzleTimer = 1.8;
   }
 
   async preloadAudioFiles() {
@@ -360,6 +510,49 @@ class SoundFX {
       const buf = await loadBuffer(url);
       if (buf) this.monsterMoveBuffers.push(buf);
     });
+
+    // Atmospheric & Weather Audio Assets
+    for (let i = 1; i <= 7; i++) {
+      loadBuffer(`./sound effect/Gale_Whoosh${i}.mp3`).then(buf => { if (buf) this.galeBuffers.push(buf); });
+    }
+    for (let i = 1; i <= 3; i++) {
+      loadBuffer(`./sound effect/Thunderclap_Boom${i}.mp3`).then(buf => { if (buf) this.thunderBuffers.push(buf); });
+      loadBuffer(`./sound effect/Lightning_Warning_Spark${i}.wav`).then(buf => { if (buf) this.lightningSparkBuffers.push(buf); });
+      loadBuffer(`./sound effect/Ocean_Swell_Crash${i}.mp3`).then(buf => { if (buf) this.oceanSwellBuffers.push(buf); });
+    }
+    loadBuffer('./sound effect/Compass_Static_Glitch.wav').then(buf => { if (buf) this.compassGlitchBuffer = buf; });
+    loadBuffer('./sound effect/Occult_Whispering_Compass.wav').then(buf => { if (buf) this.occultWhisperBuffer = buf; });
+
+    // Port & Navigation Audio Assets (Simultaneous Docking Support)
+    loadBuffer('./sound effect/Port_Docking_Rope.mp3').then(buf => { if (buf) this.portDockingRopeBuffer = buf; });
+    loadBuffer('./sound effect/Port_Docking_Wood.mp3').then(buf => { if (buf) this.portDockingWoodBuffer = buf; });
+    loadBuffer('./sound effect/Weigh_Anchor.wav').then(buf => { if (buf) this.weighAnchorBuffer = buf; });
+
+    // Combat & Clan Weapon Audio Assets
+    loadBuffer('./sound effect/Frost_Axe_Throw.wav').then(buf => { if (buf) this.frostThrowBuffer = buf; });
+    for (let i = 1; i <= 3; i++) {
+      loadBuffer(`./sound effect/Frost_Snare_Freeze${i}.wav`).then(buf => { if (buf) this.frostSnareBuffers.push(buf); });
+    }
+    loadBuffer('./sound effect/Rocket_Volley_Sizzle.wav').then(buf => { if (buf) this.rocketVolleyBuffer = buf; });
+    loadBuffer('./sound effect/Iron_Ram_Collision.mp3').then(buf => { if (buf) this.ironRamCollisionBuffer = buf; });
+
+    // Monster Specialized Audio Assets
+    loadBuffer('./sound effect/Ink_Plume_Ejection.wav').then(buf => { if (buf) this.inkPlumeBuffer = buf; });
+    loadBuffer('./sound effect/Tentacle_Sea_Slap.wav').then(buf => { if (buf) this.tentacleSlapBuffer = buf; });
+    loadBuffer('./sound effect/Ancient_Leviathan_Bellow.mp3').then(buf => { if (buf) this.leviathanBellowBuffer = buf; });
+    loadBuffer('./sound effect/Predatory_Surge.wav').then(buf => { if (buf) this.predatorySurgeBuffer = buf; });
+    loadBuffer('./sound effect/Colossal_Bite_Crunch.wav').then(buf => { if (buf) this.biteCrunchBuffer = buf; });
+    loadBuffer('./sound effect/Vortex_Whirlpool_Roar.wav').then(buf => { if (buf) this.whirlpoolBuffer = buf; });
+
+    // Island Conquest & Tower Audio Assets
+    loadBuffer('./sound effect/Tower_Destruction.wav').then(buf => { if (buf) this.towerDestructionBuffer = buf; });
+    loadBuffer('./sound effect/Island_Conquest_Fanfare.wav').then(buf => { if (buf) this.conquestFanfareBuffer = buf; });
+
+    // Shipyard & UI Audio Assets
+    loadBuffer('./sound effect/Shipyard_Hammer_Strike.wav').then(buf => { if (buf) this.shipyardHammerBuffer = buf; });
+    loadBuffer('./sound effect/Compartment_Inspect.wav').then(buf => { if (buf) this.compartmentInspectBuffer = buf; });
+    loadBuffer('./sound effect/Quick_Field_Repair.wav').then(buf => { if (buf) this.repairBuffer = buf; });
+    loadBuffer('./sound effect/Map_Unfurl_Fold.mp3').then(buf => { if (buf) this.mapToggleBuffer = buf; });
   }
 
   updateAbyssalAmbience(inDeepAbyss, dt) {
@@ -883,87 +1076,156 @@ class SoundFX {
 
   playFrostThrow(x, y) {
     if (this._muted) return;
-    this.init();
-    if (!this.ctx) return;
-    const gain = this.getSpatialVolume(x, y, 1400, 0.5);
+    const gain = this.getSpatialVolume(x, y, 1400, 0.65);
     if (gain <= 0.01) return;
-    const now = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const g = this.ctx.createGain();
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(650, now);
-    osc.frequency.exponentialRampToValueAtTime(180, now + 0.25);
-    g.gain.setValueAtTime(gain * 0.4, now);
-    g.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
-    osc.connect(g);
-    g.connect(this.destinationNode);
-    osc.start(now);
-    osc.stop(now + 0.25);
-    osc.onended = () => { try { osc.disconnect(); g.disconnect(); } catch (e) {} };
+
+    if (this.frostThrowBuffer) {
+      this._safePlayBuffer(this.frostThrowBuffer, gain, 0.94 + Math.random() * 0.12);
+    } else {
+      this.init();
+      if (!this.ctx) return;
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(650, now);
+      osc.frequency.exponentialRampToValueAtTime(180, now + 0.25);
+      g.gain.setValueAtTime(gain * 0.4, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+      osc.connect(g);
+      g.connect(this.destinationNode);
+      osc.start(now);
+      osc.stop(now + 0.25);
+      osc.onended = () => { try { osc.disconnect(); g.disconnect(); } catch (e) {} };
+    }
+  }
+
+  playFrostFreeze(x, y) {
+    if (this._muted) return;
+    const gain = this.getSpatialVolume(x, y, 1400, 0.72);
+    if (gain <= 0.01) return;
+
+    if (this.frostSnareBuffers.length > 0) {
+      const chosen = this.frostSnareBuffers[Math.floor(Math.random() * this.frostSnareBuffers.length)];
+      this._safePlayBuffer(chosen, gain, 0.93 + Math.random() * 0.14);
+    } else {
+      this.playHit(x, y);
+    }
   }
 
   playRocketBarrage(x, y) {
     if (this._muted) return;
-    this.init();
-    if (!this.ctx) return;
-    const gain = this.getSpatialVolume(x, y, 1500, 0.55);
+    const gain = this.getSpatialVolume(x, y, 1500, 0.68);
     if (gain <= 0.01) return;
-    const now = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const g = this.ctx.createGain();
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(420, now);
-    osc.frequency.linearRampToValueAtTime(980, now + 0.18);
-    g.gain.setValueAtTime(gain * 0.35, now);
-    g.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
-    osc.connect(g);
-    g.connect(this.destinationNode);
-    osc.start(now);
-    osc.stop(now + 0.22);
-    osc.onended = () => { try { osc.disconnect(); g.disconnect(); } catch (e) {} };
+
+    if (this.rocketVolleyBuffer) {
+      this._safePlayBuffer(this.rocketVolleyBuffer, gain, 0.94 + Math.random() * 0.12);
+    } else {
+      this.init();
+      if (!this.ctx) return;
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(420, now);
+      osc.frequency.linearRampToValueAtTime(980, now + 0.18);
+      g.gain.setValueAtTime(gain * 0.35, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+      osc.connect(g);
+      g.connect(this.destinationNode);
+      osc.start(now);
+      osc.stop(now + 0.22);
+      osc.onended = () => { try { osc.disconnect(); g.disconnect(); } catch (e) {} };
+    }
+  }
+
+  playIronRamCollision(x, y) {
+    if (this._muted) return;
+    const gain = this.getSpatialVolume(x, y, 1500, 0.82);
+    if (gain <= 0.01) return;
+
+    if (this.ironRamCollisionBuffer) {
+      this._safePlayBuffer(this.ironRamCollisionBuffer, gain, 0.92 + Math.random() * 0.15);
+    } else {
+      this.playRamHit();
+    }
   }
 
   playInkSpit(x, y) {
     if (this._muted) return;
-    this.init();
-    if (!this.ctx) return;
-    const gain = this.getSpatialVolume(x, y, 1800, 0.7);
+    const gain = this.getSpatialVolume(x, y, 1800, 0.72);
     if (gain <= 0.01) return;
-    const now = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const g = this.ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(140, now);
-    osc.frequency.exponentialRampToValueAtTime(45, now + 0.45);
-    g.gain.setValueAtTime(gain * 0.6, now);
-    g.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
-    osc.connect(g);
-    g.connect(this.destinationNode);
-    osc.start(now);
-    osc.stop(now + 0.45);
-    osc.onended = () => { try { osc.disconnect(); g.disconnect(); } catch (e) {} };
+
+    if (this.inkPlumeBuffer) {
+      this._safePlayBuffer(this.inkPlumeBuffer, gain, 0.94 + Math.random() * 0.12);
+    } else {
+      this.init();
+      if (!this.ctx) return;
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(140, now);
+      osc.frequency.exponentialRampToValueAtTime(45, now + 0.45);
+      g.gain.setValueAtTime(gain * 0.6, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+      osc.connect(g);
+      g.connect(this.destinationNode);
+      osc.start(now);
+      osc.stop(now + 0.45);
+      osc.onended = () => { try { osc.disconnect(); g.disconnect(); } catch (e) {} };
+    }
+  }
+
+  playTentacleSlap(x, y) {
+    if (this._muted) return;
+    const gain = this.getSpatialVolume(x, y, 1600, 0.75);
+    if (gain <= 0.01) return;
+
+    if (this.tentacleSlapBuffer) {
+      this._safePlayBuffer(this.tentacleSlapBuffer, gain, 0.92 + Math.random() * 0.14);
+    } else {
+      this.playMonsterAttack(x, y);
+    }
   }
 
   playWhirlpool(x, y) {
     if (this._muted) return;
-    this.init();
-    if (!this.ctx) return;
-    const gain = this.getSpatialVolume(x, y, 2000, 0.65);
+    const gain = this.getSpatialVolume(x, y, 2000, 0.72);
     if (gain <= 0.01) return;
-    const now = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const g = this.ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(80, now);
-    osc.frequency.linearRampToValueAtTime(120, now + 0.4);
-    osc.frequency.linearRampToValueAtTime(60, now + 0.9);
-    g.gain.setValueAtTime(gain * 0.45, now);
-    g.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
-    osc.connect(g);
-    g.connect(this.destinationNode);
-    osc.start(now);
-    osc.stop(now + 0.9);
-    osc.onended = () => { try { osc.disconnect(); g.disconnect(); } catch (e) {} };
+
+    if (this.whirlpoolBuffer) {
+      this._safePlayBuffer(this.whirlpoolBuffer, gain, 0.94 + Math.random() * 0.1);
+    } else {
+      this.init();
+      if (!this.ctx) return;
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(80, now);
+      osc.frequency.linearRampToValueAtTime(120, now + 0.4);
+      osc.frequency.linearRampToValueAtTime(60, now + 0.9);
+      g.gain.setValueAtTime(gain * 0.45, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
+      osc.connect(g);
+      g.connect(this.destinationNode);
+      osc.start(now);
+      osc.stop(now + 0.9);
+      osc.onended = () => { try { osc.disconnect(); g.disconnect(); } catch (e) {} };
+    }
+  }
+
+  playLeviathanBellow(x, y) {
+    if (this._muted) return;
+    const gain = this.getSpatialVolume(x, y, 2200, 0.85);
+    if (gain <= 0.01) return;
+
+    if (this.leviathanBellowBuffer) {
+      this._safePlayBuffer(this.leviathanBellowBuffer, gain, 0.92 + Math.random() * 0.12);
+    } else {
+      this.playMonsterRoar(x, y);
+    }
   }
 
   playSeaShantyWhistle() {
@@ -1002,6 +1264,313 @@ class SoundFX {
       osc.onended = () => { try { osc.disconnect(); gainNode.disconnect(); } catch (e) {} };
       offset += note.d + note.pause;
     });
+  }
+
+  playThunderClap(isBlood = false) {
+    if (this._muted) return;
+    if (this.thunderBuffers.length > 0) {
+      const chosen = this.thunderBuffers[Math.floor(Math.random() * this.thunderBuffers.length)];
+      const rate = isBlood ? 0.84 : (0.95 + Math.random() * 0.1);
+      this._safePlayBuffer(chosen, 0.88 * (this.masterVolume * this.sfxVolume), rate);
+    } else {
+      this.init();
+      if (!this.ctx) return;
+      const now = this.ctx.currentTime;
+
+      // 1. Resonant noise burst for explosive thunder crackle
+      const duration = isBlood ? 1.8 : 1.4;
+      const bufferSize = Math.floor(this.ctx.sampleRate * duration);
+      const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const output = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        output[i] = Math.random() * 2 - 1;
+      }
+
+      const whiteNoise = this.ctx.createBufferSource();
+      whiteNoise.buffer = noiseBuffer;
+
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(isBlood ? 420 : 650, now);
+      filter.frequency.exponentialRampToValueAtTime(isBlood ? 45 : 70, now + duration);
+      filter.Q.setValueAtTime(isBlood ? 4.5 : 3.0, now);
+
+      const gainNode = this.ctx.createGain();
+      const effGain = 0.85 * (this.masterVolume * this.sfxVolume);
+      gainNode.gain.setValueAtTime(effGain, now);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+      whiteNoise.connect(filter);
+      filter.connect(gainNode);
+      gainNode.connect(this.destinationNode);
+
+      whiteNoise.start(now);
+      whiteNoise.onended = () => {
+        try {
+          whiteNoise.disconnect();
+          filter.disconnect();
+          gainNode.disconnect();
+        } catch (e) {}
+      };
+
+      // 2. Sub-bass boom oscillator for physical shockwave
+      const subOsc = this.ctx.createOscillator();
+      const subGain = this.ctx.createGain();
+      subOsc.type = isBlood ? 'sawtooth' : 'sine';
+      subOsc.frequency.setValueAtTime(isBlood ? 95 : 120, now);
+      subOsc.frequency.exponentialRampToValueAtTime(isBlood ? 25 : 35, now + 0.8);
+
+      subGain.gain.setValueAtTime(0.7 * (this.masterVolume * this.sfxVolume), now);
+      subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+
+      subOsc.connect(subGain);
+      subGain.connect(this.destinationNode);
+
+      subOsc.start(now);
+      subOsc.stop(now + 0.8);
+      subOsc.onended = () => {
+        try {
+          subOsc.disconnect();
+          subGain.disconnect();
+        } catch (e) {}
+      };
+    }
+  }
+
+  playWindGust() {
+    if (this._muted) return;
+    const nowSec = performance.now() / 1000;
+    if (nowSec - this.lastGaleTime < 1.6) return;
+    this.lastGaleTime = nowSec;
+
+    if (this.galeBuffers.length > 0) {
+      const chosen = this.galeBuffers[Math.floor(Math.random() * this.galeBuffers.length)];
+      this._safePlayBuffer(chosen, 0.55 * (this.masterVolume * this.sfxVolume), 0.92 + Math.random() * 0.16);
+    } else {
+      this.init();
+      if (!this.ctx) return;
+      const now = this.ctx.currentTime;
+
+      const bufferSize = Math.floor(this.ctx.sampleRate * 2.2);
+      const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const output = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        output[i] = Math.random() * 2 - 1;
+      }
+
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = noiseBuffer;
+
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(220, now);
+      filter.frequency.linearRampToValueAtTime(540, now + 1.0);
+      filter.frequency.exponentialRampToValueAtTime(180, now + 2.2);
+      filter.Q.setValueAtTime(2.2, now);
+
+      const gainNode = this.ctx.createGain();
+      const effVol = 0.28 * (this.masterVolume * this.sfxVolume);
+      gainNode.gain.setValueAtTime(0, now);
+      gainNode.gain.linearRampToValueAtTime(effVol, now + 0.8);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 2.2);
+
+      noise.connect(filter);
+      filter.connect(gainNode);
+      gainNode.connect(this.destinationNode);
+
+      noise.start(now);
+      noise.onended = () => {
+        try {
+          noise.disconnect();
+          filter.disconnect();
+          gainNode.disconnect();
+        } catch (e) {}
+      };
+    }
+  }
+
+  playLightningWarning(x, y) {
+    if (this._muted) return;
+    const now = performance.now() / 1000;
+    if (now - this.lastLightningSparkTime < 0.35) return;
+    const gain = this.getSpatialVolume(x, y, 1200, 0.65);
+    if (gain <= 0.02) return;
+    this.lastLightningSparkTime = now;
+
+    if (this.lightningSparkBuffers.length > 0) {
+      const chosen = this.lightningSparkBuffers[Math.floor(Math.random() * this.lightningSparkBuffers.length)];
+      this._safePlayBuffer(chosen, gain, 0.94 + Math.random() * 0.12);
+    }
+  }
+
+  playOceanSwellCrash(x, y) {
+    if (this._muted) return;
+    const now = performance.now() / 1000;
+    if (now - this.lastOceanSwellTime < 2.2) return;
+    const gain = this.getSpatialVolume(x, y, 1400, 0.62);
+    if (gain <= 0.02) return;
+    this.lastOceanSwellTime = now;
+
+    if (this.oceanSwellBuffers.length > 0) {
+      const chosen = this.oceanSwellBuffers[Math.floor(Math.random() * this.oceanSwellBuffers.length)];
+      this._safePlayBuffer(chosen, gain, 0.92 + Math.random() * 0.15);
+    }
+  }
+
+  playCompassGlitch() {
+    if (this._muted) return;
+    const now = performance.now() / 1000;
+    if (now - this.lastCompassGlitchTime < 1.8) return;
+    this.lastCompassGlitchTime = now;
+
+    if (this.compassGlitchBuffer) {
+      this._safePlayBuffer(this.compassGlitchBuffer, 0.48 * (this.masterVolume * this.sfxVolume), 0.95 + Math.random() * 0.1);
+    }
+  }
+
+  playOccultWhisper() {
+    if (this._muted) return;
+    const now = performance.now() / 1000;
+    if (now - this.lastOccultWhisperTime < 3.5) return;
+    this.lastOccultWhisperTime = now;
+
+    if (this.occultWhisperBuffer) {
+      this._safePlayBuffer(this.occultWhisperBuffer, 0.42 * (this.masterVolume * this.sfxVolume), 0.96 + Math.random() * 0.08);
+    }
+  }
+
+  playPredatorySurge(x, y) {
+    if (this._muted) return;
+    const now = performance.now() / 1000;
+    if (now - this.lastPredatorySurgeTime < 2.5) return;
+    const gain = this.getSpatialVolume(x, y, 1600, 0.8);
+    if (gain <= 0.02) return;
+    this.lastPredatorySurgeTime = now;
+
+    if (this.predatorySurgeBuffer) {
+      this._safePlayBuffer(this.predatorySurgeBuffer, gain, 0.94 + Math.random() * 0.12);
+    } else {
+      this.playMonsterCharge(x, y);
+    }
+  }
+
+  playBiteCrunch(x, y) {
+    if (this._muted) return;
+    const gain = this.getSpatialVolume(x, y, 1400, 0.85);
+    if (gain <= 0.01) return;
+
+    if (this.biteCrunchBuffer) {
+      this._safePlayBuffer(this.biteCrunchBuffer, gain, 0.92 + Math.random() * 0.14);
+    } else {
+      this.playMonsterHit(x, y);
+    }
+  }
+
+  playPortDocking() {
+    if (this._muted) return;
+    this.init();
+    let played = false;
+    // Simultaneous dual trigger: rope moorings creak + wooden hull dock contact
+    if (this.portDockingRopeBuffer) {
+      this._safePlayBuffer(this.portDockingRopeBuffer, 0.75, 0.96 + Math.random() * 0.08);
+      played = true;
+    }
+    if (this.portDockingWoodBuffer) {
+      this._safePlayBuffer(this.portDockingWoodBuffer, 0.85, 0.95 + Math.random() * 0.08);
+      played = true;
+    }
+    if (!played) {
+      this.playSplash();
+    }
+  }
+
+  playWeighAnchor() {
+    if (this._muted) return;
+    this.init();
+    if (this.weighAnchorBuffer) {
+      this._safePlayBuffer(this.weighAnchorBuffer, 0.72, 0.98 + Math.random() * 0.04);
+    }
+  }
+
+  playTowerDestruction(x, y) {
+    if (this._muted) return;
+    const gain = this.getSpatialVolume(x, y, 1800, 0.88);
+    if (gain <= 0.01) return;
+
+    if (this.towerDestructionBuffer) {
+      this._safePlayBuffer(this.towerDestructionBuffer, gain, 0.93 + Math.random() * 0.12);
+    } else {
+      this.playMineExplosion(x, y);
+    }
+  }
+
+  playConquestFanfare() {
+    if (this._muted) return;
+    this.init();
+    if (this.conquestFanfareBuffer) {
+      this._safePlayBuffer(this.conquestFanfareBuffer, 0.85 * (this.masterVolume * this.sfxVolume), 1.0);
+    } else {
+      this.playLoot();
+    }
+  }
+
+  playShipyardHammer() {
+    if (this._muted) return;
+    this.init();
+    if (this.shipyardHammerBuffer) {
+      this._safePlayBuffer(this.shipyardHammerBuffer, 0.75 * (this.masterVolume * this.sfxVolume), 0.95 + Math.random() * 0.1);
+    } else {
+      this.playLoot();
+    }
+  }
+
+  playCompartmentInspect() {
+    if (this._muted) return;
+    this.init();
+    if (this.compartmentInspectBuffer) {
+      this._safePlayBuffer(this.compartmentInspectBuffer, 0.55 * (this.masterVolume * this.sfxVolume), 0.96 + Math.random() * 0.08);
+    } else {
+      this.playClick();
+    }
+  }
+
+  playRepair() {
+    if (this._muted) return;
+    this.init();
+    if (this.repairBuffer) {
+      this._safePlayBuffer(this.repairBuffer, 0.72 * (this.masterVolume * this.sfxVolume), 0.98 + Math.random() * 0.06);
+    } else {
+      this.playSplash();
+    }
+  }
+
+  playMapToggle() {
+    if (this._muted) return;
+    this.init();
+    if (this.mapToggleBuffer) {
+      this._safePlayBuffer(this.mapToggleBuffer, 0.65 * (this.masterVolume * this.sfxVolume), 0.96 + Math.random() * 0.08);
+    } else {
+      this.playClick();
+    }
+  }
+
+  playClick() {
+    if (this._muted) return;
+    this.init();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, now);
+    osc.frequency.exponentialRampToValueAtTime(440, now + 0.04);
+    gain.gain.setValueAtTime(0.12 * (this.masterVolume * this.sfxVolume), now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+    osc.connect(gain);
+    gain.connect(this.destinationNode);
+    osc.start(now);
+    osc.stop(now + 0.04);
+    osc.onended = () => { try { osc.disconnect(); gain.disconnect(); } catch (e) {} };
   }
 }
 

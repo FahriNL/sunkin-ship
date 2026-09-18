@@ -915,7 +915,13 @@ function selectCompartment(key, shouldScroll = false) {
   if (!key || !SHIP_COMPARTMENTS[key]) return;
   const prevKey = cutawayState.selectedKey;
   cutawayState.selectedKey = key;
-  if (prevKey !== key) sound.playClick();
+  if (prevKey !== key) {
+    if (typeof sound !== 'undefined' && typeof sound.playCompartmentInspect === 'function') {
+      sound.playCompartmentInspect();
+    } else {
+      sound.playClick();
+    }
+  }
   renderCompartmentChips();
   renderCompartmentDetail(key);
   if (shouldScroll && compartmentDetailPanel) {
@@ -1127,7 +1133,11 @@ function performCompartmentUpgrade(key) {
       });
     }
 
-    sound.playLoot();
+    if (typeof sound !== 'undefined' && typeof sound.playShipyardHammer === 'function') {
+      sound.playShipyardHammer();
+    } else {
+      sound.playLoot();
+    }
     showToast(`${comp.name} ditingkatkan ke Lv.${playerState.upgrades[key]}!`, "check");
     saveGame();
 
@@ -1892,6 +1902,9 @@ function stopMapAnimationLoop() {
 
 function openMapModal() {
   sound.init();
+  if (typeof sound !== 'undefined' && typeof sound.playMapToggle === 'function') {
+    sound.playMapToggle();
+  }
   closeUpgradeModal();
   closeLoreModal();
   closeHelpModal();
@@ -1909,6 +1922,9 @@ function openMapModal() {
 function closeMapModal() {
   stopMapAnimationLoop();
   if (!seaMapModal) return;
+  if (typeof sound !== 'undefined' && typeof sound.playMapToggle === 'function') {
+    sound.playMapToggle();
+  }
   seaMapModal.classList.remove('modal-active');
   seaMapModal.classList.add('modal-enter', 'hidden');
   if (pauseReturnTarget === 'pause') {
@@ -2134,8 +2150,11 @@ function quickRepairShip() {
   }
   if (playerState.gold >= 15) {
     playerState.gold -= 15;
-    playerState.hp = maxHp;
-    sound.playSplash();
+    if (typeof sound !== 'undefined' && typeof sound.playRepair === 'function') {
+      sound.playRepair();
+    } else {
+      sound.playSplash();
+    }
     showToast("Kapal diperbaiki sepenuhnya! (-15 Koin)", "anchor");
     updateHUD();
     saveGame();

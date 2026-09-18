@@ -264,19 +264,47 @@ function renderCompassBar() {
   ctx.scale(dpr, dpr);
   ctx.clearRect(0, 0, w, h);
 
-  // Subtle dark ocean parchment gradient
+  const compassStatus = (typeof weatherState !== 'undefined' && weatherState.compassStatus) ? weatherState.compassStatus : 'normal';
+
+  // Subtle dark ocean parchment gradient (dynamic according to compass status)
   const bgGrad = ctx.createLinearGradient(0, 0, w, 0);
-  bgGrad.addColorStop(0, 'rgba(8, 14, 26, 0.95)');
-  bgGrad.addColorStop(0.15, 'rgba(15, 23, 42, 0.7)');
-  bgGrad.addColorStop(0.5, 'rgba(15, 23, 42, 0.45)');
-  bgGrad.addColorStop(0.85, 'rgba(15, 23, 42, 0.7)');
-  bgGrad.addColorStop(1, 'rgba(8, 14, 26, 0.95)');
+  if (compassStatus === 'corrupted') {
+    bgGrad.addColorStop(0, 'rgba(45, 10, 15, 0.96)');
+    bgGrad.addColorStop(0.2, 'rgba(127, 29, 29, 0.75)');
+    bgGrad.addColorStop(0.5, 'rgba(69, 10, 10, 0.55)');
+    bgGrad.addColorStop(0.8, 'rgba(127, 29, 29, 0.75)');
+    bgGrad.addColorStop(1, 'rgba(45, 10, 15, 0.96)');
+  } else if (compassStatus === 'blind') {
+    bgGrad.addColorStop(0, 'rgba(15, 23, 42, 0.96)');
+    bgGrad.addColorStop(0.2, 'rgba(51, 65, 85, 0.75)');
+    bgGrad.addColorStop(0.5, 'rgba(30, 41, 59, 0.55)');
+    bgGrad.addColorStop(0.8, 'rgba(51, 65, 85, 0.75)');
+    bgGrad.addColorStop(1, 'rgba(15, 23, 42, 0.96)');
+  } else {
+    bgGrad.addColorStop(0, 'rgba(8, 14, 26, 0.95)');
+    bgGrad.addColorStop(0.15, 'rgba(15, 23, 42, 0.7)');
+    bgGrad.addColorStop(0.5, 'rgba(15, 23, 42, 0.45)');
+    bgGrad.addColorStop(0.85, 'rgba(15, 23, 42, 0.7)');
+    bgGrad.addColorStop(1, 'rgba(8, 14, 26, 0.95)');
+  }
   ctx.fillStyle = bgGrad;
   ctx.fillRect(0, 0, w, h);
 
-  // Player Heading in Degrees: 0 = N, 90 = E, 180 = S, 270 = W
+  // Player Heading in Degrees
   const headingRad = normAngle(playerState.angle + Math.PI / 2);
-  const headingDeg = ((headingRad * 180 / Math.PI) + 360) % 360;
+  let headingDeg = ((headingRad * 180 / Math.PI) + 360) % 360;
+
+  // Distort heading if compass is compromised
+  if (compassStatus === 'corrupted') {
+    const corruptSpin = Math.sin(Date.now() * 0.008) * 180 + (Math.random() - 0.5) * 35;
+    headingDeg = (headingDeg + corruptSpin + 720) % 360;
+  } else if (compassStatus === 'blind') {
+    const fogSpin = (Date.now() * 0.015) % 360;
+    headingDeg = (headingDeg + fogSpin) % 360;
+  } else if (compassStatus === 'jitter') {
+    const jitter = Math.sin(Date.now() * 0.04) * 18 + (Math.random() - 0.5) * 10;
+    headingDeg = (headingDeg + jitter + 360) % 360;
+  }
 
   // Total FOV span across the bar = 160 degrees (+/- 80 deg)
   const FOV_SPAN = 160;
@@ -284,13 +312,33 @@ function renderCompassBar() {
   const cx = w / 2;
   const baseLineY = h - 6;
 
-  // Gold baseline
-  ctx.strokeStyle = 'rgba(217, 119, 6, 0.45)';
+  // Baseline
+  ctx.strokeStyle = (compassStatus === 'corrupted') 
+    ? 'rgba(239, 68, 68, 0.65)' 
+    : (compassStatus === 'blind' ? 'rgba(148, 163, 184, 0.45)' : 'rgba(217, 119, 6, 0.45)');
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(12, baseLineY);
   ctx.lineTo(w - 12, baseLineY);
   ctx.stroke();
+
+  // Compass Distortions Banner Tag
+  if (compassStatus === 'corrupted') {
+    ctx.font = 'bold 7px "Cinzel", monospace';
+    ctx.fillStyle = '#f87171';
+    ctx.textAlign = 'center';
+    ctx.fillText("[KOMPAS DIRASUKI - MALFUNGSI TOTAL]", cx, 8);
+  } else if (compassStatus === 'blind') {
+    ctx.font = 'bold 7px "Cinzel", monospace';
+    ctx.fillStyle = '#94a3b8';
+    ctx.textAlign = 'center';
+    ctx.fillText("[KABUT PADAT - HILANG ARAH]", cx, 8);
+  } else if (compassStatus === 'jitter') {
+    ctx.font = 'bold 7px "Cinzel", monospace';
+    ctx.fillStyle = '#fef08a';
+    ctx.textAlign = 'center';
+    ctx.fillText("[INTERFERENSI MAGNETIK]", cx, 8);
+  }
 
   // Cardinal point names
   const CARDINALS = {
@@ -321,7 +369,7 @@ function renderCompassBar() {
 
     if (isCardinal) {
       // Major cardinal tick
-      ctx.strokeStyle = '#fef08a';
+      ctx.strokeStyle = (compassStatus === 'corrupted') ? '#fca5a5' : '#fef08a';
       ctx.lineWidth = 1.6;
       ctx.beginPath();
       ctx.moveTo(x, baseLineY);
@@ -329,13 +377,15 @@ function renderCompassBar() {
       ctx.stroke();
 
       // Cardinal letter
-      const label = CARDINALS[degNorm] || `${degNorm}°`;
+      const label = (compassStatus === 'corrupted' && Math.random() < 0.25) ? '?' : (CARDINALS[degNorm] || `${degNorm}°`);
       ctx.font = 'bold 9px "Cinzel", sans-serif';
-      ctx.fillStyle = degNorm === 0 ? '#ef4444' : '#fde68a';
+      ctx.fillStyle = (compassStatus === 'corrupted') 
+        ? '#f87171' 
+        : (degNorm === 0 ? '#ef4444' : (compassStatus === 'blind' ? '#cbd5e1' : '#fde68a'));
       ctx.fillText(label, x, baseLineY - 12);
     } else if (isMedium) {
       // Medium tick
-      ctx.strokeStyle = 'rgba(245, 158, 11, 0.7)';
+      ctx.strokeStyle = (compassStatus === 'corrupted') ? 'rgba(239, 68, 68, 0.7)' : 'rgba(245, 158, 11, 0.7)';
       ctx.lineWidth = 1.1;
       ctx.beginPath();
       ctx.moveTo(x, baseLineY);
@@ -343,13 +393,26 @@ function renderCompassBar() {
       ctx.stroke();
     } else {
       // Minor tick
-      ctx.strokeStyle = 'rgba(148, 163, 184, 0.35)';
+      ctx.strokeStyle = (compassStatus === 'corrupted') ? 'rgba(185, 28, 28, 0.35)' : 'rgba(148, 163, 184, 0.35)';
       ctx.lineWidth = 0.8;
       ctx.beginPath();
       ctx.moveTo(x, baseLineY);
       ctx.lineTo(x, baseLineY - 3.5);
       ctx.stroke();
     }
+  }
+
+  // If compass is corrupted or blinded by dense fog, POI markers are completely disabled!
+  if (compassStatus === 'corrupted' || compassStatus === 'blind') {
+    ctx.restore();
+    return;
+  }
+
+  // In thunderstorm jitter, POI markers intermittently flicker
+  const poiFlicker = (compassStatus === 'jitter') && (Math.random() < 0.48);
+  if (poiFlicker) {
+    ctx.restore();
+    return;
   }
 
   // =========================================================================

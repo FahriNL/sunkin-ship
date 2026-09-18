@@ -292,29 +292,56 @@ function createCombatDebris(x, y, tier) {
 
 function spawnWorldEntities() {
   const isMobile = isMobileDevice();
-  // Adaptive Draw Distance & Density parameters (PC vs Mobile)
-  const maxEnemies = isMobile ? 14 : 16;
+  // Dedicated capacity for open ocean encounters vs territorial island garrisons
+  const maxOceanEnemies = isMobile ? 10 : 12;
+  const maxIslandGuards = isMobile ? 8 : 10;
   const minLocalEnemies = isMobile ? 3 : 4;
-  const localRadius = isMobile ? 1350 : 1750;
-  const recycleDist = isMobile ? 1900 : 2500;
-  const spawnDistMin = isMobile ? 720 : 950;
-  const spawnDistMax = isMobile ? 980 : 1300;
+  const localRadius = isMobile ? 1400 : 1800;
+  const recycleDist = isMobile ? 2200 : 2800;
+  const spawnDistMin = isMobile ? 750 : 980;
+  const spawnDistMax = isMobile ? 1050 : 1350;
 
   const playerDist = Math.sqrt((playerState.x) * (playerState.x) + (playerState.y) * (playerState.y));
   const biome = getBiomeInfo(playerDist);
+
+  // Count active enemies by category
+  let currentOceanEnemies = 0;
+  let currentIslandGuards = 0;
+  let localEnemiesCount = 0;
 
   // 1. Distance-Based Entity Recycling: Only despawn unaware enemies when beyond recycleDist
   for (let i = entities.enemies.length - 1; i >= 0; i--) {
     const e = entities.enemies[i];
     const dx = e.x - playerState.x, dy = e.y - playerState.y;
-    // Keep ships that are currently fighting the player
-    if (dx * dx + dy * dy >= recycleDist * recycleDist && e.alertState !== 'alerted') {
-      entities.enemies.splice(i, 1);
+    const distSq = dx * dx + dy * dy;
+
+    // Check if island guard's home island is still within active sector
+    if (e.homeIslandId) {
+      const homeIsl = WORLD_ISLANDS.find(isl => isl.id === e.homeIslandId);
+      if (homeIsl) {
+        const dToIslSq = (playerState.x - homeIsl.x) * (playerState.x - homeIsl.x) + (playerState.y - homeIsl.y) * (playerState.y - homeIsl.y);
+        if (dToIslSq < 3200 * 3200) {
+          // Keep island guard alive while player is in the island's territorial waters!
+          currentIslandGuards++;
+          if (distSq < localRadius * localRadius) localEnemiesCount++;
+          continue;
+        }
+      }
     }
+
+    // Keep ships that are currently fighting the player
+    if (distSq >= recycleDist * recycleDist && e.alertState !== 'alerted') {
+      entities.enemies.splice(i, 1);
+      continue;
+    }
+
+    if (e.homeIslandId) currentIslandGuards++;
+    else currentOceanEnemies++;
+    if (distSq < localRadius * localRadius) localEnemiesCount++;
   }
 
   // Despawn props when beyond maxPropDist
-  const maxPropDist = isMobile ? 1900 : 2500;
+  const maxPropDist = isMobile ? 2000 : 2600;
   for (let i = entities.sunkenShips.length - 1; i >= 0; i--) {
     const s = entities.sunkenShips[i];
     const dx = s.x - playerState.x, dy = s.y - playerState.y;
@@ -337,40 +364,61 @@ function spawnWorldEntities() {
     }
   }
 
-  // 2. Count active enemies in the player's immediate cruising sector
-  let localEnemiesCount = 0;
-  for (let i = 0; i < entities.enemies.length; i++) {
-    const e = entities.enemies[i];
-    const dx = e.x - playerState.x, dy = e.y - playerState.y;
-    if (dx * dx + dy * dy < localRadius * localRadius) {
-      localEnemiesCount++;
+  // 1.5 Sanitize any guards from conquered islands
+  if (playerState.conqueredIslands && playerState.conqueredIslands.length > 0) {
+    for (let i = entities.enemies.length - 1; i >= 0; i--) {
+      const e = entities.enemies[i];
+      if (e.homeIslandId && playerState.conqueredIslands.includes(e.homeIslandId)) {
+        entities.enemies.splice(i, 1);
+      }
     }
   }
 
-  // Maintain docked clan guards / island patrols (Max 1 guard per outpost)
+  // 2. Maintain Hostile Island Garrisons & Orbital Patrols (Guaranteed Spawns)
   WORLD_ISLANDS.forEach(isl => {
-    const distToPlayerSq = (isl.x - playerState.x) * (isl.x - playerState.x) + (isl.y - playerState.y) * (isl.y - playerState.y);
-    if (distToPlayerSq < 1400 * 1400 && isl.clan !== 'neutral') {
-      const islandGuards = entities.enemies.filter(e => e.homeIslandId === isl.id);
-      if (islandGuards.length < 1 && entities.enemies.length < maxEnemies) {
-        const spawnAngle = (isl.dockAngle !== undefined ? isl.dockAngle : 0) + (Math.random() - 0.5) * 0.9;
-        const rAtAng = getIslandRadiusAt(isl, spawnAngle);
-        const spawnDist = rAtAng + 45 + Math.random() * 55;
-        const ex = isl.x + Math.cos(spawnAngle) * spawnDist;
-        const ey = isl.y + Math.sin(spawnAngle) * spawnDist;
+    // Only hostile outposts (ignore neutral, merchant, home port, or already conquered islands)
+    if (isl.clan === 'neutral' || isl.clan === 'merchant' || isl.isShopIsland || isl.isHomePort) return;
+    if (playerState.conqueredIslands && playerState.conqueredIslands.includes(isl.id)) return;
 
-        const tierIndex = Math.min(2, Math.floor(isl.radius / 150) - 1);
-        entities.enemies.push(createEnemyEntity(isl.clan, Math.max(0, tierIndex), ex, ey, spawnAngle + Math.PI / 2, {
+    const distToPlayerSq = (isl.x - playerState.x) * (isl.x - playerState.x) + (isl.y - playerState.y) * (isl.y - playerState.y);
+    if (distToPlayerSq < 2500 * 2500) {
+      const existingGuards = entities.enemies.filter(e => e.homeIslandId === isl.id);
+      // Fortress or major clan bastions get 3 guards; smaller outposts get 2 guards
+      const targetGuards = (isl.hasFortress || (isl.tier !== undefined && isl.tier <= 2)) ? 3 : 2;
+
+      while (existingGuards.length < targetGuards && currentIslandGuards < maxIslandGuards) {
+        const guardIndex = existingGuards.length;
+        const orbitDir = guardIndex % 2 === 0 ? 1 : -1;
+        const baseAngle = (isl.dockAngle !== undefined ? isl.dockAngle : 0) + (guardIndex / targetGuards) * Math.PI * 2;
+        const orbitDist = 65 + guardIndex * 35;
+        const rAtAng = getIslandRadiusAt(isl, baseAngle);
+        const spawnDist = rAtAng + orbitDist;
+        const ex = isl.x + Math.cos(baseAngle) * spawnDist;
+        const ey = isl.y + Math.sin(baseAngle) * spawnDist;
+
+        // Tier distribution: flagship guard is Tier 2/3, escort skiffs are Tier 1/2
+        const maxIslandTier = isl.tier !== undefined ? Math.max(1, 4 - isl.tier) : 1;
+        const tierIndex = guardIndex === 0 ? Math.min(2, Math.max(1, maxIslandTier)) : Math.min(1, Math.max(0, maxIslandTier - 1));
+
+        const tangentHeading = baseAngle + (Math.PI / 2) * orbitDir;
+        const guardEntity = createEnemyEntity(isl.clan, tierIndex, ex, ey, tangentHeading, {
           homeIslandId: isl.id,
           formationType: 'solitary',
-          formationRole: 'guard'
-        }));
+          formationRole: guardIndex === 0 ? 'guard_flagship' : 'guard_patrol',
+          patrolAngle: baseAngle,
+          orbitDist: orbitDist,
+          orbitDir: orbitDir
+        });
+
+        entities.enemies.push(guardEntity);
+        existingGuards.push(guardEntity);
+        currentIslandGuards++;
       }
     }
   });
 
   // 3. Open Ocean Forward Intercept Encounters
-  const shouldSpawnEncounter = entities.enemies.length < maxEnemies && 
+  const shouldSpawnEncounter = currentOceanEnemies < maxOceanEnemies && 
     (encounterSpawnCooldown <= 0 || (localEnemiesCount < minLocalEnemies && encounterSpawnCooldown <= 1.0));
 
   if (shouldSpawnEncounter) {
@@ -478,59 +526,71 @@ function spawnWorldEntities() {
             }
           }
         } else if (distFromCenter >= 62000) {
-          // GERBANG PALUNG NERAKA: Viking bastion, Mist ritual, Wokou junk, or Kraken
+          // GERBANG PALUNG NERAKA: Blood Kraken/Larvae, Viking Berserkers, Mist Cult
           const roll = Math.random();
-          if (roll < 0.25) {
+          if (roll < 0.35) {
             entities.enemies.push(createEnemyEntity('blood', 1, ex, ey, encounterAngle, {
               formationType: 'solitary',
               formationRole: 'solitary',
               monsterType: 'kraken',
               name: 'The Abyssal Kraken'
             }));
-          } else if (roll < 0.50 && entities.enemies.length <= maxEnemies - 3) {
+          } else if (roll < 0.60 && currentOceanEnemies <= maxOceanEnemies - 3) {
             spawnVikingRaidFlotilla(ex, ey, encounterAngle);
-          } else if (roll < 0.75 && entities.enemies.length <= maxEnemies - 3) {
+          } else if (roll < 0.85 && currentOceanEnemies <= maxOceanEnemies - 3) {
             spawnMistRitual(ex, ey);
           } else {
             spawnSolitaryShip(ex, ey, encounterAngle, Math.random() < 0.5 ? 'viking' : 'mist', distFromCenter);
           }
         } else if (distFromCenter >= 42000) {
-          // MIST & FROST WATERS: Mist Ritual, Viking Flotilla, Wokou Pack
+          // MIST & FROST WATERS: Mist Ritual, Viking Flotilla, Iron Juggernaut
           const roll = Math.random();
-          if (roll < 0.35 && entities.enemies.length <= maxEnemies - 3) {
+          if (roll < 0.35 && currentOceanEnemies <= maxOceanEnemies - 3) {
             spawnMistRitual(ex, ey);
-          } else if (roll < 0.65 && entities.enemies.length <= maxEnemies - 3) {
+          } else if (roll < 0.65 && currentOceanEnemies <= maxOceanEnemies - 3) {
             spawnVikingRaidFlotilla(ex, ey, encounterAngle);
+          } else if (roll < 0.85 && currentOceanEnemies <= maxOceanEnemies - 3) {
+            spawnIronWedge(ex, ey, encounterAngle);
           } else {
-            spawnSolitaryShip(ex, ey, encounterAngle, Math.random() < 0.5 ? 'mist' : 'viking', distFromCenter);
+            const clanPick = Math.random() < 0.4 ? 'mist' : (Math.random() < 0.7 ? 'viking' : 'iron');
+            spawnSolitaryShip(ex, ey, encounterAngle, clanPick, distFromCenter);
           }
         } else if (distFromCenter >= 22000) {
-          // IRON SEAS & FROST FJORD: Iron Wedge, Viking Flotilla, Wokou Pack
+          // IRON SEAS & FROST FJORD: Viking Flotilla, Iron Wedge, Wokou Pack, Mist Shadows
           const roll = Math.random();
-          if (roll < 0.30 && entities.enemies.length <= maxEnemies - 3) {
-            spawnIronWedge(ex, ey, encounterAngle);
-          } else if (roll < 0.60 && entities.enemies.length <= maxEnemies - 3) {
+          if (roll < 0.35 && currentOceanEnemies <= maxOceanEnemies - 3) {
             spawnVikingRaidFlotilla(ex, ey, encounterAngle);
-          } else if (roll < 0.80 && entities.enemies.length <= maxEnemies - 3) {
+          } else if (roll < 0.65 && currentOceanEnemies <= maxOceanEnemies - 3) {
+            spawnIronWedge(ex, ey, encounterAngle);
+          } else if (roll < 0.85 && currentOceanEnemies <= maxOceanEnemies - 3) {
             spawnWokouWolfpack(ex, ey, encounterAngle);
           } else {
-            spawnSolitaryShip(ex, ey, encounterAngle, Math.random() < 0.5 ? 'iron' : 'viking', distFromCenter);
+            const clanPick = Math.random() < 0.4 ? 'viking' : (Math.random() < 0.7 ? 'iron' : (Math.random() < 0.85 ? 'wokou' : 'mist'));
+            spawnSolitaryShip(ex, ey, encounterAngle, clanPick, distFromCenter);
           }
         } else if (distFromCenter >= 8000) {
-          // PERAIRAN SENJA: Batavia Convoy, Wokou Wolfpack, Iron Wedge
+          // PERAIRAN SENJA & KEPULAUAN NIAGA: Batavia Convoy, Wokou Wolfpack, Iron Wedge, Viking Snekkja
           const roll = Math.random();
-          if (roll < 0.35 && entities.enemies.length <= maxEnemies - 3) {
+          if (roll < 0.30 && currentOceanEnemies <= maxOceanEnemies - 3) {
             spawnBataviaConvoy(ex, ey, encounterAngle);
-          } else if (roll < 0.70 && entities.enemies.length <= maxEnemies - 3) {
+          } else if (roll < 0.55 && currentOceanEnemies <= maxOceanEnemies - 3) {
             spawnWokouWolfpack(ex, ey, encounterAngle);
+          } else if (roll < 0.80 && currentOceanEnemies <= maxOceanEnemies - 3) {
+            spawnIronWedge(ex, ey, encounterAngle);
           } else {
-            spawnSolitaryShip(ex, ey, encounterAngle, Math.random() < 0.5 ? 'gold' : 'wokou', distFromCenter);
+            const clanRoll = Math.random();
+            const clanPick = clanRoll < 0.35 ? 'gold' : (clanRoll < 0.65 ? 'iron' : (clanRoll < 0.85 ? 'wokou' : 'viking'));
+            spawnSolitaryShip(ex, ey, encounterAngle, clanPick, distFromCenter);
           }
         } else {
-          // TELUK NUSA DAMAI: Batavia Convoy, Solitary Merchant
+          // TELUK NUSA DAMAI & PERAIRAN LUAR: Batavia Patrols, Iron Barges, Wokou Sampans
           const roll = Math.random();
-          if (roll < 0.40 && entities.enemies.length <= maxEnemies - 3) {
+          if (roll < 0.40 && currentOceanEnemies <= maxOceanEnemies - 3) {
             spawnBataviaConvoy(ex, ey, encounterAngle);
+          } else if (roll < 0.65) {
+            spawnSolitaryShip(ex, ey, encounterAngle, 'wokou', distFromCenter);
+          } else if (roll < 0.85) {
+            spawnSolitaryShip(ex, ey, encounterAngle, 'iron', distFromCenter);
           } else {
             spawnSolitaryShip(ex, ey, encounterAngle, 'gold', distFromCenter);
           }
@@ -579,23 +639,23 @@ function spawnWorldEntities() {
       });
 
       // Spawn Scavenger / Guard Ship around the wreck
-      if (isGuarded && entities.enemies.length < maxEnemies) {
+      if (isGuarded && currentOceanEnemies < maxOceanEnemies) {
         let guardClan = 'gold';
         let tierIdx = 0;
         if (sDistCenter >= 75000) {
           guardClan = 'blood';
           tierIdx = Math.random() < 0.5 ? 1 : 2;
         } else if (sDistCenter >= 42000) {
-          guardClan = 'mist';
+          guardClan = Math.random() < 0.5 ? 'mist' : 'viking';
           tierIdx = Math.random() < 0.6 ? 1 : 2;
         } else if (sDistCenter >= 22000) {
-          guardClan = 'iron';
+          guardClan = Math.random() < 0.4 ? 'viking' : (Math.random() < 0.7 ? 'iron' : 'wokou');
           tierIdx = Math.random() < 0.6 ? 0 : 1;
         } else if (sDistCenter >= 8000) {
-          guardClan = Math.random() < 0.5 ? 'iron' : 'gold';
+          guardClan = Math.random() < 0.35 ? 'gold' : (Math.random() < 0.7 ? 'wokou' : 'iron');
           tierIdx = 0;
         } else {
-          guardClan = 'gold';
+          guardClan = Math.random() < 0.5 ? 'gold' : 'wokou';
           tierIdx = 0;
         }
 
@@ -641,14 +701,15 @@ function destroyTowerAndCheckConquer(tw, tIndex) {
 
   // Audio & Visual Destruction FX
   screenShake = Math.max(screenShake, tw.isPeranakan ? 7 : 14);
+  if (typeof sound !== 'undefined' && typeof sound.playTowerDestruction === 'function') {
+    sound.playTowerDestruction(tw.x, tw.y);
+  }
   if (tw.defenseType === 'tentacle' || tw.defenseType === 'flesh_spitter') {
     sound.playMonsterRoar(tw.x, tw.y);
   } else if (tw.defenseType === 'steam_harpoon' || tw.defenseType === 'steam_vent') {
     sound.playIronHit(tw.x, tw.y);
-    sound.playMineExplosion(tw.x, tw.y);
   } else {
     sound.playCannon(tw.x, tw.y);
-    sound.playMineExplosion(tw.x, tw.y);
   }
 
   // Destruction Debris Particles
@@ -705,6 +766,29 @@ function destroyTowerAndCheckConquer(tw, tIndex) {
         playerState.conqueredIslands.push(isl.id);
       }
 
+      // Immediately remove and surrender all defending patrol guards stationed at this conquered island
+      for (let i = entities.enemies.length - 1; i >= 0; i--) {
+        const guard = entities.enemies[i];
+        if (guard.homeIslandId === isl.id) {
+          createCombatDebris(guard.x, guard.y, guard.tier);
+          entities.sinkingShips.push({
+            x: guard.x,
+            y: guard.y,
+            angle: guard.angle,
+            clan: guard.clan,
+            tier: guard.tier,
+            name: guard.name,
+            isMonster: guard.isMonster,
+            rotSpeed: (Math.random() - 0.5) * 1.8,
+            progress: 0,
+            maxLife: 2.0,
+            life: 2.0
+          });
+          addFloatingText("MENYERAH!", guard.x, guard.y - 20, '#fde047', true);
+          entities.enemies.splice(i, 1);
+        }
+      }
+
       // Conquest Rewards based on Tier
       const tier = isl.tier || 4;
       let conquestGold = 200;
@@ -728,7 +812,11 @@ function destroyTowerAndCheckConquer(tw, tIndex) {
       if (conquestBlood > 0) playerState.bloodEssence += conquestBlood;
 
       screenShake = 22;
-      sound.playLoot();
+      if (typeof sound !== 'undefined' && typeof sound.playConquestFanfare === 'function') {
+        sound.playConquestFanfare();
+      } else {
+        sound.playLoot();
+      }
 
       showToast(`PULAU DITAKLUKKAN: ${isl.name}! Bendera armada berkibar! (+${conquestGold} Koin)`, "trophy");
       addFloatingText(`PULAU DITAKLUKKAN!`, isl.x, isl.y - 40, '#fde047', true);
@@ -769,7 +857,11 @@ function checkPlayerPortDocking(pState) {
       pState.isDockedAtPort = true;
       pState.dockedPort = nearPort;
       showToast(`Berlabuh di ${nearPort.name}: Galangan kapal siap melayani!`, "anchor");
-      if (sound.playSplash) sound.playSplash();
+      if (typeof sound !== 'undefined' && typeof sound.playPortDocking === 'function') {
+        sound.playPortDocking();
+      } else if (sound.playSplash) {
+        sound.playSplash();
+      }
     }
     pState.dockedPort = nearPort;
 
@@ -782,6 +874,9 @@ function checkPlayerPortDocking(pState) {
     if (pState.isDockedAtPort) {
       pState.isDockedAtPort = false;
       pState.dockedPort = null;
+      if (typeof sound !== 'undefined' && typeof sound.playWeighAnchor === 'function') {
+        sound.playWeighAnchor();
+      }
     }
   }
 }
@@ -991,15 +1086,279 @@ function updateMerchants(dt) {
   }
 }
 
+/* ==========================================================================
+   DYNAMIC REGIONAL WEATHER SIMULATION & HAZARDS ENGINE
+   Location-Gated Atmospheric Events, Lightning Telegraphing, & Compass Distortions
+   ========================================================================== */
+
+function updateWeatherSystem(dt) {
+  if (typeof weatherState === 'undefined') return;
+
+  const playerDist = Math.hypot(playerState.x, playerState.y);
+  const availableWeathers = (typeof getAvailableWeathersForDistance === 'function') 
+    ? getAvailableWeathersForDistance(playerDist) 
+    : ['clear'];
+
+  // Check if current weather is still allowed in this distance zone
+  const isCurrentAllowed = weatherState.type === 'clear' || availableWeathers.includes(weatherState.type);
+
+  // Weather Event Lifecycle State Machine
+  if (weatherState.targetType !== weatherState.type) {
+    // Transitioning between weathers
+    if (weatherState.targetType === 'clear') {
+      weatherState.intensity = Math.max(0, weatherState.intensity - dt * 0.22); // ~4.5s fade out
+      if (weatherState.intensity <= 0) {
+        weatherState.type = 'clear';
+        weatherState.cooldown = 32 + Math.random() * 22; // 32-54s calm period
+      }
+    } else {
+      weatherState.type = weatherState.targetType;
+      weatherState.intensity = Math.min(1.0, weatherState.intensity + dt * 0.22); // ~4.5s fade in
+    }
+  } else {
+    // Stable state
+    if (weatherState.type === 'clear') {
+      weatherState.cooldown -= dt;
+      if (weatherState.cooldown <= 0) {
+        // Pick a random weather from available weathers in player's current zone
+        const nextWeather = availableWeathers[Math.floor(Math.random() * availableWeathers.length)];
+        weatherState.targetType = nextWeather;
+        weatherState.timer = 45 + Math.random() * 25; // 45-70s duration
+        weatherState.intensity = 0.05;
+        
+        // Trigger banner announcement
+        const cfg = (typeof WEATHER_CONFIGS !== 'undefined') ? (WEATHER_CONFIGS[nextWeather] || WEATHER_CONFIGS.clear) : { name: nextWeather, subtext: '' };
+        weatherState.banner = {
+          text: `CUACA BERUBAH: ${cfg.name.toUpperCase()}`,
+          subtext: cfg.subtext,
+          alpha: 1.0,
+          timer: 5.5
+        };
+        showToast(`Cuaca: ${cfg.name} - ${cfg.subtext}`, "compass");
+        if (typeof sound !== 'undefined' && typeof sound.playWindGust === 'function') {
+          sound.playWindGust();
+        }
+      }
+    } else {
+      // Weather event active!
+      // If player sailed into a zone where current weather is disallowed, force end early
+      if (!isCurrentAllowed) {
+        weatherState.timer = Math.min(weatherState.timer, 2.0);
+      }
+
+      weatherState.timer -= dt;
+      if (weatherState.timer <= 0) {
+        // Weather ending, return to clear
+        weatherState.targetType = 'clear';
+      }
+    }
+  }
+
+  // Banner fadeout
+  if (weatherState.banner && weatherState.banner.timer > 0) {
+    weatherState.banner.timer -= dt;
+    if (weatherState.banner.timer < 1.0) {
+      weatherState.banner.alpha = Math.max(0, weatherState.banner.timer);
+    }
+  }
+
+  // Update Config & Compass Status
+  const activeCfg = (typeof WEATHER_CONFIGS !== 'undefined') 
+    ? (WEATHER_CONFIGS[weatherState.type] || WEATHER_CONFIGS.clear) 
+    : { compassStatus: 'normal' };
+
+  if (weatherState.intensity > 0.3) {
+    weatherState.compassStatus = activeCfg.compassStatus || 'normal';
+  } else {
+    weatherState.compassStatus = 'normal';
+  }
+
+  // Update Dynamic Wind Angle
+  const windRate = (activeCfg.hasWindDrift ? 0.0035 : 0.0012) * (1 + weatherState.intensity * 0.8);
+  windAngle += windRate * dt;
+
+  // Calculate Wind Drift Vector
+  if (activeCfg.hasWindDrift && weatherState.intensity > 0.1) {
+    const driftSpeed = 38 * (activeCfg.windDriftMultiplier || 1.0) * weatherState.intensity;
+    weatherState.windDrift.x = Math.cos(windAngle) * driftSpeed;
+    weatherState.windDrift.y = Math.sin(windAngle) * driftSpeed;
+  } else {
+    weatherState.windDrift.x = 0;
+    weatherState.windDrift.y = 0;
+  }
+
+  // Handle Lightning Strikes (Thunderstorm & Blood Tempest)
+  if (activeCfg.hasLightning && weatherState.intensity > 0.35) {
+    if (!weatherState._lightningCooldown) weatherState._lightningCooldown = 3.5 + Math.random() * 3.5;
+    weatherState._lightningCooldown -= dt;
+    if (weatherState._lightningCooldown <= 0) {
+      weatherState._lightningCooldown = 4.8 + Math.random() * 4.2;
+      
+      // Spawn strike near player (telegraphed)
+      const strikeAng = Math.random() * Math.PI * 2;
+      const strikeDist = 100 + Math.random() * 340;
+      const sx = playerState.x + Math.cos(strikeAng) * strikeDist;
+      const sy = playerState.y + Math.sin(strikeAng) * strikeDist;
+      const isBlood = Boolean(activeCfg.isBlood);
+
+      // Pre-generate lightning branch points
+      const branches = [];
+      const numSegments = 7;
+      let currX = sx + (Math.random() - 0.5) * 50;
+      let currY = sy - 420;
+      branches.push({ x: currX, y: currY });
+      for (let s = 1; s <= numSegments; s++) {
+        const segY = currY + (420 / numSegments) * s;
+        const segX = (s === numSegments) ? sx : currX + (Math.random() - 0.5) * 55;
+        branches.push({ x: segX, y: segY });
+        currX = segX;
+      }
+
+      weatherState.activeStrikes.push({
+        x: sx,
+        y: sy,
+        timer: 1.25, // 1.25s telegraph circle warning
+        strikeDuration: 0.28,
+        hasStruck: false,
+        isBlood: isBlood,
+        branches: branches
+      });
+      if (typeof sound !== 'undefined' && typeof sound.playLightningWarning === 'function') {
+        sound.playLightningWarning(sx, sy);
+      }
+    }
+  }
+
+  // Process Active Lightning Strikes
+  if (weatherState.activeStrikes) {
+    for (let i = weatherState.activeStrikes.length - 1; i >= 0; i--) {
+      const s = weatherState.activeStrikes[i];
+      s.timer -= dt;
+
+      if (s.timer <= 0 && !s.hasStruck) {
+        s.hasStruck = true;
+        // Strike event!
+        screenShake = Math.max(screenShake, s.isBlood ? 22 : 17);
+        if (typeof sound !== 'undefined' && typeof sound.playThunderClap === 'function') {
+          sound.playThunderClap(s.isBlood);
+        }
+
+        // Check damage to player (if within blast radius)
+        const dToP = Math.hypot(playerState.x - s.x, playerState.y - s.y);
+        if (dToP < 80) {
+          const dmg = Math.floor(30 + Math.random() * 15);
+          playerState.hp = Math.max(1, playerState.hp - dmg);
+          addFloatingText(`TERSEMBAR PETIR! -${dmg}`, playerState.x, playerState.y - 30, '#ef4444', true);
+          showToast(`Kapal tersambar petir ganas! (-${dmg} HP)`, "crosshairs");
+        }
+
+        // Check damage to nearby enemies
+        if (entities.enemies) {
+          entities.enemies.forEach(e => {
+            const dToE = Math.hypot(e.x - s.x, e.y - s.y);
+            if (dToE < 85) {
+              e.hp -= 45;
+              addFloatingText(`PETIR -45`, e.x, e.y - 20, '#fef08a', true);
+            }
+          });
+        }
+
+        // Splash particles
+        for (let p = 0; p < 16; p++) {
+          const pAng = Math.random() * Math.PI * 2;
+          const pSpd = 40 + Math.random() * 90;
+          entities.particles.push({
+            x: s.x,
+            y: s.y,
+            vx: Math.cos(pAng) * pSpd,
+            vy: Math.sin(pAng) * pSpd,
+            size: 2.5 + Math.random() * 2.5,
+            color: s.isBlood ? '#ef4444' : '#fef08a',
+            alpha: 1.0,
+            maxLife: 0.5,
+            life: 0.5
+          });
+        }
+      }
+
+      if (s.hasStruck) {
+        s.strikeDuration -= dt;
+        if (s.strikeDuration <= 0) {
+          weatherState.activeStrikes.splice(i, 1);
+        }
+      }
+    }
+  }
+
+  // Handle Blood Rain Corrosion (Blood Tempest in Red Sea)
+  if (activeCfg.hasBloodCorrosion && weatherState.intensity > 0.55 && !playerState.isDockedAtPort) {
+    weatherState.bloodCorrosionTimer += dt;
+    if (weatherState.bloodCorrosionTimer >= 1.2) {
+      weatherState.bloodCorrosionTimer = 0;
+      // Corrosive blood rain eats away 1 HP
+      if (playerState.hp > 5) {
+        playerState.hp -= 1;
+        addFloatingText("-1 Darah Korosif", playerState.x + (Math.random() - 0.5) * 20, playerState.y - 25, '#f43f5e', false);
+        if (typeof sound !== 'undefined' && typeof sound.triggerCorrosiveSizzle === 'function') {
+          sound.triggerCorrosiveSizzle(dt);
+        }
+      }
+    }
+  }
+
+  // Dynamic Weather Ambience Streams & Atmospheric SFX
+  if (typeof sound !== 'undefined') {
+    if (typeof sound.updateWeatherAmbience === 'function') {
+      sound.updateWeatherAmbience(weatherState.type, weatherState.intensity, playerDist, dt);
+    }
+    // Occult Whispers & Compass Glitch in dense fog & blood sea
+    if (weatherState.compassStatus !== 'normal' && weatherState.intensity > 0.35) {
+      if (weatherState.compassStatus === 'jitter' || weatherState.compassStatus === 'corrupted') {
+        sound.playCompassGlitch();
+      }
+      if (weatherState.compassStatus === 'corrupted' || playerDist >= 75000) {
+        sound.playOccultWhisper();
+      }
+    }
+    // Heavy ocean swell crash during storm, thunderstorm, or blood tempest
+    if ((weatherState.type === 'storm' || weatherState.type === 'thunderstorm' || weatherState.type === 'blood_tempest') && weatherState.intensity > 0.4) {
+      if (Math.random() < 0.05 * dt * 60) {
+        const swX = playerState.x + (Math.random() - 0.5) * 360;
+        const swY = playerState.y + (Math.random() - 0.5) * 360;
+        sound.playOceanSwellCrash(swX, swY);
+      }
+    }
+    // Periodic gale wind gusts
+    if ((weatherState.type === 'gale' || weatherState.type === 'storm' || weatherState.type === 'blood_tempest') && weatherState.intensity > 0.3) {
+      if (Math.random() < 0.03 * dt * 60) {
+        sound.playWindGust();
+      }
+    }
+  }
+}
+
 function updateGame(dt) {
   rebuildSpatialGrid();
+  updateWeatherSystem(dt);
   const currentMaxHp = getStatValue('hull', playerState.upgrades.hull);
   const moveSpeed = getStatValue('speed', playerState.upgrades.speed);
 
+  const activeWeatherCfg = (typeof WEATHER_CONFIGS !== 'undefined' && typeof weatherState !== 'undefined')
+    ? (WEATHER_CONFIGS[weatherState.type] || WEATHER_CONFIGS.clear)
+    : null;
+
   // Dynamic Ocean Wind & Sailing Tailwind Bonus
-  windAngle += 0.0012 * dt;
   const windAlignment = Math.cos(playerState.angle - windAngle);
-  const tailwindBonus = 1 + Math.max(0, windAlignment) * 0.15; // Up to +15% speed boost when running with wind!
+  let tailwindBonus = 1;
+  if (activeWeatherCfg && activeWeatherCfg.hasWindDrift) {
+    if (windAlignment > 0) {
+      tailwindBonus = 1 + windAlignment * (0.15 + 0.15 * weatherState.intensity); // Up to +30% tailwind!
+    } else {
+      tailwindBonus = 1 + windAlignment * (0.12 * weatherState.intensity); // Up to -12% headwind penalty!
+    }
+  } else {
+    tailwindBonus = 1 + Math.max(0, windAlignment) * 0.15;
+  }
 
   // Iron Harpoon Snare Debuff
   if (playerState.speedSnareTimer > 0) {
@@ -1020,8 +1379,11 @@ function updateGame(dt) {
     // 1. DEDICATED PC NAVAL CONTROLS (A/D Rudder, W/S Throttle)
     isPlayerMoving = true;
 
-    // Rudder Rotation
-    const navalTurnSpeed = 2.4 * dt;
+    // Rudder Rotation with Wind Steering Resistance
+    const headingDiffFromWind = normAngle(playerState.angle - windAngle);
+    const turningAgainstWind = (pcNavalState.rudder > 0 && headingDiffFromWind > 0) || (pcNavalState.rudder < 0 && headingDiffFromWind < 0);
+    const windSteerPenalty = (activeWeatherCfg && activeWeatherCfg.hasWindDrift && turningAgainstWind) ? (1 - 0.28 * weatherState.intensity) : 1.0;
+    const navalTurnSpeed = 2.4 * dt * windSteerPenalty;
     playerState.angle += pcNavalState.rudder * navalTurnSpeed;
 
     // Speed modifiers (Shift Boost / Ctrl Stealth)
@@ -1032,6 +1394,12 @@ function updateGame(dt) {
     const currentSpeed = moveSpeed * pcNavalState.throttle * speedMult * tailwindBonus * snareMultiplier * inkMultiplier;
     playerState.x += Math.cos(playerState.angle) * currentSpeed;
     playerState.y += Math.sin(playerState.angle) * currentSpeed;
+
+    // Wind Drift Vector Application
+    if (weatherState && (weatherState.windDrift.x !== 0 || weatherState.windDrift.y !== 0)) {
+      playerState.x += weatherState.windDrift.x * dt;
+      playerState.y += weatherState.windDrift.y * dt;
+    }
 
     // Player Water Trail Wake (Only when sailing forward!)
     if (pcNavalState.throttle > 0 && Math.random() < 0.65) {
@@ -1054,12 +1422,22 @@ function updateGame(dt) {
     
     diff = normAngle(diff);
 
-    const turnSpeed = 3.2 * dt;
+    // Turning Resistance against Gale Wind
+    const headingDiffFromWind = normAngle(playerState.angle - windAngle);
+    const turningAgainstWind = (Math.sign(diff) > 0 && headingDiffFromWind > 0) || (Math.sign(diff) < 0 && headingDiffFromWind < 0);
+    const windSteerPenalty = (activeWeatherCfg && activeWeatherCfg.hasWindDrift && turningAgainstWind) ? (1 - 0.28 * weatherState.intensity) : 1.0;
+    const turnSpeed = 3.2 * dt * windSteerPenalty;
     playerState.angle += Math.sign(diff) * Math.min(Math.abs(diff), turnSpeed);
 
     const currentSpeed = moveSpeed * joystickState.magnitude * tailwindBonus * snareMultiplier * inkMultiplier;
     playerState.x += Math.cos(playerState.angle) * currentSpeed;
     playerState.y += Math.sin(playerState.angle) * currentSpeed;
+
+    // Wind Drift Vector Application
+    if (weatherState && (weatherState.windDrift.x !== 0 || weatherState.windDrift.y !== 0)) {
+      playerState.x += weatherState.windDrift.x * dt;
+      playerState.y += weatherState.windDrift.y * dt;
+    }
 
     // Player Water Trail (Only when moving forward!)
     if (Math.random() < 0.65) {
@@ -1073,6 +1451,19 @@ function updateGame(dt) {
         alpha: 0.55,
         color: 'rgba(255, 255, 255, '
       });
+    }
+  } else {
+    // Idle drifting with wind force when undocked
+    if (weatherState && (weatherState.windDrift.x !== 0 || weatherState.windDrift.y !== 0) && !playerState.isDockedAtPort) {
+      playerState.x += weatherState.windDrift.x * 0.7 * dt;
+      playerState.y += weatherState.windDrift.y * 0.7 * dt;
+    }
+  }
+
+  // Ocean Storm Heavy Wave Camera Sway
+  if (activeWeatherCfg && activeWeatherCfg.id === 'storm' && weatherState && weatherState.intensity > 0.3) {
+    if (Math.random() < 0.04) {
+      screenShake = Math.max(screenShake, 3.5 * weatherState.intensity);
     }
   }
 
@@ -1552,8 +1943,11 @@ function updateGame(dt) {
         if (tw.slamProgress >= 1.0) {
           const diffCfg = (typeof getDifficultyConfig === 'function') ? getDifficultyConfig() : { enemyReloadMultiplier: 1, playerDamageReceivedMult: 1 };
           tw.isSlamming = false;
-          tw.slamCooldown = 2.6 * (diffCfg.enemyReloadMultiplier || 1.0);
-          sound.playMonsterAttack(tw.slamTargetX, tw.slamTargetY);
+          if (typeof sound !== 'undefined' && typeof sound.playTentacleSlap === 'function') {
+            sound.playTentacleSlap(tw.slamTargetX, tw.slamTargetY);
+          } else {
+            sound.playMonsterAttack(tw.slamTargetX, tw.slamTargetY);
+          }
 
           // Shockwave ripple and blood splashes
           entities.seaRipples.push({
@@ -2107,7 +2501,7 @@ function updateGame(dt) {
           playerState.speedSnareTimer = 1.4;
           showToast("Terkait Harpoon Besi Baja! Laju Kapal Melambat!", "alert");
         } else if (p.type === 'frost_axe') {
-          if (sound && sound.playFrostThrow) sound.playFrostThrow(playerState.x, playerState.y);
+          if (sound && sound.playFrostFreeze) sound.playFrostFreeze(playerState.x, playerState.y);
           else sound.playHit(playerState.x, playerState.y);
           playerState.speedSnareTimer = 2.0;
           showToast("Hantaman Kapak Es Viking! Kemudi Membeku!", "alert");
@@ -2610,7 +3004,11 @@ function updateGame(dt) {
             }
             target.hp -= ramDmg;
             if (e.clan === 'iron') {
-              sound.playIronHit(target.x, target.y);
+              if (typeof sound.playIronRamCollision === 'function') {
+                sound.playIronRamCollision(target.x, target.y);
+              } else {
+                sound.playIronHit(target.x, target.y);
+              }
             } else if (e.isMonster || e.clan === 'blood') {
               sound.playMonsterHit(target.x, target.y);
             } else {
@@ -2931,7 +3329,11 @@ function updateGame(dt) {
         e.y += Math.sin(e.angle) * (cruiseSpeed * surge);
 
         if (!isSearching && surge > 1.4) {
-          sound.playMonsterCharge(e.x, e.y);
+          if (mType === 'megalodon' && typeof sound.playPredatorySurge === 'function') {
+            sound.playPredatorySurge(e.x, e.y);
+          } else {
+            sound.playMonsterCharge(e.x, e.y);
+          }
         } else if (targetDist < 450) {
           sound.playMonsterMove(e.x, e.y);
         }
@@ -2946,7 +3348,11 @@ function updateGame(dt) {
             const bDmg = Math.round(e.damage * 1.35 * (diffCfg.playerDamageReceivedMult || 1.0));
             playerState.hp -= bDmg;
             screenShake = Math.max(screenShake, 12);
-            sound.playMonsterHit(playerState.x, playerState.y);
+            if (typeof sound.playBiteCrunch === 'function') {
+              sound.playBiteCrunch(playerState.x, playerState.y);
+            } else {
+              sound.playMonsterHit(playerState.x, playerState.y);
+            }
             addFloatingText(`GIGITAN MEGALODON! -${bDmg}`, playerState.x, playerState.y, '#ef4444', true);
             showToast("Gigitan Predator Megalodon Merobek Lambung!", "alert");
             if (playerState.hp <= 0) {
@@ -2963,6 +3369,9 @@ function updateGame(dt) {
             spitKrakenInk(e, target);
           } else if (mType === 'leviathan' && targetDist < 420) {
             e.specialCooldown = (4.2 + Math.random() * 2.2) * (diffCfg.enemyReloadMultiplier || 1.0);
+            if (typeof sound.playLeviathanBellow === 'function') {
+              sound.playLeviathanBellow(e.x, e.y);
+            }
             summonLeviathanWhirlpool(e, target);
             fireChitinSpikes(e, true);
           } else if (targetDist < 340) {
@@ -2994,18 +3403,27 @@ function updateGame(dt) {
       if (e.homeIslandId) {
         const homeIsl = WORLD_ISLANDS.find(i => i.id === e.homeIslandId);
         if (homeIsl) {
-          e.patrolAngle += 0.45 * dt * e.orbitDir;
+          const orbitR = e.orbitDist || 75;
           const rAtAng = getIslandRadiusAt(homeIsl, e.patrolAngle);
-          const patrolDist = rAtAng + 65;
-          const targetPatrolX = homeIsl.x + Math.cos(e.patrolAngle) * patrolDist;
-          const targetPatrolY = homeIsl.y + Math.sin(e.patrolAngle) * patrolDist;
-          const headingToPatrol = Math.atan2(targetPatrolY - e.y, targetPatrolX - e.x);
+          const patrolDist = rAtAng + orbitR;
+          const orbitDirection = e.orbitDir || 1;
+          const angSpeed = Math.max(0.08, Math.min(0.28, (e.speed * 0.75) / patrolDist));
+          e.patrolAngle += angSpeed * dt * orbitDirection;
+
+          const lookaheadAng = e.patrolAngle + 0.22 * orbitDirection;
+          const rAhead = getIslandRadiusAt(homeIsl, lookaheadAng);
+          const targetPatrolX = homeIsl.x + Math.cos(lookaheadAng) * (rAhead + orbitR);
+          const targetPatrolY = homeIsl.y + Math.sin(lookaheadAng) * (rAhead + orbitR);
+
+          let headingToPatrol = Math.atan2(targetPatrolY - e.y, targetPatrolX - e.x);
+          headingToPatrol = avoidIslandObstacles(e, headingToPatrol, 120);
 
           let angleDiff = headingToPatrol - e.angle;
           angleDiff = normAngle(angleDiff);
           e.angle += Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), e.turnRate * dt);
-          e.x += Math.cos(e.angle) * (e.speed * 0.7);
-          e.y += Math.sin(e.angle) * (e.speed * 0.7);
+          e.x += Math.cos(e.angle) * (e.speed * 0.75);
+          e.y += Math.sin(e.angle) * (e.speed * 0.75);
+
           if (e.clan === 'blood' && (((e.x - playerState.x) * (e.x - playerState.x) + (e.y - playerState.y) * (e.y - playerState.y)) < (420) * (420))) {
             sound.playMonsterMove(e.x, e.y);
           }

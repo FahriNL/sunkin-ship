@@ -3792,6 +3792,11 @@ function render() {
   // Render Enemy Ships
   entities.enemies.forEach(e => {
     if (!isVisible(e.x, e.y, 300)) return;
+    // In Dense Fog (Zone >= 62,000m), player can only see their own ship; enemy ships are completely hidden
+    if (typeof weatherState !== 'undefined' && weatherState.type === 'dense_fog' && weatherState.intensity > 0.35) {
+      const dToPlayer = Math.hypot(e.x - playerState.x, e.y - playerState.y);
+      if (dToPlayer > 55) return; // Completely invisible outside collision distance
+    }
     drawVectorShip(ctx, e, false);
   });
 
@@ -4005,6 +4010,100 @@ function render() {
     });
   }
 
+  // Render Rolling Cloud Shadows for Overcast and Storms
+  if (typeof weatherState !== 'undefined' && weatherState.intensity > 0.05) {
+    const activeCfg = (typeof WEATHER_CONFIGS !== 'undefined') ? (WEATHER_CONFIGS[weatherState.type] || WEATHER_CONFIGS.clear) : null;
+    if (activeCfg && (activeCfg.id === 'overcast' || activeCfg.id === 'storm' || activeCfg.id === 'blood_tempest')) {
+      ctx.save();
+      const cloudAlpha = (activeCfg.id === 'overcast' ? 0.22 : 0.32) * weatherState.intensity;
+      ctx.fillStyle = activeCfg.id === 'blood_tempest' ? `rgba(45, 10, 15, ${cloudAlpha})` : `rgba(15, 23, 42, ${cloudAlpha})`;
+      
+      const cloudSpeed = time * 28;
+      const numClouds = 6;
+      for (let c = 0; c < numClouds; c++) {
+        const cx = Math.floor(viewLeft / 1200) * 1200 + (c % 3) * 450 + (cloudSpeed * (1 + (c % 2) * 0.4)) % 1800 - 300;
+        const cy = Math.floor(viewTop / 900) * 900 + Math.floor(c / 3) * 480 + (c * 75);
+        if (isVisible(cx, cy, 300)) {
+          ctx.beginPath();
+          ctx.ellipse(cx, cy, 220 + (c % 3) * 40, 140 + (c % 2) * 30, (c * 0.4), 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+    }
+  }
+
+  // Render Telegraphed & Active Lightning Strikes in World Space
+  if (typeof weatherState !== 'undefined' && weatherState.activeStrikes && weatherState.activeStrikes.length > 0) {
+    weatherState.activeStrikes.forEach(s => {
+      if (!isVisible(s.x, s.y, 350)) return;
+      ctx.save();
+      const isBlood = Boolean(s.isBlood);
+
+      if (!s.hasStruck) {
+        // Warning circle on ocean surface with crackling telegraph arcs
+        const progress = Math.max(0, 1 - (s.timer / 1.25));
+        const pulse = Math.sin(_now * 0.02) * 4;
+        const blastRadius = 75;
+
+        ctx.strokeStyle = isBlood ? 'rgba(239, 68, 68, 0.85)' : 'rgba(254, 240, 138, 0.85)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, blastRadius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Expanding inner warning disc
+        ctx.fillStyle = isBlood 
+          ? `rgba(225, 29, 72, ${(0.15 + progress * 0.28).toFixed(2)})` 
+          : `rgba(253, 224, 71, ${(0.15 + progress * 0.28).toFixed(2)})`;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, blastRadius * progress, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Telegraph sparks
+        for (let a = 0; a < 4; a++) {
+          const sparkAng = (a / 4) * Math.PI * 2 + progress * 4;
+          const sx = s.x + Math.cos(sparkAng) * (blastRadius + pulse);
+          const sy = s.y + Math.sin(sparkAng) * (blastRadius + pulse);
+          ctx.strokeStyle = isBlood ? '#fda4af' : '#ffffff';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(sx + (Math.random() - 0.5) * 16, sy + (Math.random() - 0.5) * 16);
+          ctx.stroke();
+        }
+      } else {
+        // Lightning bolt striking down from the sky!
+        if (s.branches && s.branches.length > 1) {
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 3.5;
+          ctx.shadowColor = isBlood ? '#ef4444' : '#67e8f9';
+          ctx.shadowBlur = 18;
+          ctx.beginPath();
+          ctx.moveTo(s.branches[0].x, s.branches[0].y);
+          for (let b = 1; b < s.branches.length; b++) {
+            ctx.lineTo(s.branches[b].x, s.branches[b].y);
+          }
+          ctx.stroke();
+
+          // Outer lightning halo
+          ctx.strokeStyle = isBlood ? '#dc2626' : '#38bdf8';
+          ctx.lineWidth = 7;
+          ctx.globalAlpha = 0.55;
+          ctx.stroke();
+          ctx.globalAlpha = 1.0;
+        }
+
+        // Impact shockwave circle
+        ctx.fillStyle = isBlood ? 'rgba(254, 205, 211, 0.85)' : 'rgba(255, 255, 255, 0.85)';
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, 24, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    });
+  }
+
   ctx.restore();
 
   // Blood Sea Vignette
@@ -4043,5 +4142,149 @@ function render() {
     ctx.ellipse(width * 0.82, height * 0.32, 42, 28, -0.3, 0, Math.PI * 2);
     ctx.ellipse(width * 0.3, height * 0.78, 55, 36, 0.2, 0, Math.PI * 2);
     ctx.fill();
+  }
+
+  // =========================================================================
+  // WEATHER ENVIRONMENTAL SCREEN OVERLAYS & PRECIPITATION
+  // =========================================================================
+
+  // 1. Render Rain & Blood Rain Streaks
+  if (typeof weatherState !== 'undefined' && weatherState.intensity > 0.05) {
+    const activeCfg = (typeof WEATHER_CONFIGS !== 'undefined') ? (WEATHER_CONFIGS[weatherState.type] || WEATHER_CONFIGS.clear) : null;
+    if (activeCfg && activeCfg.rainDensity > 0) {
+      ctx.save();
+      const isBlood = Boolean(activeCfg.isBlood);
+      const rainCount = Math.floor(75 * activeCfg.rainDensity * weatherState.intensity);
+      const rainAngle = windAngle + Math.PI * 0.15;
+      const dx = Math.cos(rainAngle) * 22;
+      const dy = Math.sin(rainAngle) * 22 + 18;
+
+      ctx.strokeStyle = isBlood 
+        ? `rgba(225, 29, 72, ${(0.48 * weatherState.intensity).toFixed(2)})`
+        : `rgba(203, 213, 225, ${(0.38 * weatherState.intensity).toFixed(2)})`;
+      ctx.lineWidth = isBlood ? 1.8 : 1.2;
+
+      ctx.beginPath();
+      for (let r = 0; r < rainCount; r++) {
+        const rx = ((r * 137.5 + time * 680 * Math.cos(rainAngle)) % width + width) % width;
+        const ry = ((r * 241.3 + time * 880) % height + height) % height;
+        ctx.moveTo(rx, ry);
+        ctx.lineTo(rx - dx * 0.6, ry - dy * 0.6);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  // 2. Dense Fog Screen Overlay (Zone >= 62,000m)
+  if (typeof weatherState !== 'undefined' && weatherState.type === 'dense_fog' && weatherState.intensity > 0.05) {
+    ctx.save();
+    const fogAlpha = Math.min(0.96, weatherState.intensity * 0.95);
+    const minDim = Math.min(width, height);
+    const maxDim = Math.max(width, height);
+    const clearRadius = minDim * 0.14; // Narrow clear sight aperture around ship
+    const outerRadius = maxDim * 0.62;
+
+    const fogGrad = ctx.createRadialGradient(
+      width / 2, height / 2, clearRadius,
+      width / 2, height / 2, outerRadius
+    );
+    fogGrad.addColorStop(0, 'rgba(226, 232, 240, 0)');
+    fogGrad.addColorStop(0.35, `rgba(203, 213, 225, ${(0.55 * fogAlpha).toFixed(2)})`);
+    fogGrad.addColorStop(0.7, `rgba(148, 163, 184, ${(0.85 * fogAlpha).toFixed(2)})`);
+    fogGrad.addColorStop(1, `rgba(71, 85, 105, ${fogAlpha.toFixed(2)})`);
+    ctx.fillStyle = fogGrad;
+    ctx.fillRect(0, 0, width, height);
+
+    // Swirling dense fog veils
+    ctx.fillStyle = `rgba(241, 245, 249, ${(0.18 * fogAlpha).toFixed(2)})`;
+    for (let f = 0; f < 5; f++) {
+      const fAng = (f / 5) * Math.PI * 2 + time * 0.15;
+      const fDist = minDim * 0.38;
+      const fx = width / 2 + Math.cos(fAng) * fDist;
+      const fy = height / 2 + Math.sin(fAng) * fDist;
+      ctx.beginPath();
+      ctx.ellipse(fx, fy, 160, 95, fAng, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // 3. Dense Blood Fog Overlay (Zone >= 75,000m - Blood Tempest)
+  if (typeof weatherState !== 'undefined' && weatherState.type === 'blood_tempest' && weatherState.intensity > 0.05) {
+    ctx.save();
+    const bloodFogAlpha = Math.min(0.92, weatherState.intensity * 0.88);
+    const minDim = Math.min(width, height);
+    const maxDim = Math.max(width, height);
+
+    const bloodFogGrad = ctx.createRadialGradient(
+      width / 2, height / 2, minDim * 0.20,
+      width / 2, height / 2, maxDim * 0.65
+    );
+    bloodFogGrad.addColorStop(0, 'rgba(153, 27, 27, 0)');
+    bloodFogGrad.addColorStop(0.5, `rgba(127, 29, 29, ${(0.6 * bloodFogAlpha).toFixed(2)})`);
+    bloodFogGrad.addColorStop(1, `rgba(69, 10, 10, ${bloodFogAlpha.toFixed(2)})`);
+    ctx.fillStyle = bloodFogGrad;
+    ctx.fillRect(0, 0, width, height);
+
+    // Occult pulsing crimson swirls
+    ctx.fillStyle = `rgba(185, 28, 28, ${(0.22 * bloodFogAlpha).toFixed(2)})`;
+    for (let b = 0; b < 4; b++) {
+      const bAng = (b / 4) * Math.PI * 2 - time * 0.2;
+      const bDist = minDim * 0.35;
+      const bx = width / 2 + Math.cos(bAng) * bDist;
+      const by = height / 2 + Math.sin(bAng) * bDist;
+      ctx.beginPath();
+      ctx.ellipse(bx, by, 140, 80, bAng, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // 4. Fullscreen Lightning Flash
+  if (typeof weatherState !== 'undefined' && weatherState.activeStrikes) {
+    const striking = weatherState.activeStrikes.find(s => s.hasStruck && s.strikeDuration > 0.12);
+    if (striking) {
+      ctx.save();
+      const flashAlpha = (striking.strikeDuration / 0.28) * 0.55;
+      ctx.fillStyle = striking.isBlood ? `rgba(239, 68, 68, ${flashAlpha.toFixed(2)})` : `rgba(255, 255, 255, ${flashAlpha.toFixed(2)})`;
+      ctx.fillRect(0, 0, width, height);
+      ctx.restore();
+    }
+  }
+
+  // 5. Dynamic Weather HUD Banner (Fade-in and Fade-out announcement below compass)
+  if (typeof weatherState !== 'undefined' && weatherState.banner && weatherState.banner.alpha > 0.01) {
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, Math.min(1, weatherState.banner.alpha));
+    const bannerW = Math.min(380, width * 0.86);
+    const bannerH = 46;
+    const bannerX = (width - bannerW) / 2;
+    const bannerY = 56; // Just below the compass bar
+
+    ctx.fillStyle = 'rgba(8, 14, 26, 0.86)';
+    ctx.strokeStyle = (weatherState.type === 'blood_tempest') ? 'rgba(239, 68, 68, 0.75)' : 'rgba(251, 191, 36, 0.55)';
+    ctx.lineWidth = 1.2;
+
+    if (typeof ctx.roundRect === 'function') {
+      ctx.beginPath();
+      ctx.roundRect(bannerX, bannerY, bannerW, bannerH, 8);
+      ctx.fill();
+      ctx.stroke();
+    } else {
+      ctx.fillRect(bannerX, bannerY, bannerW, bannerH);
+      ctx.strokeRect(bannerX, bannerY, bannerW, bannerH);
+    }
+
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 11px "Cinzel", sans-serif';
+    ctx.fillStyle = (weatherState.type === 'blood_tempest') ? '#fca5a5' : '#fef08a';
+    ctx.fillText(weatherState.banner.text, width / 2, bannerY + 19);
+
+    ctx.font = '9.5px sans-serif';
+    ctx.fillStyle = '#cbd5e1';
+    ctx.fillText(weatherState.banner.subtext, width / 2, bannerY + 35);
+
+    ctx.restore();
   }
 }

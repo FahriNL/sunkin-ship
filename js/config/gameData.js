@@ -977,3 +977,148 @@ function getBiomeInfo(dist) {
 
   return _cachedBiomeInfo;
 }
+
+/* ==========================================================================
+   DYNAMIC REGIONAL WEATHER & RANDOM ATMOSPHERIC EVENTS
+   Distance-Gated Event Pools & Environmental Hazards (Strictly 0 Emoji)
+   ========================================================================== */
+
+const WEATHER_CONFIGS = {
+  clear: {
+    id: 'clear',
+    name: 'Laut Tenang',
+    subtext: 'Angin sepoi-sepoi dan perairan bersahabat',
+    compassStatus: 'normal',
+    color: '#38bdf8',
+    rainDensity: 0,
+    hasWindDrift: false,
+    windDriftMultiplier: 0,
+    hasLightning: false,
+    hasBloodCorrosion: false,
+    denseFog: false
+  },
+  overcast: {
+    id: 'overcast',
+    name: 'Langit Berawan',
+    subtext: 'Awan tebal meredupkan cakrawala samudra',
+    compassStatus: 'normal',
+    color: '#94a3b8',
+    rainDensity: 0,
+    hasWindDrift: false,
+    windDriftMultiplier: 0,
+    hasLightning: false,
+    hasBloodCorrosion: false,
+    denseFog: false
+  },
+  rain: {
+    id: 'rain',
+    name: 'Hujan Samudra',
+    subtext: 'Rintik hujan membasahi geladak, pengereman licin',
+    compassStatus: 'normal',
+    color: '#60a5fa',
+    rainDensity: 1.0,
+    hasWindDrift: false,
+    windDriftMultiplier: 0,
+    hasLightning: false,
+    hasBloodCorrosion: false,
+    denseFog: false
+  },
+  gale: {
+    id: 'gale',
+    name: 'Angin Kencang',
+    subtext: 'Hembusan angin kencang menyeret haluan kapal',
+    compassStatus: 'normal',
+    color: '#a7f3d0',
+    rainDensity: 0.2,
+    hasWindDrift: true,
+    windDriftMultiplier: 1.0,
+    hasLightning: false,
+    hasBloodCorrosion: false,
+    denseFog: false
+  },
+  storm: {
+    id: 'storm',
+    name: 'Badai Gelombang',
+    subtext: 'Ombak ganas bergulung dan hempasan angin liar',
+    compassStatus: 'normal',
+    color: '#38bdf8',
+    rainDensity: 1.6,
+    hasWindDrift: true,
+    windDriftMultiplier: 1.3,
+    hasLightning: false,
+    hasBloodCorrosion: false,
+    denseFog: false
+  },
+  thunderstorm: {
+    id: 'thunderstorm',
+    name: 'Badai Petir Maut',
+    subtext: 'Kilat membelah langit, interferensi kompas terjadi',
+    compassStatus: 'jitter',
+    color: '#fef08a',
+    rainDensity: 2.2,
+    hasWindDrift: true,
+    windDriftMultiplier: 1.5,
+    hasLightning: true,
+    hasBloodCorrosion: false,
+    denseFog: false
+  },
+  mist: {
+    id: 'mist',
+    name: 'Kabut Halimun',
+    subtext: 'Kabut mistis perairan kutukan menyelimuti laut',
+    compassStatus: 'normal',
+    color: '#c084fc',
+    rainDensity: 0.1,
+    hasWindDrift: false,
+    windDriftMultiplier: 0,
+    hasLightning: false,
+    hasBloodCorrosion: false,
+    denseFog: false
+  },
+  dense_fog: {
+    id: 'dense_fog',
+    name: 'Kabut Padat Abisal',
+    subtext: 'Pandangan tertutup pekat, musuh terselubung misteri',
+    compassStatus: 'blind',
+    color: '#e2e8f0',
+    rainDensity: 0,
+    hasWindDrift: false,
+    windDriftMultiplier: 0,
+    hasLightning: false,
+    hasBloodCorrosion: false,
+    denseFog: true
+  },
+  blood_tempest: {
+    id: 'blood_tempest',
+    name: 'Prahara Darah Neraka',
+    subtext: 'Hujan darah korosif dan petir abisal merah',
+    compassStatus: 'corrupted',
+    color: '#ef4444',
+    rainDensity: 2.8,
+    isBlood: true,
+    hasWindDrift: true,
+    windDriftMultiplier: 1.8,
+    hasLightning: true,
+    hasBloodCorrosion: true,
+    denseFog: true
+  }
+};
+
+const ZONE_WEATHER_POOLS = [
+  { maxDist: 8000,  weathers: ['overcast', 'rain', 'gale'] },
+  { maxDist: 22000, weathers: ['overcast', 'rain', 'gale', 'storm'] },
+  { maxDist: 42000, weathers: ['overcast', 'rain', 'gale', 'storm', 'thunderstorm'] },
+  { maxDist: 62000, weathers: ['rain', 'gale', 'mist'] },
+  { maxDist: 75000, weathers: ['dense_fog'] },
+  { maxDist: Infinity, weathers: ['blood_tempest'] }
+];
+
+function getAvailableWeathersForDistance(dist) {
+  for (let i = 0; i < ZONE_WEATHER_POOLS.length; i++) {
+    if (dist < ZONE_WEATHER_POOLS[i].maxDist) {
+      return ZONE_WEATHER_POOLS[i].weathers;
+    }
+  }
+  return ['blood_tempest'];
+}
+

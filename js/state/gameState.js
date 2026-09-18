@@ -51,6 +51,20 @@ const entities = {
   seagulls: []      // Oceanic seabirds flying and gliding over the sea
 };
 
+// Dynamic Regional Weather & Atmospheric Event State
+let weatherState = {
+  type: 'clear',
+  targetType: 'clear',
+  intensity: 0.0,
+  timer: 0,
+  cooldown: 25.0, // Initial calm period on launch
+  windDrift: { x: 0, y: 0 },
+  activeStrikes: [], // Telegraphed and active lightning strikes
+  compassStatus: 'normal', // 'normal' | 'jitter' | 'blind' | 'corrupted'
+  banner: { text: '', subtext: '', alpha: 0, timer: 0 },
+  bloodCorrosionTimer: 0
+};
+
 // Game Difficulty State & Persistence (Easy, Medium/Default, Hard)
 let currentDifficulty = 'medium';
 try {
@@ -467,10 +481,11 @@ function createEnemyEntity(clanKey, tierIndex, x, y, angle, options = {}) {
     lostSightTimer: 0,
     disengageTimer: 0,
     tailgateTimer: 0,
-    orbitDir: Math.random() > 0.5 ? 1 : -1,
+    orbitDir: options.orbitDir !== undefined ? options.orbitDir : (Math.random() > 0.5 ? 1 : -1),
     preferredDist: preferredDist,
     turnRate: turnRate,
-    patrolAngle: angle,
+    patrolAngle: options.patrolAngle !== undefined ? options.patrolAngle : angle,
+    orbitDist: options.orbitDist !== undefined ? options.orbitDist : 65,
     detectionMeter: 0,
     alertState: 'unaware',
     searchTimer: 0,
@@ -752,9 +767,11 @@ function seedWorldFormations() {
   const monDist = 76000 + Math.random() * 4000;
   spawnMonsterPair(Math.cos(monAngle) * monDist, Math.sin(monAngle) * monDist, monAngle + Math.PI / 2);
 
-  // 5. One or two solitary ships in transit
+  // 5. Initial solitary ships in transit across outer calm waters (Gold, Iron, Wokou, Viking)
   spawnSolitaryShip(1200, 950, Math.random() * Math.PI * 2, 'gold', 1500);
-  spawnSolitaryShip(-2200, -1800, Math.random() * Math.PI * 2, 'iron', 2800);
+  spawnSolitaryShip(-1900, -1600, Math.random() * Math.PI * 2, 'iron', 2400);
+  spawnSolitaryShip(1800, -1700, Math.random() * Math.PI * 2, 'wokou', 2400);
+  spawnSolitaryShip(-1700, 1600, Math.random() * Math.PI * 2, 'viking', 2300);
 }
 
 initTerritorialDefenses();
@@ -884,6 +901,20 @@ function resetRoguelikeRun() {
   entities.particles = [];
   entities.seaRipples = [];
   entities.floatingTexts = [];
+
+  // Reset Regional Weather to calm state
+  if (typeof weatherState !== 'undefined') {
+    weatherState.type = 'clear';
+    weatherState.targetType = 'clear';
+    weatherState.intensity = 0;
+    weatherState.timer = 0;
+    weatherState.cooldown = 25.0;
+    weatherState.windDrift = { x: 0, y: 0 };
+    weatherState.activeStrikes = [];
+    weatherState.compassStatus = 'normal';
+    weatherState.banner = { text: '', subtext: '', alpha: 0, timer: 0 };
+    weatherState.bloodCorrosionTimer = 0;
+  }
 
   // Seed live starting world formations across the ocean rings
   seedWorldFormations();
