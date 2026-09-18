@@ -21,65 +21,18 @@
   <canvas id="gameCanvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block; z-index: 1; touch-action: none;"></canvas>
 
   <!-- Top HUD: Center Compass Bar, Left Purser & PC Hull, Right Pause & Map -->
-  <div id="topHUD" class="fixed top-0 left-0 right-0 p-2 sm:p-3 pointer-events-none z-20 flex justify-between items-start transition-opacity duration-300 opacity-0">
+  <!-- Top HUD: Center Compass Bar, Left Purser & PC Hull, Right Pause & Map -->
+  <div id="topHUD" class="fixed top-0 left-0 right-0 p-1.5 sm:p-2.5 pointer-events-none z-20 flex flex-col items-center transition-opacity duration-300 opacity-0">
     
-    <!-- 1. TOP-LEFT: Purser (Gold & Blood) + PC Hull Integrity Gauge + Stealth Eye -->
-    <div id="topLeftHUD" class="flex flex-col gap-1.5 pointer-events-auto shrink-0 max-w-[150px] sm:max-w-xs">
-      <!-- Currency Bar (Gold & Blood) -->
-      <div class="pirate-panel rounded-xl px-2.5 sm:px-3 py-1 flex items-center gap-2 sm:gap-2.5 border-amber-500/30">
-        <div class="flex items-center gap-1 sm:gap-1.5" title="Koin Emas Rampasan">
-          <svg class="w-3.5 h-3.5 text-amber-400 shrink-0" viewBox="0 0 24 24" fill="currentColor">
-            <circle cx="12" cy="12" r="10" stroke="#f59e0b" stroke-width="2" fill="#d97706"/>
-            <path d="M12 6v12M9 9.5c0-1.5 1.5-2 3-2s3 .8 3 2c0 2-3 2.5-3 4 0 1.5 1.5 2 3 2s3-.8 3-2" stroke="#fef3c7" stroke-width="2" fill="none" stroke-linecap="round"/>
-          </svg>
-          <span id="goldText" class="font-black text-xs font-mono tracking-tight text-amber-200">0</span>
-        </div>
-        <div class="w-px h-3 bg-amber-500/20"></div>
-        <div class="flex items-center gap-1 sm:gap-1.5" title="Darah Abisal">
-          <svg class="w-3.5 h-3.5 text-rose-500 animate-pulse shrink-0" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>
-          </svg>
-          <span id="bloodEssenceText" class="font-black text-xs font-mono tracking-tight text-rose-300">0</span>
-        </div>
+    <!-- 1. TOP-CENTER: Horizontal Nautical Compass Bar with Zone Header Plaque -->
+    <div id="compassBarContainer" class="pointer-events-auto flex flex-col items-center w-full">
+      <!-- Mini Zone & Heading Indicator plaque directly above the compass bar -->
+      <div class="flex items-center gap-1.5 mb-0.5 pointer-events-none">
+        <span id="zoneIndicator" class="text-[7.5px] sm:text-[8.5px] font-bold px-2 py-0.2 rounded-full bg-slate-950/90 text-sky-300 border border-sky-500/35 truncate max-w-[130px] text-center shadow">Laut Tenang</span>
+        <span id="distanceText" class="font-mono text-[8px] sm:text-[9px] font-bold text-amber-300 drop-shadow">0m</span>
       </div>
-
-      <!-- PC Vessel Hull Integrity Gauge (Hidden on mobile, visible on Desktop) -->
-      <div id="pcHullContainer" class="pirate-panel rounded-xl px-2 sm:px-2.5 py-1 hidden lg:flex items-center gap-2 border-amber-500/25">
-        <div class="relative w-6 h-6 rounded-lg nautical-badge flex items-center justify-center shrink-0">
-          <svg class="w-3.5 h-3.5 text-amber-400" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 2L4 6v6c0 5.55 3.84 10.74 8 12 4.16-1.26 8-6.45 8-12V6l-8-4zm0 4.5a3 3 0 110 6 3 3 0 010-6z"/>
-          </svg>
-          <div id="shipRankBadge" class="absolute -bottom-1 -right-1 bg-amber-500 text-slate-950 font-black text-[8px] w-3.5 h-3.5 rounded-full flex items-center justify-center border border-black">1</div>
-        </div>
-        <div class="flex-1 min-w-[100px]">
-          <div class="flex items-center justify-between text-[9px] font-bold">
-            <span id="shipTitle" class="font-cinzel text-amber-300 truncate">Sekoci</span>
-            <span id="hpNumericText" class="font-mono text-emerald-400 ml-1">100/100</span>
-          </div>
-          <div class="w-full bg-slate-950 h-1.5 rounded-full overflow-hidden border border-amber-500/30 mt-0.5 p-0.2">
-            <div id="hpBar" class="bg-gradient-to-r from-emerald-600 via-emerald-400 to-green-300 h-full w-full rounded-full transition-[width] duration-200"></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Stealth Eye Indicator -->
-      <div id="stealthBadge" class="pirate-panel rounded-xl px-2 py-0.5 flex items-center gap-1.5 border-emerald-500/40 text-[9px]">
-        <span id="stealthIcon" class="shrink-0 flex items-center">
-          <svg class="w-3.5 h-3.5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>
-          </svg>
-        </span>
-        <span id="stealthStatusLabel" class="text-emerald-400 font-bold truncate">Aman</span>
-        <span id="stealthPercentLabel" class="font-mono text-emerald-300 ml-auto">0%</span>
-        <div class="w-12 bg-slate-950 h-1 rounded-full overflow-hidden border border-slate-700 ml-1 hidden sm:block">
-          <div id="stealthBar" class="bg-emerald-500 h-full w-0 transition-[width] duration-150"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 2. TOP-CENTER: Horizontal Nautical Compass Bar -->
-    <div id="compassBarContainer" class="pointer-events-auto absolute top-2 sm:top-2.5 left-1/2 -translate-x-1/2 flex flex-col items-center">
-      <div class="relative w-[70vw] max-w-[320px] sm:max-w-[420px] h-9 sm:h-10 pirate-panel rounded-full px-2 py-0.5 flex items-center justify-center border-amber-500/50 shadow-2xl overflow-hidden">
+      <!-- Compass Bar Canvas Container -->
+      <div class="relative w-[76vw] max-w-[320px] sm:max-w-[420px] h-8 sm:h-9 pirate-panel rounded-full px-2 py-0.5 flex items-center justify-center border-amber-500/50 shadow-2xl overflow-hidden">
         <!-- Brass Decorative Brackets -->
         <span class="absolute left-1.5 text-amber-400/80 font-mono text-xs font-bold pointer-events-none">&lt;</span>
         <span class="absolute right-1.5 text-amber-400/80 font-mono text-xs font-bold pointer-events-none">&gt;</span>
@@ -92,38 +45,92 @@
         <!-- High DPI Compass Canvas -->
         <canvas id="compassCanvas" class="w-full h-full block touch-none"></canvas>
       </div>
-      <!-- Mini Zone & Heading Indicator pill under compass -->
-      <div class="flex items-center gap-1.5 mt-0.5">
-        <span id="zoneIndicator" class="text-[7.5px] sm:text-[8.5px] font-bold px-2 py-0.2 rounded-full bg-slate-950/80 text-sky-300 border border-sky-600/30 truncate max-w-[120px] text-center">Laut Tenang</span>
-        <span id="distanceText" class="font-mono text-[8px] sm:text-[9px] font-bold text-amber-300">0m</span>
-      </div>
     </div>
 
-    <!-- 3. TOP-RIGHT: Pause Button and Map Button (Stacked Vertically) -->
-    <div id="topRightHUD" class="flex flex-col items-end gap-1.5 pointer-events-auto shrink-0">
-      <!-- Pause Button -->
-      <button id="btnPauseGame" class="pirate-panel rounded-xl px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs hover:border-amber-400 transition flex items-center gap-1.5 bg-amber-500/10 active:scale-95 shadow-lg cursor-pointer" title="Jeda Game [Esc / P]">
-        <svg class="w-3.5 h-3.5 text-amber-300" viewBox="0 0 24 24" fill="currentColor">
-          <rect x="6" y="4" width="4" height="16" rx="1"/>
-          <rect x="14" y="4" width="4" height="16" rx="1"/>
-        </svg>
-        <span class="font-cinzel font-bold text-[10px] sm:text-[11px] text-amber-300">JEDA</span>
-        <kbd class="kbd-badge hidden sm:inline-flex">Esc</kbd>
-      </button>
-      <!-- Sea Map Button (Placed directly below Pause) -->
-      <button id="btnOpenMap" class="pirate-panel hover:border-sky-400 hover:brightness-110 active:scale-95 text-sky-300 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl text-[10px] sm:text-[11px] font-cinzel font-bold flex items-center gap-1.5 transition shadow-lg cursor-pointer" title="Bagan Peta Samudra [M]">
-        <svg class="w-3.5 h-3.5 text-sky-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="10"/>
-          <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>
-        </svg>
-        <span>PETA</span>
-        <kbd class="kbd-badge hidden sm:inline-flex">M</kbd>
-      </button>
+    <!-- 2. SUB-COMPASS CONTROLS ROW: Left (Currency & Status) | Right (Pause & Map) -->
+    <div class="w-full flex justify-between items-start mt-1 px-1 sm:px-2 pointer-events-none">
+      
+      <!-- TOP-LEFT: Purser (Gold & Blood) + PC Hull Integrity Gauge + Stealth Eye -->
+      <div id="topLeftHUD" class="flex flex-col gap-1 pointer-events-auto shrink-0 max-w-[145px] sm:max-w-xs">
+        <!-- Currency Bar (Gold & Blood) -->
+        <div class="pirate-panel rounded-xl px-2.5 sm:px-3 py-1 flex items-center gap-2 sm:gap-2.5 border-amber-500/30">
+          <div class="flex items-center gap-1 sm:gap-1.5" title="Koin Emas Rampasan">
+            <svg class="w-3.5 h-3.5 text-amber-400 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="12" cy="12" r="10" stroke="#f59e0b" stroke-width="2" fill="#d97706"/>
+              <path d="M12 6v12M9 9.5c0-1.5 1.5-2 3-2s3 .8 3 2c0 2-3 2.5-3 4 0 1.5 1.5 2 3 2s3-.8 3-2" stroke="#fef3c7" stroke-width="2" fill="none" stroke-linecap="round"/>
+            </svg>
+            <span id="goldText" class="font-black text-xs font-mono tracking-tight text-amber-200">0</span>
+          </div>
+          <div class="w-px h-3 bg-amber-500/20"></div>
+          <div class="flex items-center gap-1 sm:gap-1.5" title="Darah Abisal">
+            <svg class="w-3.5 h-3.5 text-rose-500 animate-pulse shrink-0" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>
+            </svg>
+            <span id="bloodEssenceText" class="font-black text-xs font-mono tracking-tight text-rose-300">0</span>
+          </div>
+        </div>
+
+        <!-- PC Vessel Hull Integrity Gauge (Hidden on mobile, visible on Desktop) -->
+        <div id="pcHullContainer" class="pirate-panel rounded-xl px-2 sm:px-2.5 py-1 hidden lg:flex items-center gap-2 border-amber-500/25">
+          <div class="relative w-6 h-6 rounded-lg nautical-badge flex items-center justify-center shrink-0">
+            <svg class="w-3.5 h-3.5 text-amber-400" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2L4 6v6c0 5.55 3.84 10.74 8 12 4.16-1.26 8-6.45 8-12V6l-8-4zm0 4.5a3 3 0 110 6 3 3 0 010-6z"/>
+            </svg>
+            <div id="shipRankBadge" class="absolute -bottom-1 -right-1 bg-amber-500 text-slate-950 font-black text-[8px] w-3.5 h-3.5 rounded-full flex items-center justify-center border border-black">1</div>
+          </div>
+          <div class="flex-1 min-w-[100px]">
+            <div class="flex items-center justify-between text-[9px] font-bold">
+              <span id="shipTitle" class="font-cinzel text-amber-300 truncate">Sekoci</span>
+              <span id="hpNumericText" class="font-mono text-emerald-400 ml-1">100/100</span>
+            </div>
+            <div class="w-full bg-slate-950 h-1.5 rounded-full overflow-hidden border border-amber-500/30 mt-0.5 p-0.2">
+              <div id="hpBar" class="bg-gradient-to-r from-emerald-600 via-emerald-400 to-green-300 h-full w-full rounded-full transition-[width] duration-200"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stealth Eye Indicator -->
+        <div id="stealthBadge" class="pirate-panel rounded-xl px-2 py-0.5 flex items-center gap-1.5 border-emerald-500/40 text-[9px]">
+          <span id="stealthIcon" class="shrink-0 flex items-center">
+            <svg class="w-3.5 h-3.5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>
+            </svg>
+          </span>
+          <span id="stealthStatusLabel" class="text-emerald-400 font-bold truncate">Aman</span>
+          <span id="stealthPercentLabel" class="font-mono text-emerald-300 ml-auto">0%</span>
+          <div class="w-12 bg-slate-950 h-1 rounded-full overflow-hidden border border-slate-700 ml-1 hidden sm:block">
+            <div id="stealthBar" class="bg-emerald-500 h-full w-0 transition-[width] duration-150"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TOP-RIGHT: Pause Button and Map Button (Stacked Vertically) -->
+      <div id="topRightHUD" class="flex flex-col items-end gap-1 pointer-events-auto shrink-0">
+        <!-- Pause Button -->
+        <button id="btnPauseGame" class="pirate-panel rounded-xl px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs hover:border-amber-400 transition flex items-center gap-1.5 bg-amber-500/10 active:scale-95 shadow-lg cursor-pointer" title="Jeda Game [Esc / P]">
+          <svg class="w-3.5 h-3.5 text-amber-300" viewBox="0 0 24 24" fill="currentColor">
+            <rect x="6" y="4" width="4" height="16" rx="1"/>
+            <rect x="14" y="4" width="4" height="16" rx="1"/>
+          </svg>
+          <span class="font-cinzel font-bold text-[10px] sm:text-[11px] text-amber-300">JEDA</span>
+          <kbd class="kbd-badge hidden sm:inline-flex">Esc</kbd>
+        </button>
+        <!-- Sea Map Button (Placed directly below Pause) -->
+        <button id="btnOpenMap" class="pirate-panel hover:border-sky-400 hover:brightness-110 active:scale-95 text-sky-300 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl text-[10px] sm:text-[11px] font-cinzel font-bold flex items-center gap-1.5 transition shadow-lg cursor-pointer" title="Bagan Peta Samudra [M]">
+          <svg class="w-3.5 h-3.5 text-sky-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>
+          </svg>
+          <span>PETA</span>
+          <kbd class="kbd-badge hidden sm:inline-flex">M</kbd>
+        </button>
+      </div>
+
     </div>
   </div>
 
   <!-- Floating Toast / Notification with SVG Icon container -->
-  <div id="toastNotification" class="fixed top-16 sm:top-20 left-1/2 -translate-x-1/2 pointer-events-none z-30 transition-all duration-300 opacity-0 -translate-y-3 max-w-[92vw] sm:max-w-md">
+  <div id="toastNotification" class="fixed top-24 sm:top-28 left-1/2 -translate-x-1/2 pointer-events-none z-30 transition-all duration-300 opacity-0 -translate-y-3 max-w-[92vw] sm:max-w-md">
     <div class="pirate-panel px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-full flex items-center gap-2 text-[11px] sm:text-xs font-bold text-amber-300 border border-amber-400/60 shadow-xl text-center">
       <span id="toastIcon" class="shrink-0 flex items-center">
         <svg class="w-3.5 sm:w-4 h-3.5 sm:h-4 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
@@ -146,29 +153,29 @@
     <span class="mt-1 text-[11px] font-cinzel font-black text-amber-300 bg-slate-950/90 px-3 py-0.5 rounded-full border border-amber-500/40 shadow-lg">Menyelam Bangkai...</span>
   </div>
 
-  <!-- Contextual Dock Action Prompt (Appears ONLY when ship is docked at safe harbor, shop island, or conquered port) -->
-  <div id="dockShopAction" class="fixed bottom-36 sm:bottom-40 left-1/2 -translate-x-1/2 z-20 pointer-events-auto hidden transition-all duration-300 max-w-[90vw]">
-    <button id="btnDockShop" type="button" class="group relative px-4 sm:px-5 py-2 sm:py-2.5 rounded-2xl bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-cinzel font-black text-xs sm:text-sm tracking-wide shadow-[0_0_20px_rgba(245,158,11,0.6)] border-2 border-amber-200 active:scale-95 transition flex items-center gap-2 sm:gap-3 cursor-pointer animate-pulse" title="Buka Galangan Kapal [U]">
-      <svg class="w-4 sm:w-5 h-4 sm:h-5 text-slate-950" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Contextual Dock Action Prompt (Positioned safely above helm controls with ample breathing room) -->
+  <div id="dockShopAction" class="fixed bottom-48 sm:bottom-52 left-1/2 -translate-x-1/2 z-20 pointer-events-auto hidden transition-all duration-300 max-w-[90vw] sm:max-w-xs">
+    <button id="btnDockShop" type="button" class="group relative px-4 sm:px-5 py-2 rounded-2xl bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-cinzel font-black text-xs sm:text-sm tracking-wide shadow-[0_0_20px_rgba(245,158,11,0.6)] border-2 border-amber-200 active:scale-95 transition flex items-center gap-2.5 cursor-pointer animate-pulse" title="Buka Galangan Kapal [U]">
+      <svg class="w-4 h-4 text-slate-950 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="5" r="3"/><line x1="12" y1="8" x2="12" y2="21"/><path d="M5 12H2a10 10 0 0 0 20 0h-3"/>
       </svg>
       <div class="flex flex-col text-left leading-tight">
         <div class="flex items-center gap-1.5">
-          <span id="dockShopTitle">GALANGAN KAPAL</span>
-          <kbd class="kbd-badge bg-black/80 text-amber-200 border-amber-400 text-[9px]">U</kbd>
+          <span id="dockShopTitle" class="text-xs sm:text-sm font-bold">GALANGAN KAPAL</span>
+          <kbd class="kbd-badge bg-black/80 text-amber-200 border-amber-400 text-[8px] sm:text-[9px]">U</kbd>
         </div>
-        <span id="dockShopSubtitle" class="text-[9px] font-sans font-bold text-slate-900/80">Berlabuh di Pelabuhan</span>
+        <span id="dockShopSubtitle" class="text-[8.5px] font-sans font-bold text-slate-900/80">Berlabuh di Pelabuhan</span>
       </div>
     </button>
   </div>
 
   <!-- Unified Nautical Controls Dock (Mobile Centered: [SERANG] (KEMUDI + CIRCULAR HP) [REPAIR] | Desktop: Hidden) -->
-  <div id="mobileControlsDock" class="fixed bottom-3.5 sm:bottom-5 left-0 right-0 z-20 flex items-center justify-center gap-3.5 sm:gap-6 pointer-events-none transition-all duration-300">
+  <div id="mobileControlsDock" class="fixed bottom-2.5 sm:bottom-4 left-0 right-0 z-20 flex items-center justify-center gap-3.5 sm:gap-6 pointer-events-none transition-all duration-300">
     
     <!-- 1. LEFT: Attack / Cannons & Mine Action Button -->
     <div class="flex flex-col items-center pointer-events-auto lg:hidden">
-      <button id="btnMobileFire" type="button" class="relative w-14 h-14 rounded-full bg-gradient-to-br from-rose-600 via-rose-700 to-red-900 border-2 border-amber-400/80 active:scale-90 flex items-center justify-center shadow-2xl transition-all touch-manipulation cursor-pointer" title="Tembak Meriam / Ranjau Mesiu [Space]">
-        <svg class="w-7 h-7 text-amber-200 drop-shadow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <button id="btnMobileFire" type="button" class="relative w-13 h-13 sm:w-14 sm:h-14 rounded-full bg-gradient-to-br from-rose-600 via-rose-700 to-red-900 border-2 border-amber-400/80 active:scale-90 flex items-center justify-center shadow-2xl transition-all touch-manipulation cursor-pointer" title="Tembak Meriam / Ranjau Mesiu [Space]">
+        <svg class="w-6 h-6 sm:w-7 sm:h-7 text-amber-200 drop-shadow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="9"/>
           <line x1="12" y1="3" x2="12" y2="7"/>
           <line x1="12" y1="17" x2="12" y2="21"/>
@@ -176,50 +183,54 @@
           <line x1="17" y1="12" x2="21" y2="12"/>
           <circle cx="12" cy="12" r="2" fill="currentColor"/>
         </svg>
-        <span class="absolute -bottom-1 text-[8px] font-cinzel font-black px-1.5 py-0.2 rounded-full bg-black/85 text-amber-300 border border-amber-500/50 shadow-md">SERANG</span>
+        <span class="absolute -bottom-1 text-[7.5px] sm:text-[8px] font-cinzel font-black px-1.5 py-0.2 rounded-full bg-black/85 text-amber-300 border border-amber-500/50 shadow-md">SERANG</span>
       </button>
     </div>
 
-    <!-- 2. CENTER: Virtual Joystick Helm Wheel with Circular Progress HP Ring -->
-    <div class="flex flex-col items-center pointer-events-none relative">
-      <!-- Circular HP SVG Progress Ring wrapping the helm wheel -->
-      <svg id="joystickHpSvg" class="absolute -inset-2 w-[calc(100%+16px)] h-[calc(100%+16px)] -rotate-90 pointer-events-none z-10" viewBox="0 0 120 120">
-        <!-- Background track -->
-        <circle id="joystickHpTrack" cx="60" cy="60" r="54" fill="none" stroke="rgba(15, 23, 42, 0.9)" stroke-width="4.5"/>
-        <!-- Active HP Circular Bar -->
-        <circle id="joystickHpCircle" cx="60" cy="60" r="54" fill="none" stroke="#10b981" stroke-width="4.5" stroke-linecap="round" stroke-dasharray="339.29" stroke-dashoffset="0" class="transition-all duration-200"/>
-      </svg>
-
-      <div id="joystickZone" class="pointer-events-auto relative w-28 h-28 sm:w-32 sm:h-32 rounded-full helm-base flex items-center justify-center touch-none shadow-2xl opacity-95 hover:opacity-100 transition-opacity">
-        <svg class="absolute inset-0 w-full h-full text-amber-500/35 pointer-events-none p-1" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="3">
-          <circle cx="50" cy="50" r="42" stroke-width="2" stroke-dasharray="3, 5" opacity="0.6"/>
-          <line x1="50" y1="2" x2="50" y2="98" />
-          <line x1="2" y1="50" x2="98" y2="50" />
-          <line x1="16" y1="16" x2="84" y2="84" />
-          <line x1="16" y1="84" x2="84" y2="16" />
+    <!-- 2. CENTER: Virtual Joystick Helm Wheel with Concentric Circular Progress HP Ring -->
+    <div class="flex flex-col items-center pointer-events-none">
+      <!-- Dedicated Square Wrapper: Ensures Helm and SVG Ring share the EXACT same geometric center -->
+      <div id="joystickWrapper" class="relative w-28 h-28 sm:w-32 sm:h-32 flex items-center justify-center pointer-events-none">
+        <!-- Circular HP SVG Progress Ring strictly concentric with joystickZone -->
+        <svg id="joystickHpSvg" class="absolute inset-0 w-full h-full -rotate-90 pointer-events-none z-10" viewBox="0 0 120 120">
+          <!-- Background track -->
+          <circle id="joystickHpTrack" cx="60" cy="60" r="54" fill="none" stroke="rgba(15, 23, 42, 0.9)" stroke-width="4.5"/>
+          <!-- Active HP Circular Bar -->
+          <circle id="joystickHpCircle" cx="60" cy="60" r="54" fill="none" stroke="#10b981" stroke-width="4.5" stroke-linecap="round" stroke-dasharray="339.29" stroke-dashoffset="0" class="transition-all duration-200"/>
         </svg>
-        <div id="joystickKnob" class="absolute w-12 h-12 sm:w-14 sm:h-14 rounded-full helm-knob transform translate-x-0 translate-y-0 flex items-center justify-center shadow-lg">
-          <svg class="w-6 h-6 sm:w-7 sm:h-7 text-amber-200 pointer-events-none drop-shadow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="5" r="3"></circle>
-            <line x1="12" y1="8" x2="12" y2="22"></line>
-            <path d="M5 12H2a10 10 0 0 0 20 0h-3"></path>
+
+        <!-- Helm wheel sits symmetrically inside the circular HP ring -->
+        <div id="joystickZone" class="pointer-events-auto relative w-[98px] h-[98px] sm:w-[112px] sm:h-[112px] rounded-full helm-base flex items-center justify-center touch-none shadow-2xl opacity-95 hover:opacity-100 transition-opacity">
+          <svg class="absolute inset-0 w-full h-full text-amber-500/35 pointer-events-none p-1" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="3">
+            <circle cx="50" cy="50" r="42" stroke-width="2" stroke-dasharray="3, 5" opacity="0.6"/>
+            <line x1="50" y1="2" x2="50" y2="98" />
+            <line x1="2" y1="50" x2="98" y2="50" />
+            <line x1="16" y1="16" x2="84" y2="84" />
+            <line x1="16" y1="84" x2="84" y2="16" />
           </svg>
+          <div id="joystickKnob" class="absolute w-11 h-11 sm:w-13 sm:h-13 rounded-full helm-knob transform translate-x-0 translate-y-0 flex items-center justify-center shadow-lg">
+            <svg class="w-5 h-5 sm:w-6 sm:h-6 text-amber-200 pointer-events-none drop-shadow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="5" r="3"></circle>
+              <line x1="12" y1="8" x2="12" y2="22"></line>
+              <path d="M5 12H2a10 10 0 0 0 20 0h-3"></path>
+            </svg>
+          </div>
         </div>
       </div>
 
       <!-- Compact HP numeric text below the wheel for mobile -->
-      <div id="mobileHpPill" class="mt-1 bg-slate-950/90 px-2 py-0.5 rounded-full border border-emerald-500/40 text-[9px] font-mono font-bold text-emerald-400 pointer-events-none z-10 shadow">
+      <div id="mobileHpPill" class="mt-0.5 bg-slate-950/90 px-2 py-0.5 rounded-full border border-emerald-500/40 text-[9px] font-mono font-bold text-emerald-400 pointer-events-none z-10 shadow">
         <span id="mobileHpText">100/100</span>
       </div>
     </div>
 
     <!-- 3. RIGHT: Quick Repair Action Button -->
     <div class="flex flex-col items-center pointer-events-auto lg:hidden">
-      <button id="btnMobileRepair" type="button" class="relative w-14 h-14 rounded-full pirate-panel border-2 border-emerald-500/60 hover:border-emerald-400 active:scale-90 flex items-center justify-center shadow-2xl transition-all opacity-85 hover:opacity-100 touch-manipulation cursor-pointer" title="Reparasi Lambung (15 Koin) [R]">
+      <button id="btnMobileRepair" type="button" class="relative w-13 h-13 sm:w-14 sm:h-14 rounded-full pirate-panel border-2 border-emerald-500/60 hover:border-emerald-400 active:scale-90 flex items-center justify-center shadow-2xl transition-all opacity-85 hover:opacity-100 touch-manipulation cursor-pointer" title="Reparasi Lambung (15 Koin) [R]">
         <svg class="w-6 h-6 text-emerald-400 drop-shadow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
         </svg>
-        <span class="absolute -bottom-1 text-[8px] font-cinzel font-black px-1.5 py-0.2 rounded-full bg-black/85 text-emerald-300 border border-emerald-500/50 shadow-md">REPAIR</span>
+        <span class="absolute -bottom-1 text-[7.5px] sm:text-[8px] font-cinzel font-black px-1.5 py-0.2 rounded-full bg-black/85 text-emerald-300 border border-emerald-500/50 shadow-md">REPAIR</span>
       </button>
     </div>
 

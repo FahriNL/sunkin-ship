@@ -203,9 +203,32 @@ canvas {
   z-index: 5 !important;
 }
 
-/* Circular Mobile HP Ring */
+/* Circular Mobile HP Ring & Concentric Helm Wrapper */
+#joystickWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 112px;
+  height: 112px;
+  margin: 0 auto;
+}
+
+@media (min-width: 640px) {
+  #joystickWrapper {
+    width: 128px;
+    height: 128px;
+  }
+}
+
 #joystickHpSvg {
-  filter: drop-shadow(0 0 5px rgba(16, 185, 129, 0.4));
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  pointer-events: none !important;
+  filter: drop-shadow(0 0 6px rgba(16, 185, 129, 0.45));
   transition: filter 0.3s ease;
 }
 
@@ -228,7 +251,7 @@ canvas {
   }
 }
 
-/* Contextual Dock Shop Action */
+/* Contextual Dock Shop Action (Guaranteed Clearance above Joystick) */
 #dockShopAction:not(.hidden) {
   animation: dockPromptSlide 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
