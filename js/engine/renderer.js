@@ -1605,9 +1605,9 @@ function render() {
 
   // Adaptive Camera Zoom:
   // On PC / wide screens, cameraZoom is 1.0.
-  // On mobile portrait (e.g. width 465px), dynamically zooms out so horizontal ocean view is ~680px.
+  // On mobile portrait, zoom is tuned (~0.88x - 0.90x) so ship is close and prominent without feeling cramped.
   const isMobile = isMobileDevice() || width < 1024;
-  const cameraZoom = isMobile ? Math.min(1.0, Math.max(0.68, width / 680)) : 1.0;
+  const cameraZoom = isMobile ? Math.min(1.0, Math.max(0.85, width / 520)) : 1.0;
 
   // True Centering Transform:
   // Center world coordinates at (width/2, height/2), apply zoom, then translate to player

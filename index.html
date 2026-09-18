@@ -14,7 +14,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Pirata+One&family=Cinzel:wght@600;800;900&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
   
   <!-- Custom Game Styles -->
-  <link rel="stylesheet" crossorigin href="./assets/index-B3ACuH2b.css">
+  <link rel="stylesheet" href="css/style.css">
 </head>
 <body class="relative text-white select-none" style="margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: #030712;">
   <!-- WebGL/2D Game Canvas -->
@@ -190,50 +190,57 @@
     </div>
   </div>
 
-  <!-- Virtual Joystick Controller (Nautical Brass Helm Design - Bottom Left) -->
-  <div id="joystickWrapper" class="fixed bottom-4 left-4 sm:bottom-6 sm:left-6 z-20 flex flex-col items-center pointer-events-none transition-all duration-300">
-    <div id="joystickHint" class="text-[9px] text-amber-300 font-cinzel font-bold mb-1.5 bg-slate-950/80 px-2.5 py-0.5 rounded-full border border-amber-500/30 backdrop-blur-md shadow-md tracking-wider hidden lg:block">
-      KEMUDI BAHARI
-    </div>
-    <div id="joystickZone" class="pointer-events-auto relative w-28 h-28 sm:w-32 sm:h-32 rounded-full helm-base flex items-center justify-center touch-none shadow-2xl opacity-80 hover:opacity-100 transition-opacity">
-      <svg class="absolute inset-0 w-full h-full text-amber-500/35 pointer-events-none p-1" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="3">
-        <circle cx="50" cy="50" r="42" stroke-width="2" stroke-dasharray="3, 5" opacity="0.6"/>
-        <line x1="50" y1="2" x2="50" y2="98" />
-        <line x1="2" y1="50" x2="98" y2="50" />
-        <line x1="16" y1="16" x2="84" y2="84" />
-        <line x1="16" y1="84" x2="84" y2="16" />
-      </svg>
-      <div id="joystickKnob" class="absolute w-12 h-12 sm:w-14 sm:h-14 rounded-full helm-knob transform translate-x-0 translate-y-0 flex items-center justify-center shadow-lg">
-        <svg class="w-6 h-6 sm:w-7 sm:h-7 text-amber-200 pointer-events-none drop-shadow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="5" r="3"></circle>
-          <line x1="12" y1="8" x2="12" y2="22"></line>
-          <path d="M5 12H2a10 10 0 0 0 20 0h-3"></path>
+  <!-- Unified Nautical Controls Dock (Mobile Centered: [SERANG] (KEMUDI) [REPAIR] | Desktop: Left Corner Helm) -->
+  <div id="mobileControlsDock" class="fixed bottom-3.5 sm:bottom-5 left-0 right-0 z-20 flex items-center justify-center gap-3.5 sm:gap-6 pointer-events-none transition-all duration-300">
+    
+    <!-- 1. LEFT: Attack / Cannons & Mine Action Button -->
+    <div class="flex flex-col items-center pointer-events-auto lg:hidden">
+      <button id="btnMobileFire" type="button" class="relative w-14 h-14 rounded-full bg-gradient-to-br from-rose-600 via-rose-700 to-red-900 border-2 border-amber-400/80 active:scale-90 flex items-center justify-center shadow-2xl transition-all touch-manipulation cursor-pointer" title="Tembak Meriam / Ranjau Mesiu [Space]">
+        <svg class="w-7 h-7 text-amber-200 drop-shadow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="9"/>
+          <line x1="12" y1="3" x2="12" y2="7"/>
+          <line x1="12" y1="17" x2="12" y2="21"/>
+          <line x1="3" y1="12" x2="7" y2="12"/>
+          <line x1="17" y1="12" x2="21" y2="12"/>
+          <circle cx="12" cy="12" r="2" fill="currentColor"/>
         </svg>
+        <span class="absolute -bottom-1 text-[8px] font-cinzel font-black px-1.5 py-0.2 rounded-full bg-black/85 text-amber-300 border border-amber-500/50 shadow-md">SERANG</span>
+      </button>
+    </div>
+
+    <!-- 2. CENTER: Virtual Joystick Helm Wheel -->
+    <div class="flex flex-col items-center pointer-events-none">
+      <div id="joystickHint" class="text-[9px] text-amber-300 font-cinzel font-bold mb-1.5 bg-slate-950/80 px-2.5 py-0.5 rounded-full border border-amber-500/30 backdrop-blur-md shadow-md tracking-wider hidden lg:block">
+        KEMUDI BAHARI
+      </div>
+      <div id="joystickZone" class="pointer-events-auto relative w-28 h-28 sm:w-32 sm:h-32 rounded-full helm-base flex items-center justify-center touch-none shadow-2xl opacity-90 hover:opacity-100 transition-opacity">
+        <svg class="absolute inset-0 w-full h-full text-amber-500/35 pointer-events-none p-1" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="3">
+          <circle cx="50" cy="50" r="42" stroke-width="2" stroke-dasharray="3, 5" opacity="0.6"/>
+          <line x1="50" y1="2" x2="50" y2="98" />
+          <line x1="2" y1="50" x2="98" y2="50" />
+          <line x1="16" y1="16" x2="84" y2="84" />
+          <line x1="16" y1="84" x2="84" y2="16" />
+        </svg>
+        <div id="joystickKnob" class="absolute w-12 h-12 sm:w-14 sm:h-14 rounded-full helm-knob transform translate-x-0 translate-y-0 flex items-center justify-center shadow-lg">
+          <svg class="w-6 h-6 sm:w-7 sm:h-7 text-amber-200 pointer-events-none drop-shadow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="5" r="3"></circle>
+            <line x1="12" y1="8" x2="12" y2="22"></line>
+            <path d="M5 12H2a10 10 0 0 0 20 0h-3"></path>
+          </svg>
+        </div>
       </div>
     </div>
-  </div>
 
-  <!-- Mobile Ergonomic Touch Action Buttons (Bottom Right) -->
-  <div id="mobileActionButtons" class="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-20 flex flex-col items-end gap-2.5 pointer-events-auto lg:hidden">
-    <!-- Quick Repair Button (Active when damaged) -->
-    <button id="btnMobileRepair" type="button" class="w-11 h-11 rounded-full pirate-panel border border-emerald-500/50 hover:border-emerald-400 active:scale-90 flex items-center justify-center shadow-xl transition-all opacity-85 hover:opacity-100 touch-manipulation cursor-pointer" title="Reparasi Lambung (15 Koin)">
-      <svg class="w-5 h-5 text-emerald-400 drop-shadow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
-      </svg>
-    </button>
+    <!-- 3. RIGHT: Quick Repair Action Button -->
+    <div class="flex flex-col items-center pointer-events-auto lg:hidden">
+      <button id="btnMobileRepair" type="button" class="relative w-14 h-14 rounded-full pirate-panel border-2 border-emerald-500/60 hover:border-emerald-400 active:scale-90 flex items-center justify-center shadow-2xl transition-all opacity-85 hover:opacity-100 touch-manipulation cursor-pointer" title="Reparasi Lambung (15 Koin) [R]">
+        <svg class="w-6 h-6 text-emerald-400 drop-shadow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+        </svg>
+        <span class="absolute -bottom-1 text-[8px] font-cinzel font-black px-1.5 py-0.2 rounded-full bg-black/85 text-emerald-300 border border-emerald-500/50 shadow-md">REPAIR</span>
+      </button>
+    </div>
 
-    <!-- Main Combat Action: Fire Cannons / Drop Spiked Mine -->
-    <button id="btnMobileFire" type="button" class="relative w-14 h-14 rounded-full bg-gradient-to-br from-rose-600 via-rose-700 to-red-900 border-2 border-amber-400/80 active:scale-90 flex items-center justify-center shadow-2xl transition-all touch-manipulation cursor-pointer" title="Tembak Meriam / Ranjau Mesiu">
-      <svg class="w-7 h-7 text-amber-200 drop-shadow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="9"/>
-        <line x1="12" y1="3" x2="12" y2="7"/>
-        <line x1="12" y1="17" x2="12" y2="21"/>
-        <line x1="3" y1="12" x2="7" y2="12"/>
-        <line x1="17" y1="12" x2="21" y2="12"/>
-        <circle cx="12" cy="12" r="2" fill="currentColor"/>
-      </svg>
-      <span class="absolute -bottom-1 text-[8px] font-cinzel font-black px-1.5 py-0.2 rounded-full bg-black/80 text-amber-300 border border-amber-500/40">TEMBAK</span>
-    </button>
   </div>
 
   <!-- Modal: Kodex 4 Klan Laut & Lore -->

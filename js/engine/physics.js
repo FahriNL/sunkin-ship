@@ -769,14 +769,18 @@ function updateGame(dt) {
       sm.detonating = true;
     }
 
-    // Check proximity to Enemies
-    for (let j = 0; j < entities.enemies.length; j++) {
-      const e = entities.enemies[j];
-      if (e.clan === 'iron') continue; // Iron clan ships completely ignore spiked sea mines!
-      const dx = e.x - sm.x, dy = e.y - sm.y;
-      if (dx * dx + dy * dy < (e.radius + 25) * (e.radius + 25)) {
-        sm.detonating = true;
-        break;
+    // Check proximity to Enemies ONLY if within player's active screen area!
+    // Off-screen mines in the fog of war remain pristine until player arrives!
+    const activeMineRadius = isMobileDevice() ? 650 : 850;
+    if (distToPlayer <= activeMineRadius) {
+      for (let j = 0; j < entities.enemies.length; j++) {
+        const e = entities.enemies[j];
+        if (e.clan === 'iron') continue; // Iron clan ships completely ignore spiked sea mines!
+        const dx = e.x - sm.x, dy = e.y - sm.y;
+        if (dx * dx + dy * dy < (e.radius + 25) * (e.radius + 25)) {
+          sm.detonating = true;
+          break;
+        }
       }
     }
 
@@ -785,8 +789,10 @@ function updateGame(dt) {
       sm.flashTimer += dt * 16;
       if (sm.detonateTimer <= 0) {
         // DETONATE!
-        sound.playMineExplosion(sm.x, sm.y);
-        screenShake = Math.max(screenShake, 10);
+        if (distToPlayer <= activeMineRadius + 100) {
+          sound.playMineExplosion(sm.x, sm.y);
+          screenShake = Math.max(screenShake, 10);
+        }
 
         const diffCfg = (typeof getDifficultyConfig === 'function') ? getDifficultyConfig() : { playerDamageReceivedMult: 1 };
 
@@ -834,7 +840,8 @@ function updateGame(dt) {
     // 0. Proximity Sleep Culling: Skip heavy targeting and LOS math if beyond active combat radius
     const dxP = playerState.x - tw.x, dyP = playerState.y - tw.y;
     const distSqP = dxP * dxP + dyP * dyP;
-    if (distSqP > 1050 * 1050) {
+    const activeTowerRadius = isMobileDevice() ? 650 : 850;
+    if (distSqP > activeTowerRadius * activeTowerRadius) {
       tw.shootCooldown = Math.max(0, tw.shootCooldown - dt);
       if (tw.slamCooldown > 0) tw.slamCooldown -= dt;
       return;
@@ -1588,6 +1595,21 @@ function updateGame(dt) {
 
   // 2. Process AI behavior, stealth vision, and inter-clan rival battles
   entities.enemies.forEach(e => {
+    const distToPlayer = Math.hypot(playerState.x - e.x, playerState.y - e.y);
+    const simRadius = isMobileDevice() ? 780 : 1050;
+
+    // Dormant Off-Screen Optimization: If far off-screen, do lightweight drift and skip heavy collision/vision/combat
+    if (distToPlayer > simRadius) {
+      e.prevX = e.x;
+      e.prevY = e.y;
+      e.vx = (e.vx || 0) * 0.98;
+      e.vy = (e.vy || 0) * 0.98;
+      e.x += e.vx * dt;
+      e.y += e.vy * dt;
+      e.isMoving = false;
+      return;
+    }
+
     // Collision with Organic Islands
     WORLD_ISLANDS.forEach(isl => {
       const _dx = e.x - isl.x, _dy = e.y - isl.y;
@@ -1609,7 +1631,6 @@ function updateGame(dt) {
     const distMoved = Math.sqrt(dxMoved * dxMoved + dyMoved * dyMoved);
     e.isMoving = distMoved > 0.22;
     e.prevX = e.x;
-    const distToPlayer = Math.sqrt((playerState.x - e.x) * (playerState.x - e.x) + (playerState.y - e.y) * (playerState.y - e.y));
     const targetAngle = Math.atan2(playerState.y - e.y, playerState.x - e.x);
     const highLodDist = isMobileDevice() ? 850 : 1200;
 
@@ -1815,32 +1836,36 @@ function updateGame(dt) {
     highestDetectionLevel = Math.max(highestDetectionLevel, e.detectionMeter / 100);
 
     // Dynamic Inter-Clan Rivalry (Gold vs Iron vs Mist vs Blood)
+    // ONLY seek rivals if within player's active screen/encounter range!
+    // Off-screen ships stay on patrol and don't fight/destroy each other before player arrives!
     const _now = Date.now();
     let nearestRival = null;
     let minRivalDist = 550;
+    const activeCombatRadius = isMobileDevice() ? 650 : 850;
 
-    if (e._lastRivalryCheck && _now - e._lastRivalryCheck < 500) {
-      nearestRival = e._cachedRival;
-      minRivalDist = e._cachedRivalDist;
-    } else {
-      e._lastRivalryCheck = _now;
-      for (let k = 0; k < entities.enemies.length; k++) {
-        const other = entities.enemies[k];
-        if (other === e || (other.convoyId && other.convoyId === e.convoyId)) continue;
-        if (other.clan !== e.clan && other.hp > 0) {
-          const dx = other.x - e.x, dy = other.y - e.y;
-          if (dx * dx + dy * dy < minRivalDist * minRivalDist && hasLineOfSight(e.x, e.y, other.x, other.y)) {
-            minRivalDist = Math.sqrt(dx * dx + dy * dy);
-            nearestRival = other;
+    if (distToPlayer <= activeCombatRadius) {
+      if (e._lastRivalryCheck && _now - e._lastRivalryCheck < 500) {
+        nearestRival = e._cachedRival;
+        minRivalDist = e._cachedRivalDist;
+      } else {
+        e._lastRivalryCheck = _now;
+        for (let k = 0; k < entities.enemies.length; k++) {
+          const other = entities.enemies[k];
+          if (other === e || (other.convoyId && other.convoyId === e.convoyId)) continue;
+          if (other.clan !== e.clan && other.hp > 0) {
+            const dx = other.x - e.x, dy = other.y - e.y;
+            if (dx * dx + dy * dy < minRivalDist * minRivalDist && hasLineOfSight(e.x, e.y, other.x, other.y)) {
+              minRivalDist = Math.sqrt(dx * dx + dy * dy);
+              nearestRival = other;
+            }
           }
         }
+        e._cachedRival = nearestRival;
+        e._cachedRivalDist = minRivalDist;
       }
-      e._cachedRival = nearestRival;
-      e._cachedRivalDist = minRivalDist;
     }
 
     if (nearestRival) {
-      const distToPlayer = Math.sqrt((playerState.x - e.x) * (playerState.x - e.x) + (playerState.y - e.y) * (playerState.y - e.y));
       // Engage rival if unaware/searching, OR if currently targeting player but rival is closer/in immediate combat range
       const shouldEngageRival = (e.alertState === 'unaware' || e.alertState === 'searching') ||
                                 (e.targetEntity === playerState && (minRivalDist < distToPlayer * 1.25 || minRivalDist < 360)) ||

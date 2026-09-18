@@ -569,8 +569,8 @@ function startGameFromMenu() {
       pcControlsBar.classList.add('hidden');
     }
   }
-  const joystickWrapper = document.getElementById('joystickWrapper');
-  if (joystickWrapper) joystickWrapper.classList.remove('pointer-events-none');
+  const controlsDock = document.getElementById('mobileControlsDock') || document.getElementById('joystickWrapper');
+  if (controlsDock) controlsDock.classList.remove('pointer-events-none');
 
   showToast("Ekspedisi Dimulai! Berlayar menembus batas lautan.", "anchor");
   updateHUD();
@@ -596,8 +596,8 @@ function returnToMainMenu() {
   }
   const pcControlsBar = document.getElementById('pcControlsBar');
   if (pcControlsBar) pcControlsBar.classList.add('hidden');
-  const joystickWrapper = document.getElementById('joystickWrapper');
-  if (joystickWrapper) joystickWrapper.classList.add('pointer-events-none');
+  const controlsDock = document.getElementById('mobileControlsDock') || document.getElementById('joystickWrapper');
+  if (controlsDock) controlsDock.classList.add('pointer-events-none');
 }
 
 if (btnMainMenuPlay) btnMainMenuPlay.addEventListener('click', startGameFromMenu);

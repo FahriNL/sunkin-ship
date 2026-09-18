@@ -195,6 +195,7 @@ canvas {
 
 /* ==========================================================================
    MOBILE & TOUCH RESPONSIVE LAYOUT (NO OVERLAPS / SAFE AREA)
+   Build: v2.3.0 Differential Deployment Architecture
    ========================================================================== */
 
 /* Top HUD Safe Area */
@@ -214,38 +215,45 @@ canvas {
     display: none !important;
   }
 
-  #joystickWrapper {
-    left: max(0.85rem, env(safe-area-inset-left, 0.85rem)) !important;
-    right: auto !important;
+  #mobileControlsDock {
+    position: fixed !important;
     bottom: max(0.85rem, env(safe-area-inset-bottom, 0.85rem)) !important;
-    align-items: flex-start !important;
-  }
-
-  #mobileActionButtons {
-    right: max(0.85rem, env(safe-area-inset-right, 0.85rem)) !important;
-    bottom: max(0.85rem, env(safe-area-inset-bottom, 0.85rem)) !important;
+    left: 0 !important;
+    right: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0.85rem !important;
+    z-index: 20 !important;
+    pointer-events: none !important;
   }
 }
 
 /* PC / Desktop with Fine Pointer & Mouse */
 @media (min-width: 1024px) and (hover: hover) and (pointer: fine) {
-  #joystickWrapper {
+  #mobileControlsDock {
+    position: fixed !important;
     left: 1.5rem !important;
     right: auto !important;
     bottom: 1.5rem !important;
+    display: flex !important;
     align-items: flex-start !important;
+    justify-content: flex-start !important;
+    z-index: 20 !important;
+    pointer-events: none !important;
   }
-  
+
+  #btnMobileFire,
+  #btnMobileRepair {
+    display: none !important;
+  }
+
   #joystickHint {
     font-size: 9px;
   }
 
   #pcControlsBar {
     display: flex !important;
-  }
-
-  #mobileActionButtons {
-    display: none !important;
   }
 }
 
