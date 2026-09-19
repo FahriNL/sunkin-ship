@@ -221,12 +221,16 @@ const shipyardBloodText = document.getElementById('shipyardBloodText');
 const cutawayHoverLabel = document.getElementById('cutawayHoverLabel');
 const shipOverallTierTitle = document.getElementById('shipOverallTierTitle');
 const maxProgressLabel = document.getElementById('maxProgressLabel');
-const btnTabUpgradeCards = document.getElementById('btnTabUpgradeCards');
-const btnTabUpgradeCutaway = document.getElementById('btnTabUpgradeCutaway');
+const mobileUpgradeCinematicModal = document.getElementById('mobileUpgradeCinematicModal');
+const cinematicCutawayCanvas = document.getElementById('cinematicCutawayCanvas');
+const cinematicModuleTitle = document.getElementById('cinematicModuleTitle');
+const cinematicModuleLevel = document.getElementById('cinematicModuleLevel');
+const cinematicShipStatusTitle = document.getElementById('cinematicShipStatusTitle');
 const upgradeCardsContainer = document.getElementById('upgradeCardsContainer');
-const upgradeCutawayContainer = document.getElementById('upgradeCutawayContainer');
 
-let activeShipyardTab = 'cards';
+let cinematicAnimId = null;
+let cinematicStartTime = 0;
+let cinematicParticles = [];
 
 // 6 Functional Ship Compartments matching UPGRADE_CONFIG
 const SHIP_COMPARTMENTS = {
@@ -388,12 +392,15 @@ function findCompartmentAt(x, y) {
 }
 
 // Draw the master architectural cutaway schematic on the HTML5 canvas
+// Draw the master architectural cutaway schematic on the HTML5 canvas (PC View)
 function renderShipCutaway() {
   if (!shipCutawayCanvas || !upgradeModal || !upgradeModal.classList.contains('modal-active')) return;
+  if (isMobileDevice() || window.innerWidth < 1024) return;
   const ctx = shipCutawayCanvas.getContext('2d');
   if (!ctx) return;
 
   const rect = shipCutawayCanvas.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return;
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const targetW = Math.round(rect.width * dpr);
   const targetH = Math.round(rect.height * dpr);
@@ -409,8 +416,15 @@ function renderShipCutaway() {
   ctx.scale(scaleCanvasX, scaleCanvasY);
 
   cutawayState.animTime += 0.035;
-  const t = cutawayState.animTime;
+  drawMasterCutawayGraphic(ctx, cutawayState.animTime, cutawayState.selectedKey, 0, cutawayState.particles);
 
+  if (upgradeModal && upgradeModal.classList.contains('modal-active') && !isMobileDevice() && window.innerWidth >= 1024) {
+    cutawayAnimationId = requestAnimationFrame(renderShipCutaway);
+  }
+}
+
+// Master schematic rendering routine shared by PC cutaway & Android cinematic zoom animation
+function drawMasterCutawayGraphic(ctx, t, highlightKey = null, highlightPulse = 0, customParticles = null) {
   // 1. Deep Parchment / Ocean Blueprint Background
   const bgGrad = ctx.createLinearGradient(0, 0, 0, 440);
   bgGrad.addColorStop(0, '#060a12');
@@ -517,7 +531,7 @@ function renderShipCutaway() {
 
   for (const comp of Object.values(SHIP_COMPARTMENTS)) {
     const r = comp.rect;
-    const isSelected = (cutawayState.selectedKey === comp.key);
+    const isSelected = (comp.key === highlightKey || cutawayState.selectedKey === comp.key);
     const isHovered = (cutawayState.hoveredKey === comp.key);
     const lvl = (playerState.upgrades && playerState.upgrades[comp.key]) || 0;
     const conf = UPGRADE_CONFIG[comp.key];
@@ -535,10 +549,15 @@ function renderShipCutaway() {
     ctx.fillRect(r.x, r.y, r.w, r.h);
 
     // Deck plank floor and boundary joists
-    ctx.strokeStyle = isSelected 
-      ? '#fbbf24' 
-      : (isHovered ? '#f59e0b' : 'rgba(217, 119, 6, 0.45)');
-    ctx.lineWidth = isSelected ? 2.2 : (isHovered ? 1.8 : 1.2);
+    if (comp.key === highlightKey && highlightPulse > 0) {
+      ctx.strokeStyle = `rgba(251, 191, 36, ${Math.min(1, 0.7 + highlightPulse * 0.3)})`;
+      ctx.lineWidth = 3.5;
+    } else {
+      ctx.strokeStyle = isSelected 
+        ? '#fbbf24' 
+        : (isHovered ? '#f59e0b' : 'rgba(217, 119, 6, 0.45)');
+      ctx.lineWidth = isSelected ? 2.2 : (isHovered ? 1.8 : 1.2);
+    }
     ctx.strokeRect(r.x, r.y, r.w, r.h);
 
     // Subtle wooden ceiling & floor beam lines
@@ -882,25 +901,21 @@ function renderShipCutaway() {
   }
 
   // 5. Draw Floating Upgrade Sparks / Celebration Particles
-  for (let i = cutawayState.particles.length - 1; i >= 0; i--) {
-    const p = cutawayState.particles[i];
+  const particlesToDraw = customParticles || cutawayState.particles;
+  for (let i = particlesToDraw.length - 1; i >= 0; i--) {
+    const p = particlesToDraw[i];
     p.x += p.vx;
     p.y += p.vy;
     p.life -= 0.035;
     if (p.life <= 0) {
-      cutawayState.particles.splice(i, 1);
+      particlesToDraw.splice(i, 1);
       continue;
     }
-    const alpha = p.life / p.maxLife;
+    const alpha = Math.max(0, Math.min(1, p.life / p.maxLife));
     ctx.fillStyle = p.color.replace(')', `, ${alpha.toFixed(2)})`).replace('rgb', 'rgba');
     ctx.beginPath();
     ctx.arc(p.x, p.y, p.size * alpha, 0, Math.PI * 2);
     ctx.fill();
-  }
-
-  // Loop next frame
-  if (upgradeModal && upgradeModal.classList.contains('modal-active')) {
-    cutawayAnimationId = requestAnimationFrame(renderShipCutaway);
   }
 }
 
@@ -916,7 +931,7 @@ function stopCutawayLoop() {
   }
 }
 
-// Unified selector for ship compartments ensuring immediate visual synchronization
+// Unified selector for ship compartments ensuring immediate visual synchronization (PC View)
 function selectCompartment(key, shouldScroll = false) {
   if (!key || !SHIP_COMPARTMENTS[key]) return;
   const prevKey = cutawayState.selectedKey;
@@ -935,36 +950,143 @@ function selectCompartment(key, shouldScroll = false) {
   }
 }
 
-// Switch between Mobile Cards View and Architectural Cutaway View
-function switchShipyardTab(tab) {
-  activeShipyardTab = tab;
-  const isCards = (tab === 'cards');
+// Mobile/Android Cinematic Cutaway Zoom Animation Engine
+function showMobileUpgradeCinematic(comp, targetLevel) {
+  if (!mobileUpgradeCinematicModal || !cinematicCutawayCanvas || !comp) return;
 
-  if (btnTabUpgradeCards && btnTabUpgradeCutaway) {
-    if (isCards) {
-      btnTabUpgradeCards.className = 'flex-1 py-2 px-3 rounded-xl font-cinzel font-bold text-xs sm:text-sm transition flex items-center justify-center gap-1.5 cursor-pointer bg-amber-500 text-slate-950 shadow-md';
-      btnTabUpgradeCutaway.className = 'flex-1 py-2 px-3 rounded-xl font-cinzel font-bold text-xs sm:text-sm transition flex items-center justify-center gap-1.5 cursor-pointer text-slate-400 hover:text-amber-300';
-    } else {
-      btnTabUpgradeCutaway.className = 'flex-1 py-2 px-3 rounded-xl font-cinzel font-bold text-xs sm:text-sm transition flex items-center justify-center gap-1.5 cursor-pointer bg-amber-500 text-slate-950 shadow-md';
-      btnTabUpgradeCards.className = 'flex-1 py-2 px-3 rounded-xl font-cinzel font-bold text-xs sm:text-sm transition flex items-center justify-center gap-1.5 cursor-pointer text-slate-400 hover:text-amber-300';
+  if (cinematicAnimId) {
+    cancelAnimationFrame(cinematicAnimId);
+    cinematicAnimId = null;
+  }
+
+  // Set celebratory typography
+  if (cinematicModuleTitle) {
+    cinematicModuleTitle.innerText = comp.name.toUpperCase();
+  }
+  if (cinematicModuleLevel) {
+    cinematicModuleLevel.innerText = `Tingkat Baru: Lv.${targetLevel}`;
+  }
+  const tierInfo = getShipTier();
+  if (cinematicShipStatusTitle) {
+    cinematicShipStatusTitle.innerText = `ARMADA DIPERKUAT • ${tierInfo.name}`;
+    cinematicShipStatusTitle.style.color = tierInfo.color || '#e2e8f0';
+  }
+
+  // Populate 35 celebration particles in virtual coordinates within compartment rect
+  cinematicParticles = [];
+  const r = comp.rect;
+  for (let p = 0; p < 35; p++) {
+    cinematicParticles.push({
+      x: r.x + Math.random() * r.w,
+      y: r.y + Math.random() * r.h,
+      vx: (Math.random() - 0.5) * 5,
+      vy: (Math.random() - 0.5) * 5 - 1.5,
+      life: 1.0 + Math.random() * 0.8,
+      maxLife: 1.8,
+      color: Math.random() < 0.65 ? 'rgb(251, 191, 36)' : 'rgb(244, 63, 94)',
+      size: 3 + Math.random() * 3.5
+    });
+  }
+
+  // Display overlay
+  mobileUpgradeCinematicModal.classList.remove('hidden');
+
+  const targetCx = r.x + r.w / 2;
+  const targetCy = r.y + r.h / 2;
+  cinematicStartTime = performance.now();
+
+  function cinematicStep(now) {
+    const elapsed = (now - cinematicStartTime) / 1000;
+    if (elapsed >= 2.2) {
+      closeMobileUpgradeCinematic();
+      return;
     }
+
+    const ctx = cinematicCutawayCanvas.getContext('2d');
+    if (!ctx) return;
+
+    const rect = cinematicCutawayCanvas.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+
+    const dpr = Math.min(1.5, window.devicePixelRatio || 1);
+    const targetW = Math.round(rect.width * dpr);
+    const targetH = Math.round(rect.height * dpr);
+    if (cinematicCutawayCanvas.width !== targetW || cinematicCutawayCanvas.height !== targetH) {
+      cinematicCutawayCanvas.width = targetW;
+      cinematicCutawayCanvas.height = targetH;
+    }
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    // Dynamic camera interpolation:
+    // Phase 1 (0.0s - 0.7s): Zoomed in 2.4x at (targetCx, targetCy) with pulsing gold border
+    // Phase 2 (0.7s - 1.7s): Smooth cubic ease out to 1.0x at (440, 220)
+    // Phase 3 (1.7s - 2.2s): Full ship overview at 1.0x
+    let currentZoom = 2.4;
+    let currentCx = targetCx;
+    let currentCy = targetCy;
+    let pulse = 0;
+
+    if (elapsed < 0.7) {
+      currentZoom = 2.4;
+      currentCx = targetCx;
+      currentCy = targetCy;
+      pulse = Math.sin(elapsed * 12) * 0.5 + 0.5;
+    } else if (elapsed < 1.7) {
+      const t = (elapsed - 0.7) / 1.0;
+      // Smooth easeInOutCubic
+      const ease = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      currentZoom = 2.4 - (2.4 - 1.0) * ease;
+      currentCx = targetCx + (440 - targetCx) * ease;
+      currentCy = targetCy + (220 - targetCy) * ease;
+      pulse = Math.max(0, 1 - t);
+    } else {
+      currentZoom = 1.0;
+      currentCx = 440;
+      currentCy = 220;
+      pulse = 0;
+    }
+
+    const W = rect.width;
+    const H = rect.height;
+    const baseScale = Math.min(W / 880, H / 440);
+
+    ctx.save();
+    ctx.clearRect(0, 0, W, H);
+    ctx.translate(W / 2, H / 2);
+    ctx.scale(currentZoom * baseScale, currentZoom * baseScale);
+    ctx.translate(-currentCx, -currentCy);
+
+    drawMasterCutawayGraphic(ctx, elapsed * 2, comp.key, pulse, cinematicParticles);
+
+    ctx.restore();
+
+    cinematicAnimId = requestAnimationFrame(cinematicStep);
   }
 
-  if (upgradeCardsContainer) {
-    upgradeCardsContainer.classList.toggle('hidden', !isCards);
-  }
-  if (upgradeCutawayContainer) {
-    upgradeCutawayContainer.classList.toggle('hidden', isCards);
-  }
+  cinematicAnimId = requestAnimationFrame(cinematicStep);
+}
 
-  if (isCards) {
-    stopCutawayLoop();
-    renderUpgradeCardsView();
-  } else {
-    startCutawayLoop();
-    renderCompartmentChips();
-    renderCompartmentDetail(cutawayState.selectedKey);
+function closeMobileUpgradeCinematic() {
+  if (cinematicAnimId) {
+    cancelAnimationFrame(cinematicAnimId);
+    cinematicAnimId = null;
   }
+  cinematicParticles = [];
+  if (mobileUpgradeCinematicModal) {
+    mobileUpgradeCinematicModal.classList.add('hidden');
+  }
+}
+
+if (mobileUpgradeCinematicModal) {
+  mobileUpgradeCinematicModal.addEventListener('click', () => {
+    closeMobileUpgradeCinematic();
+  });
+}
+
+// Backwards compatibility stub for legacy shipyard tab references
+function switchShipyardTab(tab) {
+  // Tabs replaced by responsive layout: PC has dedicated cutaway; Android has direct cards.
 }
 
 // Render the 6 Touch-Friendly Mobile Upgrade Cards
@@ -1107,11 +1229,7 @@ function updateShipyardRepairButton() {
   }
 }
 
-// Attach Tab Switcher Listeners
-if (btnTabUpgradeCards) btnTabUpgradeCards.addEventListener('click', () => switchShipyardTab('cards'));
-if (btnTabUpgradeCutaway) btnTabUpgradeCutaway.addEventListener('click', () => switchShipyardTab('cutaway'));
-
-// Render the 6 Touch-Friendly Selector Chips underneath the canvas
+// Render the 6 Touch-Friendly Selector Chips underneath the canvas (PC View)
 function renderCompartmentChips() {
   if (!compartmentChipsBar) return;
   compartmentChipsBar.innerHTML = '';
@@ -1300,21 +1418,6 @@ function performCompartmentUpgrade(key) {
       playerState.hp = Math.min(newMaxHp, playerState.hp + 75);
     }
 
-    // Spawn 25 celebration sparkle particles around the upgraded compartment
-    const r = comp.rect;
-    for (let p = 0; p < 25; p++) {
-      cutawayState.particles.push({
-        x: r.x + Math.random() * r.w,
-        y: r.y + Math.random() * r.h,
-        vx: (Math.random() - 0.5) * 4,
-        vy: (Math.random() - 0.5) * 4 - 1.5,
-        life: 1.0,
-        maxLife: 1.0,
-        color: Math.random() < 0.6 ? 'rgb(251, 191, 36)' : 'rgb(244, 63, 94)',
-        size: 2.5 + Math.random() * 3.5
-      });
-    }
-
     if (typeof sound !== 'undefined' && typeof sound.playShipyardHammer === 'function') {
       sound.playShipyardHammer();
     } else {
@@ -1326,6 +1429,28 @@ function performCompartmentUpgrade(key) {
     // Re-render entire shipyard UI and detail card instantly in place!
     renderUpgradeUI();
     updateHUD();
+
+    // Platform-specific upgrade visual feedback:
+    // Android / Mobile (<1024px): Launch focused zoom cinematic sequence
+    // PC / Desktop (>=1024px): Spawn sparkle particles directly on the master cutaway canvas
+    const isMobile = isMobileDevice() || window.innerWidth < 1024;
+    if (isMobile) {
+      showMobileUpgradeCinematic(comp, playerState.upgrades[key]);
+    } else {
+      const r = comp.rect;
+      for (let p = 0; p < 25; p++) {
+        cutawayState.particles.push({
+          x: r.x + Math.random() * r.w,
+          y: r.y + Math.random() * r.h,
+          vx: (Math.random() - 0.5) * 4,
+          vy: (Math.random() - 0.5) * 4 - 1.5,
+          life: 1.0,
+          maxLife: 1.0,
+          color: Math.random() < 0.6 ? 'rgb(251, 191, 36)' : 'rgb(244, 63, 94)',
+          size: 2.5 + Math.random() * 3.5
+        });
+      }
+    }
   } else {
     showToast("Emas atau Esensi Darah Anda tidak mencukupi untuk peningkatan ini.", "alert");
   }
@@ -1415,13 +1540,14 @@ function openUpgradeModal() {
   closeLoreModal();
   closeHelpModal();
   closeMapModal();
-  switchShipyardTab(activeShipyardTab);
   renderUpgradeUI();
   upgradeModal.classList.remove('modal-enter', 'hidden');
   upgradeModal.classList.add('modal-active');
   isGamePaused = true;
-  if (activeShipyardTab === 'cutaway') {
+  if (!isMobileDevice() && window.innerWidth >= 1024) {
     startCutawayLoop();
+  } else {
+    stopCutawayLoop();
   }
 }
 
@@ -1432,6 +1558,7 @@ function closeUpgradeModal() {
   isGamePaused = false;
   lastTime = performance.now();
   stopCutawayLoop();
+  closeMobileUpgradeCinematic();
 }
 
 function toggleUpgradeModal() {

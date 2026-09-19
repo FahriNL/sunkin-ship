@@ -323,25 +323,8 @@
         <p id="shipyardLocationLabel" class="text-[10px] text-slate-400 truncate">Dermaga Berlabuh: Teluk Nusa Damai</p>
       </div>
 
-      <!-- Segmented Tab Switcher (Mobile First - Touch Friendly) -->
-      <div id="shipyardTabsBar" class="flex items-center gap-1.5 p-1 bg-slate-950/80 rounded-2xl border border-white/10 shrink-0 select-none my-1.5">
-        <button id="btnTabUpgradeCards" type="button" class="flex-1 py-2 px-3 rounded-xl font-cinzel font-bold text-xs sm:text-sm transition flex items-center justify-center gap-1.5 cursor-pointer bg-amber-500 text-slate-950 shadow-md">
-          <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-          <span>Daftar Peningkatan</span>
-        </button>
-        <button id="btnTabUpgradeCutaway" type="button" class="flex-1 py-2 px-3 rounded-xl font-cinzel font-bold text-xs sm:text-sm transition flex items-center justify-center gap-1.5 cursor-pointer text-slate-400 hover:text-amber-300">
-          <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 20a2.4 2.4 0 0 0 2 1 2.4 2.4 0 0 0 2-1 2.4 2.4 0 0 1 2-1 2.4 2.4 0 0 1 2 1 2.4 2.4 0 0 0 2 1 2.4 2.4 0 0 0 2-1 2.4 2.4 0 0 1 2-1 2.4 2.4 0 0 1 2 1 2.4 2.4 0 0 0 2 1 2.4 2.4 0 0 0 2-1"/><path d="M4 18 3 9l4 1 5-6 5 6 4-1-1 9"/><line x1="12" y1="4" x2="12" y2="18"/></svg>
-          <span>Bagan Anatomi</span>
-        </button>
-      </div>
-
-      <!-- VIEW 1: Mobile-First Responsive Cards View -->
-      <div id="upgradeCardsContainer" class="grid grid-cols-1 md:grid-cols-2 gap-2.5 overflow-y-auto flex-1 pr-1 py-1">
-        <!-- Dynamically populated 6 upgrade modules -->
-      </div>
-
-      <!-- VIEW 2: Interactive Cutaway Viewport (Hidden by default or toggled) -->
-      <div id="upgradeCutawayContainer" class="hidden flex-1 overflow-y-auto pr-1 py-1 space-y-2.5">
+      <!-- PC LAYOUT (Desktop >= 1024px): Original Interactive Cutaway + Detail Panel -->
+      <div id="pcShipyardContainer" class="hidden lg:flex flex-1 flex-col overflow-y-auto pr-1 py-1 space-y-2.5">
         <!-- Canvas Viewport for Ship Cross-Section Cutaway -->
         <div class="relative w-full aspect-[16/9] sm:aspect-[21/9] max-h-[35vh] sm:max-h-[40vh] bg-[#080d19] rounded-2xl border-2 border-amber-900/60 overflow-hidden shadow-2xl flex items-center justify-center select-none">
           <canvas id="shipCutawayCanvas" class="w-full h-full block cursor-pointer touch-none"></canvas>
@@ -353,7 +336,7 @@
           </div>
         </div>
 
-        <!-- Compartment Selector Quick Chips (Touch Friendly) -->
+        <!-- Compartment Selector Quick Chips -->
         <div id="compartmentChipsBar" class="flex items-center gap-1.5 overflow-x-auto py-0.5 px-0.5 select-none text-xs">
           <!-- Dynamically populated chips -->
         </div>
@@ -361,6 +344,13 @@
         <!-- Selected Compartment Detail & Upgrade Action Panel -->
         <div id="compartmentDetailPanel" class="bg-slate-950/85 rounded-2xl border border-amber-500/30 p-3 sm:p-4 shadow-lg flex flex-col gap-2">
           <!-- Dynamically populated detail card -->
+        </div>
+      </div>
+
+      <!-- ANDROID / MOBILE LAYOUT (< 1024px): Clean, Responsive Module Cards List -->
+      <div id="mobileShipyardContainer" class="flex lg:hidden flex-1 flex-col overflow-y-auto pr-1 py-1">
+        <div id="upgradeCardsContainer" class="grid grid-cols-1 gap-2.5">
+          <!-- Dynamically populated 6 upgrade modules -->
         </div>
       </div>
 
@@ -380,6 +370,36 @@
           <kbd class="kbd-badge bg-black/40 text-[9px] hidden sm:inline-block">R</kbd>
         </button>
       </div>
+    </div>
+  </div>
+
+  <!-- Modal: Cinematic Ship Upgrade Animation Overlay (Android Only) -->
+  <div id="mobileUpgradeCinematicModal" class="fixed inset-0 z-50 bg-black/95 backdrop-blur-md flex flex-col items-center justify-between p-3 sm:p-5 hidden select-none transition-opacity duration-300 pointer-events-auto cursor-pointer">
+    <!-- Top Header: Celebration Banner & Upgraded Compartment Name -->
+    <div class="flex flex-col items-center text-center mt-2 shrink-0 pointer-events-none">
+      <div class="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-amber-950/90 border border-amber-400/50 text-[10px] font-bold text-amber-300 uppercase tracking-widest shadow-lg">
+        <svg class="w-3.5 h-3.5 text-amber-400 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+        <span>PENINGKATAN SELESAI</span>
+      </div>
+      <h2 id="cinematicModuleTitle" class="font-cinzel text-lg sm:text-2xl font-black text-amber-300 mt-1 tracking-wide">
+        GELADAK MERIAM
+      </h2>
+      <p id="cinematicModuleLevel" class="font-mono text-xs sm:text-sm text-emerald-400 font-bold tracking-wide mt-0.5">
+        Tingkat Baru: Lv. 3
+      </p>
+    </div>
+
+    <!-- Center: Cinematic Canvas Viewport with Glow Border -->
+    <div class="relative w-full max-w-lg aspect-[16/9] sm:aspect-[21/9] max-h-[50vh] sm:max-h-[55vh] rounded-2xl border-2 border-amber-500/60 shadow-2xl overflow-hidden bg-[#060a12] my-auto flex items-center justify-center pointer-events-none">
+      <canvas id="cinematicCutawayCanvas" class="w-full h-full block"></canvas>
+    </div>
+
+    <!-- Bottom Footer: Overall Ship Status & Tap to Skip -->
+    <div class="flex flex-col items-center text-center mb-2 shrink-0 gap-1 pointer-events-none">
+      <div id="cinematicShipStatusTitle" class="text-xs sm:text-sm font-cinzel font-bold text-slate-200">
+        ARMADA DIPERKUAT • Sekoci Pemburu
+      </div>
+      <span class="text-[9.5px] text-slate-400 font-cinzel tracking-wider">Ketuk layar untuk menutup</span>
     </div>
   </div>
 
