@@ -967,9 +967,13 @@ function drawWorldIsland(ctx, isl) {
   } else if (isl.isConquered) {
     subtitle = `PULAU KEKUASAAN (TIER ${isl.tier || 4}) • TERLINDUNGI`;
     subColor = '#fde047';
+  } else if (isl.conquestActive || isl.isProvoked) {
+    const rem = (typeof entities !== 'undefined' && entities.towers) ? entities.towers.filter(t => t.islandId === isl.id).length : 0;
+    subtitle = `[PENAKLUKAN AKTIF] SISA BASTION: ${rem} • BANTUAN BERDATANGAN`;
+    subColor = '#ef4444';
   } else {
-    subtitle = `[TIER ${isl.tier || 4}] WILAYAH: ${CLAN_LORE[isl.clan]?.name || 'PIRATE'}`;
-    subColor = CLAN_LORE[isl.clan]?.badgeColor || '#fbbf24';
+    subtitle = `[TIER ${isl.tier || 4}] ${CLAN_LORE[isl.clan]?.name || 'WILAYAH NETRAL'} • DAMAI`;
+    subColor = '#94a3b8';
   }
   ctx.fillStyle = subColor;
   ctx.fillText(subtitle, 0, 8);
@@ -3044,6 +3048,250 @@ function drawFleshSpitter(ctx, tw) {
   ctx.restore();
 }
 
+// Render Viking Norse Defenses (Runestone Watchtower & Frost Ballista)
+function drawVikingDefense(ctx, tw) {
+  ctx.save();
+  ctx.translate(tw.x, tw.y);
+
+  // 1. Water shadow / rocky timber foundation
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+  ctx.beginPath();
+  ctx.arc(2, 3, tw.radius + 4, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 2. Chiseled granite rock base
+  ctx.fillStyle = '#334155';
+  ctx.strokeStyle = '#1e293b';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  const sides = 6;
+  for (let s = 0; s < sides; s++) {
+    const ang = (s / sides) * Math.PI * 2;
+    const px = Math.cos(ang) * (tw.radius + 2);
+    const py = Math.sin(ang) * (tw.radius + 2);
+    if (s === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // 3. Heavy Norse timber logs platform
+  ctx.fillStyle = '#451a03';
+  ctx.strokeStyle = '#78350f';
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.arc(0, 0, tw.radius - 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // 4. Glowing Runic Runestones
+  const runePulse = Math.sin(_now * 0.004) * 0.3 + 0.7;
+  ctx.strokeStyle = `rgba(56, 189, 248, ${runePulse})`;
+  ctx.lineWidth = 1.6;
+  for (let r = 0; r < 4; r++) {
+    const rAng = tw.baseAngle + (r * Math.PI / 2);
+    const rx = Math.cos(rAng) * (tw.radius - 8);
+    const ry = Math.sin(rAng) * (tw.radius - 8);
+    ctx.beginPath();
+    ctx.arc(rx, ry, 2.5, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // 5. Turret head rotating to aimAngle
+  ctx.save();
+  ctx.rotate(tw.aimAngle);
+
+  if (tw.defenseType === 'viking_ballista') {
+    // Massive Norse Frost Ballista
+    // Stock/Beam
+    ctx.fillStyle = '#78350f';
+    ctx.strokeStyle = '#451a03';
+    ctx.lineWidth = 1.5;
+    ctx.fillRect(-4, -18, 8, 26);
+    ctx.strokeRect(-4, -18, 8, 26);
+
+    // Ballista curved bow arms
+    ctx.strokeStyle = '#b45309';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-16, -6);
+    ctx.quadraticCurveTo(0, -14, 16, -6);
+    ctx.stroke();
+
+    // Bowstring
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(-16, -6);
+    ctx.lineTo(0, -2);
+    ctx.lineTo(16, -6);
+    ctx.stroke();
+
+    // Frost harpoon projectile loaded
+    ctx.fillStyle = '#38bdf8';
+    ctx.beginPath();
+    ctx.moveTo(0, -22);
+    ctx.lineTo(3, -12);
+    ctx.lineTo(-3, -12);
+    ctx.closePath();
+    ctx.fill();
+
+  } else {
+    // Viking Watchtower / Shield Paladin Turret
+    // Timber fortress post
+    ctx.fillStyle = '#292524';
+    ctx.fillRect(-7, -7, 14, 14);
+    ctx.strokeStyle = '#78350f';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(-7, -7, 14, 14);
+
+    // Norse round shields rimming the fortress
+    const shieldColors = ['#0284c7', '#dc2626', '#0284c7', '#d97706'];
+    for (let sh = 0; sh < 4; sh++) {
+      const shAng = (sh * Math.PI / 2);
+      ctx.fillStyle = shieldColors[sh];
+      ctx.beginPath();
+      ctx.arc(Math.cos(shAng) * 9, Math.sin(shAng) * 9, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#f8fafc';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+    }
+
+    // Heavy Norse battle axe ready on rack
+    ctx.fillStyle = '#78350f';
+    ctx.fillRect(-1, -14, 2, 10);
+    ctx.fillStyle = '#38bdf8';
+    ctx.beginPath();
+    ctx.arc(3, -11, 3, -Math.PI * 0.5, Math.PI * 0.5);
+    ctx.lineTo(0, -11);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  ctx.restore(); // Turret head
+
+  // 6. Health Bar
+  const barW = tw.radius * 1.6;
+  const barH = 3.5;
+  ctx.fillStyle = '#1e293b';
+  ctx.fillRect(-barW / 2, -tw.radius - 9, barW, barH);
+  ctx.fillStyle = '#38bdf8';
+  const hpRatio = Math.max(0, tw.hp / tw.maxHp);
+  ctx.fillRect(-barW / 2, -tw.radius - 9, barW * hpRatio, barH);
+
+  ctx.restore();
+}
+
+// Render Wokou Pirate Defenses (Rocket Pagoda & Fire Arrow Nest)
+function drawWokouDefense(ctx, tw) {
+  ctx.save();
+  ctx.translate(tw.x, tw.y);
+
+  // 1. Water shadow
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+  ctx.beginPath();
+  ctx.arc(2, 3, tw.radius + 3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 2. Stone & timber foundation
+  ctx.fillStyle = '#1c1917';
+  ctx.strokeStyle = '#b91c1c';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(0, 0, tw.radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // 3. Pagoda deck platform (Vermilion lacquer)
+  ctx.fillStyle = '#7f1d1d';
+  ctx.beginPath();
+  ctx.arc(0, 0, tw.radius - 3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 4. Swept Pagoda Eaves (4 swept corners)
+  ctx.fillStyle = '#1e293b';
+  ctx.strokeStyle = '#facc15';
+  ctx.lineWidth = 1.2;
+  for (let c = 0; c < 4; c++) {
+    const cAng = tw.baseAngle + (c * Math.PI / 2);
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(cAng - 0.2) * (tw.radius - 2), Math.sin(cAng - 0.2) * (tw.radius - 2));
+    ctx.lineTo(Math.cos(cAng) * (tw.radius + 6), Math.sin(cAng) * (tw.radius + 6));
+    ctx.lineTo(Math.cos(cAng + 0.2) * (tw.radius - 2), Math.sin(cAng + 0.2) * (tw.radius - 2));
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  // 5. Turret head rotating to aimAngle
+  ctx.save();
+  ctx.rotate(tw.aimAngle);
+
+  if (tw.defenseType === 'wokou_pagoda') {
+    // Pagoda Tower Top & Multi-tube Rocket Battery
+    ctx.fillStyle = '#991b1b';
+    ctx.fillRect(-6, -6, 12, 12);
+    ctx.strokeStyle = '#f59e0b';
+    ctx.lineWidth = 1.4;
+    ctx.strokeRect(-6, -6, 12, 12);
+
+    // 3 Rocket launcher tubes
+    ctx.fillStyle = '#78350f';
+    ctx.strokeStyle = '#facc15';
+    ctx.lineWidth = 1;
+    [-4, 0, 4].forEach(offset => {
+      ctx.fillRect(offset - 1.2, -18, 2.4, 14);
+      ctx.strokeRect(offset - 1.2, -18, 2.4, 14);
+      // Fiery rocket tip
+      ctx.fillStyle = '#ef4444';
+      ctx.beginPath();
+      ctx.arc(offset, -19, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#78350f';
+    });
+
+  } else {
+    // Wokou Rocket Nest (Bamboo arrow battery)
+    ctx.fillStyle = '#451a03';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 8, 6, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Bamboo rack
+    ctx.strokeStyle = '#ca8a04';
+    ctx.lineWidth = 1.8;
+    [-3, 3].forEach(offset => {
+      ctx.beginPath();
+      ctx.moveTo(offset, 4);
+      ctx.lineTo(offset, -14);
+      ctx.stroke();
+      // Rocket arrow warhead
+      ctx.fillStyle = '#dc2626';
+      ctx.beginPath();
+      ctx.moveTo(offset, -17);
+      ctx.lineTo(offset + 2, -13);
+      ctx.lineTo(offset - 2, -13);
+      ctx.closePath();
+      ctx.fill();
+    });
+  }
+
+  ctx.restore(); // Turret head
+
+  // 6. Health Bar
+  const barW = tw.radius * 1.6;
+  const barH = 3.5;
+  ctx.fillStyle = '#1e293b';
+  ctx.fillRect(-barW / 2, -tw.radius - 9, barW, barH);
+  ctx.fillStyle = '#ef4444';
+  const hpRatio = Math.max(0, tw.hp / tw.maxHp);
+  ctx.fillRect(-barW / 2, -tw.radius - 9, barW * hpRatio, barH);
+
+  ctx.restore();
+}
+
 // Master Dispatcher for Island Defenses
 function drawIslandDefense(ctx, tw) {
   if (tw.defenseType === 'tentacle') {
@@ -3058,6 +3306,10 @@ function drawIslandDefense(ctx, tw) {
     drawSwivelOutpost(ctx, tw);
   } else if (tw.defenseType === 'skull_pylon') {
     drawSkullPylon(ctx, tw);
+  } else if (tw.defenseType === 'viking_ballista' || tw.defenseType === 'viking_watchtower') {
+    drawVikingDefense(ctx, tw);
+  } else if (tw.defenseType === 'wokou_pagoda' || tw.defenseType === 'wokou_rocket_nest') {
+    drawWokouDefense(ctx, tw);
   } else if (tw.defenseType === 'cannon_bastion' || tw.defenseType === 'haven_bastion') {
     drawCannonBastion(ctx, tw);
   } else {
@@ -3645,6 +3897,51 @@ function render() {
       ctx.strokeRect(-2, 0, 4, 7);
 
       ctx.restore();
+    } else if (loot.type === 'chest') {
+      ctx.save();
+      ctx.translate(loot.x, loot.y);
+      const bob = Math.sin(_now * 0.0035 + (loot.bobOffset || 0)) * 2.5;
+      ctx.translate(0, bob);
+
+      // Chest shadow
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
+      ctx.beginPath();
+      ctx.ellipse(1, 6, 9, 4.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Ornate Batavia Mahogany Chest Box
+      ctx.fillStyle = '#78350f';
+      ctx.strokeStyle = '#451a03';
+      ctx.lineWidth = 1.3;
+      ctx.fillRect(-7.5, -4, 15, 9);
+      ctx.strokeRect(-7.5, -4, 15, 9);
+
+      // Domed Rounded Lid
+      ctx.fillStyle = '#9a3412';
+      ctx.beginPath();
+      ctx.ellipse(0, -4, 7.5, 3.8, 0, Math.PI, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Gold Brass Strips
+      ctx.fillStyle = '#f59e0b';
+      ctx.fillRect(-5.5, -7.5, 2.2, 12.5);
+      ctx.fillRect(3.3, -7.5, 2.2, 12.5);
+
+      // Golden Lock Clasp
+      ctx.fillStyle = '#fde047';
+      ctx.beginPath();
+      ctx.arc(0, 0, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Shimmering Golden Sparkle
+      const sparkle = (Math.sin(_now * 0.006 + (loot.bobOffset || 0)) + 1) * 0.5;
+      ctx.fillStyle = `rgba(254, 240, 138, ${0.4 + sparkle * 0.6})`;
+      ctx.beginPath();
+      ctx.arc(4.5, -5.5, 1.2 + sparkle * 1.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
     } else {
       ctx.fillStyle = loot.type === 'repair' ? '#b45309' : '#fbbf24';
       ctx.beginPath();
@@ -3917,26 +4214,44 @@ function render() {
       ctx.lineWidth = 1;
       ctx.stroke();
     } else if (p.type === 'frost_axe') {
-      // Spinning Norse Frost Battleaxe
-      const spin = (p.angle || 0) + (_now * 0.02);
+      // Spinning Norse Frost Throwing Battleaxe (Compact & High-RPM)
+      const spin = (p.angle || 0) + (p.spinAngle !== undefined ? p.spinAngle : (_now * 0.025));
       ctx.rotate(spin);
-      ctx.fillStyle = '#78350f';
-      ctx.fillRect(-1.5, -9, 3, 18);
+
+      // Compact Ash Wood Handle (10px long, 1.8px wide)
+      ctx.fillStyle = '#451a03';
+      ctx.fillRect(-0.9, -5, 1.8, 10);
+
+      // Leather Grip Wrap
+      ctx.fillStyle = '#b45309';
+      ctx.fillRect(-1.1, 0, 2.2, 2.8);
+
+      // Norse Bearded Steel Blades (Compact 3.0px crescent)
+      ctx.fillStyle = '#cbd5e1';
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 0.9;
+
+      // Right Blade
+      ctx.beginPath();
+      ctx.arc(3.6, -2.6, 3.0, -Math.PI * 0.5, Math.PI * 0.5);
+      ctx.lineTo(0, -2.6);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Left Blade
+      ctx.beginPath();
+      ctx.arc(-3.6, -2.6, 3.0, Math.PI * 0.5, -Math.PI * 0.5);
+      ctx.lineTo(0, -2.6);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Center Runic Frost Core
       ctx.fillStyle = '#38bdf8';
-      ctx.strokeStyle = '#f8fafc';
-      ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.arc(6, -4, 6, -Math.PI * 0.5, Math.PI * 0.5);
-      ctx.lineTo(0, -4);
-      ctx.closePath();
+      ctx.arc(0, -2.6, 1.2, 0, Math.PI * 2);
       ctx.fill();
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(-6, -4, 6, Math.PI * 0.5, -Math.PI * 0.5);
-      ctx.lineTo(0, -4);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
 
     } else if (p.type === 'rocket_arrow') {
       // Wokou Firework Rocket Arrow

@@ -690,6 +690,136 @@ function spawnWorldEntities() {
   }
 }
 
+// Island Provocation & Conquest Reinforcements System
+function isIslandProvoked(islandId) {
+  if (!islandId) return false;
+  const isl = WORLD_ISLANDS.find(i => i.id === islandId);
+  return isl ? Boolean(isl.isProvoked || isl.clan === 'blood') : false;
+}
+if (typeof window !== 'undefined') window.isIslandProvoked = isIslandProvoked;
+
+function triggerIslandProvocation(islandOrId) {
+  let isl = null;
+  if (typeof islandOrId === 'string') {
+    isl = WORLD_ISLANDS.find(i => i.id === islandOrId);
+  } else if (islandOrId && islandOrId.id) {
+    isl = islandOrId;
+  }
+  if (!isl || isl.isConquered || isl.isShopIsland || isl.isHomePort) return;
+  if (isl.isProvoked && isl.conquestActive) return;
+
+  isl.isProvoked = true;
+  isl.conquestActive = true;
+
+  const tier = isl.tier || 4;
+  const cfg = (typeof CONQUEST_REINFORCEMENT_CONFIG !== 'undefined')
+    ? (CONQUEST_REINFORCEMENT_CONFIG[tier] || CONQUEST_REINFORCEMENT_CONFIG[4])
+    : { totalWaves: 1, waveInterval: 14.0, shipsPerWave: [2], tiers: [4], arrivalNotice: "Pasukan perlindungan pulau datang!" };
+
+  isl.reinforcementWavesLeft = cfg.totalWaves;
+  isl.reinforcementWaveCurrent = 0;
+  isl.reinforcementTimer = 5.0; // Gelombang pertama tiba 5 detik setelah terprovokasi
+
+  if (typeof sound !== 'undefined') {
+    if (isl.clan === 'viking' && typeof sound.playHorn === 'function') {
+      sound.playHorn();
+    } else if (typeof sound.playAlertHorn === 'function') {
+      sound.playAlertHorn();
+    }
+  }
+
+  showToast(`PROVOKASI: Pertahanan ${isl.name} membalas serangan! Bantuan segera tiba!`, "alert");
+  addFloatingText("PERTAHANAN AKTIF!", isl.x, isl.y - 30, '#ef4444', true);
+
+  // Waspadakan seluruh kapal patroli yang bertugas di pulau ini
+  entities.enemies.forEach(e => {
+    if (e.homeIslandId === isl.id) {
+      e.alertState = 'alerted';
+      e.targetEntity = playerState;
+      e.detectionMeter = 100;
+    }
+  });
+}
+if (typeof window !== 'undefined') window.triggerIslandProvocation = triggerIslandProvocation;
+
+// Update gelombang bala bantuan pulau saat penaklukan berlangsung
+function updateIslandConquestReinforcements(dt) {
+  for (let i = 0; i < WORLD_ISLANDS.length; i++) {
+    const isl = WORLD_ISLANDS[i];
+    if (!isl.conquestActive || isl.isConquered || (isl.reinforcementWavesLeft || 0) <= 0) continue;
+
+    const dx = playerState.x - isl.x;
+    const dy = playerState.y - isl.y;
+    const distSq = dx * dx + dy * dy;
+    if (distSq > 1600 * 1600) continue; // Hanya hitung jika pemain berada di teater perairan pulau
+
+    isl.reinforcementTimer -= dt;
+    if (isl.reinforcementTimer <= 0) {
+      isl.reinforcementWaveCurrent++;
+      isl.reinforcementWavesLeft--;
+
+      const tier = isl.tier || 4;
+      const cfg = (typeof CONQUEST_REINFORCEMENT_CONFIG !== 'undefined')
+        ? (CONQUEST_REINFORCEMENT_CONFIG[tier] || CONQUEST_REINFORCEMENT_CONFIG[4])
+        : { totalWaves: 1, waveInterval: 14.0, shipsPerWave: [2], tiers: [4], arrivalNotice: "Pasukan bala bantuan merapat!" };
+
+      isl.reinforcementTimer = cfg.waveInterval || 14.0;
+
+      const waveIndex = isl.reinforcementWaveCurrent - 1;
+      const count = (cfg.shipsPerWave && cfg.shipsPerWave[waveIndex]) ? cfg.shipsPerWave[waveIndex] : 2;
+      const availableTiers = cfg.tiers || [tier];
+
+      // Kapal bantuan berlayar dari perairan luar pulau
+      const spawnBaseAngle = Math.atan2(playerState.y - isl.y, playerState.x - isl.x) + Math.PI;
+      const spawnDist = (isl.radius || 250) + 400;
+
+      for (let s = 0; s < count; s++) {
+        const ang = spawnBaseAngle + (s - (count - 1) / 2) * 0.45;
+        const sx = isl.x + Math.cos(ang) * spawnDist;
+        const sy = isl.y + Math.sin(ang) * spawnDist;
+        const sTier = availableTiers[s % availableTiers.length] || tier;
+
+        const headingToPlayer = Math.atan2(playerState.y - sy, playerState.x - sx);
+        const reinforceShip = createEnemyEntity(isl.clan || 'batavia', sTier, sx, sy, headingToPlayer, {
+          formationType: 'solitary',
+          formationRole: 'guard',
+          homeIslandId: isl.id
+        });
+
+        reinforceShip.alertState = 'alerted';
+        reinforceShip.targetEntity = playerState;
+        reinforceShip.detectionMeter = 100;
+        reinforceShip.isReinforcement = true;
+
+        if (isl.clan === 'viking') reinforceShip.hasWarHorn = true;
+        if (isl.clan === 'wokou') reinforceShip.hasSmokeScreen = true;
+        if (isl.clan === 'iron') reinforceShip.hasSteamRam = true;
+        if (isl.clan === 'batavia' && s === 0) reinforceShip.isTreasuryShip = true;
+
+        entities.enemies.push(reinforceShip);
+
+        // Riak air saat armada bantuan merapat
+        entities.seaRipples.push({
+          x: sx,
+          y: sy,
+          radius: 8,
+          maxRadius: 36,
+          alpha: 0.7,
+          color: 'rgba(255, 255, 255, '
+        });
+      }
+
+      if (typeof sound !== 'undefined') {
+        if (isl.clan === 'viking' && typeof sound.playHorn === 'function') sound.playHorn();
+        else if (typeof sound.playAlertHorn === 'function') sound.playAlertHorn();
+      }
+
+      showToast(`${cfg.arrivalNotice} (Gelombang ${isl.reinforcementWaveCurrent}/${cfg.totalWaves})`, "alert");
+      addFloatingText(`BANTUAN GELOMBANG ${isl.reinforcementWaveCurrent}!`, isl.x, isl.y - 45, '#ef4444', true);
+    }
+  }
+}
+
 // Destroy an Island Tower/Defense & Check if Island is fully Conquered
 function destroyTowerAndCheckConquer(tw, tIndex) {
   if (tIndex !== undefined && tIndex >= 0 && tIndex < entities.towers.length) {
@@ -762,30 +892,26 @@ function destroyTowerAndCheckConquer(tw, tIndex) {
     const isl = WORLD_ISLANDS.find(i => i.id === tw.islandId);
     if (isl && !isl.isConquered) {
       isl.isConquered = true;
+      isl.conquestActive = false;
+      isl.reinforcementWavesLeft = 0;
       if (!playerState.conqueredIslands.includes(isl.id)) {
         playerState.conqueredIslands.push(isl.id);
       }
 
-      // Immediately remove and surrender all defending patrol guards stationed at this conquered island
-      for (let i = entities.enemies.length - 1; i >= 0; i--) {
+      // Pasukan penjaga yang bertahan tidak tenggelam, melainkan langsung melarikan diri ("KABUR!") ke laut lepas
+      for (let i = 0; i < entities.enemies.length; i++) {
         const guard = entities.enemies[i];
         if (guard.homeIslandId === isl.id) {
-          createCombatDebris(guard.x, guard.y, guard.tier);
-          entities.sinkingShips.push({
-            x: guard.x,
-            y: guard.y,
-            angle: guard.angle,
-            clan: guard.clan,
-            tier: guard.tier,
-            name: guard.name,
-            isMonster: guard.isMonster,
-            rotSpeed: (Math.random() - 0.5) * 1.8,
-            progress: 0,
-            maxLife: 2.0,
-            life: 2.0
-          });
-          addFloatingText("MENYERAH!", guard.x, guard.y - 20, '#fde047', true);
-          entities.enemies.splice(i, 1);
+          guard.state = 'fleeing';
+          guard.alertState = 'unaware';
+          guard.targetEntity = null;
+          guard.target = null;
+          guard.isAggro = false;
+          guard.fleeTimer = 30.0;
+          const awayAngle = Math.atan2(guard.y - isl.y, guard.x - isl.x);
+          guard.angle = awayAngle;
+          guard.speed = (guard.baseSpeed || guard.speed || 80) * 1.5;
+          addFloatingText("KABUR!", guard.x, guard.y - 20, '#38bdf8', true);
         }
       }
 
@@ -1340,6 +1466,7 @@ function updateWeatherSystem(dt) {
 function updateGame(dt) {
   rebuildSpatialGrid();
   updateWeatherSystem(dt);
+  updateIslandConquestReinforcements(dt);
   const currentMaxHp = getStatValue('hull', playerState.upgrades.hull);
   const moveSpeed = getStatValue('speed', playerState.upgrades.speed);
 
@@ -1604,6 +1731,8 @@ function updateGame(dt) {
     for (let t = 0; t < entities.towers.length; t++) {
       const tw = entities.towers[t];
       if (tw.clan === 'neutral' || tw.defenseType === 'haven_bastion') continue;
+      // Jangan tembak pertahanan pulau yang damai kecuali sudah terprovokasi
+      if (tw.clan !== 'blood' && !isIslandProvoked(tw.islandId)) continue;
 
       const dx = tw.x - playerState.x, dy = tw.y - playerState.y;
       const dSq = dx * dx + dy * dy;
@@ -1625,6 +1754,7 @@ function updateGame(dt) {
     if (!primaryTarget) {
       for (let e = 0; e < entities.enemies.length; e++) {
         const en = entities.enemies[e];
+        if (en.state === 'fleeing') continue; // Abaikan musuh yang sedang kabur
         const dx = en.x - playerState.x, dy = en.y - playerState.y;
         const dSq = dx * dx + dy * dy;
         if (dSq > 330 * 330) continue;
@@ -1648,6 +1778,7 @@ function updateGame(dt) {
   // Rear Defense / Stern Chaser check
   if (playerState.upgrades.rearDefense > 0) {
     const checkRear = (e) => {
+      if (e.state === 'fleeing') return false;
       const dx = e.x - playerState.x, dy = e.y - playerState.y;
       if (dx * dx + dy * dy > 240 * 240) return false;
       if (!hasLineOfSight(playerState.x, playerState.y, e.x, e.y)) return false;
@@ -1657,7 +1788,7 @@ function updateGame(dt) {
       return relativeAngle >= 2.35;
     };
 
-    const isHostileTowerRear = (tw) => tw.clan !== 'neutral' && tw.defenseType !== 'haven_bastion' && checkRear(tw);
+    const isHostileTowerRear = (tw) => tw.clan !== 'neutral' && tw.defenseType !== 'haven_bastion' && (tw.clan === 'blood' || isIslandProvoked(tw.islandId)) && checkRear(tw);
     const targetInRear = entities.enemies.some(checkRear) || entities.towers.some(isHostileTowerRear);
 
     if (targetInRear) {
@@ -1926,8 +2057,9 @@ function updateGame(dt) {
         if (victim) target = victim;
       }
     } else {
-      // Clan Bastions & Turrets (Gold, Iron, Mist)
-      if (distSqP < maxRange * maxRange && hasLineOfSight(tw.x, tw.y, playerState.x, playerState.y)) {
+      // Clan Bastions & Turrets (Gold, Iron, Mist, Viking, Wokou)
+      const islProvoked = tw.clan === 'blood' || isIslandProvoked(tw.islandId);
+      if (islProvoked && distSqP < maxRange * maxRange && hasLineOfSight(tw.x, tw.y, playerState.x, playerState.y)) {
         target = playerState;
       } else {
         const rival = entities.enemies.find(e => e.clan !== tw.clan && ((e.x - tw.x) * (e.x - tw.x) + (e.y - tw.y) * (e.y - tw.y) < (maxRange - 20) * (maxRange - 20)));
@@ -2171,6 +2303,47 @@ function updateGame(dt) {
             isPlayer: false,
             life: 1.25
           });
+        } else if (tw.defenseType === 'viking_ballista' || tw.defenseType === 'viking_watchtower') {
+          // Viking Norse Ballista & Watchtower (Spinning Frost Axes)
+          tw.shootCooldown = (tw.defenseType === 'viking_ballista' ? 2.5 : 1.9) * reloadMult;
+          if (typeof sound !== 'undefined' && typeof sound.playHit === 'function') sound.playHit(tw.x, tw.y);
+          entities.projectiles.push({
+            type: 'frost_axe',
+            sourceClan: 'viking',
+            x: tw.x + Math.cos(fireAngle) * 20,
+            y: tw.y + Math.sin(fireAngle) * 20,
+            vx: Math.cos(fireAngle) * 6.2,
+            vy: Math.sin(fireAngle) * 6.2,
+            angle: fireAngle,
+            spinAngle: 0,
+            spinSpeed: 24.0,
+            radius: 4.5,
+            damage: tw.damage,
+            isPlayer: false,
+            life: 1.4,
+            slowDuration: 2.2
+          });
+        } else if (tw.defenseType === 'wokou_pagoda' || tw.defenseType === 'wokou_rocket_nest') {
+          // Wokou Pagoda & Rocket Nest (Multi-Rocket Salvo)
+          tw.shootCooldown = (tw.defenseType === 'wokou_pagoda' ? 2.4 : 1.8) * reloadMult;
+          if (typeof sound !== 'undefined' && typeof sound.playRocketBarrage === 'function') sound.playRocketBarrage(tw.x, tw.y);
+          const rCount = tw.defenseType === 'wokou_pagoda' ? 3 : 2;
+          for (let r = 0; r < rCount; r++) {
+            const spread = (r - (rCount - 1) / 2) * 0.14;
+            entities.projectiles.push({
+              type: 'rocket_arrow',
+              sourceClan: 'wokou',
+              x: tw.x + Math.cos(fireAngle + spread) * 20,
+              y: tw.y + Math.sin(fireAngle + spread) * 20,
+              vx: Math.cos(fireAngle + spread) * 7.5,
+              vy: Math.sin(fireAngle + spread) * 7.5,
+              angle: fireAngle + spread,
+              radius: 4,
+              damage: Math.round(tw.damage * (tw.defenseType === 'wokou_pagoda' ? 0.5 : 0.65)),
+              isPlayer: false,
+              life: 1.3
+            });
+          }
         } else {
           // Cannon Bastion & Haven Bastion
           tw.shootCooldown = (2.3 + Math.random() * 0.4) * reloadMult;
@@ -2248,6 +2421,21 @@ function updateGame(dt) {
       }
     }
 
+    if (p.type === 'frost_axe') {
+      p.spinAngle = (p.spinAngle || 0) + (p.spinSpeed || 24.0) * dt;
+      if (Math.random() < 0.4) {
+        entities.particles.push({
+          x: p.x + (Math.random() - 0.5) * 4,
+          y: p.y + (Math.random() - 0.5) * 4,
+          vx: -p.vx * 0.12 + (Math.random() - 0.5) * 0.6,
+          vy: -p.vy * 0.12 + (Math.random() - 0.5) * 0.6,
+          life: 0.22,
+          color: Math.random() < 0.5 ? '#38bdf8' : '#e0f2fe',
+          size: 1.8
+        });
+      }
+    }
+
     p.x += p.vx;
     p.y += p.vy;
     p.life -= dt;
@@ -2261,6 +2449,9 @@ function updateGame(dt) {
 
         const hitRadius = tw.radius + 32;
         if (((p.x - tw.x) * (p.x - tw.x) + (p.y - tw.y) * (p.y - tw.y) < hitRadius * hitRadius)) {
+          if (tw.islandId && !isIslandProvoked(tw.islandId)) {
+            triggerIslandProvocation(tw.islandId);
+          }
           tw.hp -= p.damage;
           p.life = 0;
 
@@ -2431,6 +2622,34 @@ function updateGame(dt) {
           e.lastKnownPos.y = playerState.y;
           e.targetEntity = playerState;
 
+          // Menyerang penjaga pulau langsung memprovokasi pertahanan pulau tersebut
+          if (e.homeIslandId && !isIslandProvoked(e.homeIslandId)) {
+            triggerIslandProvocation(e.homeIslandId);
+          }
+
+          // Tabir asap Wokou jika HP menipis di bawah 45%
+          if (e.clan === 'wokou' && e.hasSmokeScreen && !e.hasPoppedSmoke && e.hp > 0 && e.hp < (e.maxHp || 100) * 0.45) {
+            e.hasPoppedSmoke = true;
+            if (typeof sound !== 'undefined' && typeof sound.playSteamHiss === 'function') sound.playSteamHiss();
+            showToast(`${e.name} Melepaskan Tabir Asap Pelarian!`, "info");
+            addFloatingText("TABIR ASAP!", e.x, e.y - 20, '#94a3b8', true);
+            for (let s = 0; s < 16; s++) {
+              const sAng = Math.random() * Math.PI * 2;
+              const sSpd = 1.0 + Math.random() * 3.5;
+              entities.particles.push({
+                x: e.x + (Math.random() - 0.5) * 16,
+                y: e.y + (Math.random() - 0.5) * 16,
+                vx: Math.cos(sAng) * sSpd,
+                vy: Math.sin(sAng) * sSpd,
+                life: 1.2,
+                maxLife: 1.2,
+                size: 7 + Math.random() * 7,
+                color: 'rgba(203, 213, 225, 0.7)'
+              });
+            }
+            e.speed = (e.baseSpeed || e.speed || 80) * 1.35;
+          }
+
           if (e.hp <= 0) {
             playerState.kills++;
             screenShake = Math.max(screenShake, e.tier >= 3 ? 10 : 4);
@@ -2463,6 +2682,18 @@ function updateGame(dt) {
             }
             sound.playCoin();
             createCombatDebris(e.x, e.y, e.tier);
+
+            // Drop peti emas terapung khusus kapal kas kasir/treasury Batavia
+            if (e.isTreasuryShip || (e.clan === 'batavia' && (e.formationRole === 'treasury' || e.tier >= 3))) {
+              entities.floatingLoots.push({
+                x: e.x,
+                y: e.y,
+                type: 'chest',
+                value: Math.floor(180 + Math.random() * 120),
+                bobOffset: Math.random() * 10
+              });
+              showToast("Peti Emas Batavia terapung di laut!", "gold");
+            }
 
             // Transition to Sinking Sequence
             entities.sinkingShips.push({
@@ -2682,6 +2913,17 @@ function updateGame(dt) {
       return;
     }
 
+    // Fleeing behavior: musuh yang melarikan diri (setelah pulau takluk) berlayar menjauh dan tidak menyerang
+    if (e.state === 'fleeing') {
+      e.fleeTimer = (e.fleeTimer || 30.0) - dt;
+      e.x += Math.cos(e.angle) * (e.speed * dt);
+      e.y += Math.sin(e.angle) * (e.speed * dt);
+      if (Math.random() < 0.04 * dt * 60) {
+        addFloatingText("KABUR!", e.x, e.y - 18, '#38bdf8', false);
+      }
+      return;
+    }
+
     // Collision with Organic Islands
     WORLD_ISLANDS.forEach(isl => {
       const _dx = e.x - isl.x, _dy = e.y - isl.y;
@@ -2755,8 +2997,11 @@ function updateGame(dt) {
     if (e.alertState === 'unaware' || e.alertState === 'suspicious') {
       let detected = false;
 
-      // Scavenger guarding a sunken shipwreck: alerts if player approaches wreck or guard
-      if (e.guardWreckId) {
+      // Penjaga pulau yang damai/belum terprovokasi berpatroli damai dan tidak menyerang pemain
+      if (e.homeIslandId && !isIslandProvoked(e.homeIslandId) && e.clan !== 'blood') {
+        detected = false;
+      } else if (e.guardWreckId) {
+        // Scavenger guarding a sunken shipwreck: alerts if player approaches wreck or guard
         const wreck = entities.sunkenShips.find(s => s.id === e.guardWreckId && !s.salvaged);
         if (wreck) {
           const wdx = playerState.x - wreck.x, wdy = playerState.y - wreck.y;
@@ -2766,7 +3011,7 @@ function updateGame(dt) {
         }
       }
 
-      if (!detected) {
+      if (!detected && !(e.homeIslandId && !isIslandProvoked(e.homeIslandId) && e.clan !== 'blood')) {
         if (e.isMonster) {
           // Sea Monster 360-degree circular underwater vibration sonar!
           const monsterAuraDist = 420 * (isPlayerMovingFast ? 1.25 : 0.95) * stealthMult;
@@ -2810,6 +3055,14 @@ function updateGame(dt) {
 
         if (e.isMonster || e.clan === 'blood') {
           sound.playMonsterRoar(e.x, e.y);
+        } else if (e.clan === 'viking' && (e.hasWarHorn || e.tier >= 3)) {
+          if (!e.hasBlownHorn) {
+            e.hasBlownHorn = true;
+            if (typeof sound !== 'undefined' && typeof sound.playHorn === 'function') sound.playHorn();
+            else sound.playAlertHorn();
+          } else {
+            sound.playAlertHorn();
+          }
         } else {
           sound.playAlertHorn();
         }
@@ -3682,6 +3935,12 @@ function updateGame(dt) {
         }
         addFloatingText(`+${loot.value} Koin & Peta Kuno!`, playerState.x, playerState.y, '#38bdf8');
         showToast("Pesan Dalam Botol: Jarum kompas menunjukkan lokasi harta karun!", "scroll");
+      } else if (loot.type === 'chest') {
+        playerState.gold += loot.value;
+        addFloatingText(`+${loot.value} Koin Peti Emas!`, playerState.x, playerState.y, '#f59e0b', true);
+        showToast(`Membuka Peti Harta Karun Batavia: +${loot.value} Koin!`, "gold");
+        if (typeof sound !== 'undefined' && typeof sound.playLoot === 'function') sound.playLoot();
+        else sound.playCoin();
       } else {
         playerState.gold += loot.value;
         addFloatingText(`+${loot.value} Koin`, playerState.x, playerState.y, '#fbbf24');

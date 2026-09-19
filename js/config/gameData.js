@@ -279,6 +279,14 @@ const CLAN_LORE = {
   }
 };
 
+// Island Conquest Reinforcement Parameters by Island Tier
+const CONQUEST_REINFORCEMENT_CONFIG = {
+  4: { waves: 1, interval: 14.0, countPerWave: 2, minTier: 0, maxTier: 1, title: "Patroli Pesisir" },
+  3: { waves: 2, interval: 12.0, countPerWave: 3, minTier: 0, maxTier: 1, title: "Armada Pengawal Niaga" },
+  2: { waves: 3, interval: 11.0, countPerWave: 3, minTier: 1, maxTier: 2, title: "Skuadron Kapal Tempur" },
+  1: { waves: 4, interval: 10.0, countPerWave: 4, minTier: 1, maxTier: 2, title: "Bala Bantuan Legiun Palung" }
+};
+
 const WORLD_GEN_KEY = 'BLOOD_SEA_WORLD_GEN_v1';
 let currentWorldGenSeed = 104928;
 let currentWorldGenNumber = 1;

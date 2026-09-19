@@ -25,24 +25,49 @@ function fireCannons(source, target = null, isPlayer = false, customAimAngle = n
   if (!isPlayer && target) {
     const targetAngle = Math.atan2(target.y - source.y, target.x - source.x);
     angles = [targetAngle];
-  } else if (isPlayer && customAimAngle !== null) {
-    // Dynamic Gun Carriage Traverse for Player Cannons:
-    // Accurately aims the broadside cannons towards targeted enemy ship or island tower
-    const portAngle = source.angle - Math.PI / 2;
-    const stbdAngle = source.angle + Math.PI / 2;
+  } else {
+    // If player fires manually without auto-target, check if broadside is facing nearby island defenses to allow deliberate attack
+    if (isPlayer && customAimAngle === null && typeof entities !== 'undefined' && entities.towers) {
+      for (let t = 0; t < entities.towers.length; t++) {
+        const tw = entities.towers[t];
+        if (tw.clan === 'neutral' || tw.defenseType === 'haven_bastion') continue;
+        const dx = tw.x - source.x, dy = tw.y - source.y;
+        if (dx * dx + dy * dy > 460 * 460) continue;
+        if (typeof hasLineOfSight === 'function' && !hasLineOfSight(source.x, source.y, tw.x, tw.y)) continue;
+        const angToTw = Math.atan2(dy, dx);
+        let relAng = Math.abs(normAngle(angToTw - source.angle));
+        if (relAng > 0.35 && relAng < 2.8) {
+          customAimAngle = angToTw;
+          if (typeof WORLD_ISLANDS !== 'undefined') {
+            const isl = WORLD_ISLANDS.find(i => i.id === tw.islandId);
+            if (isl && !isl.isProvoked && typeof triggerIslandProvocation === 'function') {
+              triggerIslandProvocation(isl);
+            }
+          }
+          break;
+        }
+      }
+    }
 
-    const diffPort = Math.abs(normAngle(customAimAngle - portAngle));
-    const diffStbd = Math.abs(normAngle(customAimAngle - stbdAngle));
+    if (isPlayer && customAimAngle !== null) {
+      // Dynamic Gun Carriage Traverse for Player Cannons:
+      // Accurately aims the broadside cannons towards targeted enemy ship or island tower
+      const portAngle = source.angle - Math.PI / 2;
+      const stbdAngle = source.angle + Math.PI / 2;
 
-    const chosenSide = (diffPort < diffStbd) ? portAngle : stbdAngle;
-    const diffChosen = normAngle(customAimAngle - chosenSide);
+      const diffPort = Math.abs(normAngle(customAimAngle - portAngle));
+      const diffStbd = Math.abs(normAngle(customAimAngle - stbdAngle));
 
-    // Dynamic gunport traverse clamped to +/- 32 degrees (0.56 rad)
-    const traverse = Math.max(-0.56, Math.min(0.56, diffChosen));
-    const aimedAngle = chosenSide + traverse;
+      const chosenSide = (diffPort < diffStbd) ? portAngle : stbdAngle;
+      const diffChosen = normAngle(customAimAngle - chosenSide);
 
-    // The engaged broadside fires directly at the target; the opposite side fires perpendicular
-    angles = [aimedAngle, (diffPort < diffStbd) ? stbdAngle : portAngle];
+      // Dynamic gunport traverse clamped to +/- 32 degrees (0.56 rad)
+      const traverse = Math.max(-0.56, Math.min(0.56, diffChosen));
+      const aimedAngle = chosenSide + traverse;
+
+      // The engaged broadside fires directly at the target; the opposite side fires perpendicular
+      angles = [aimedAngle, (diffPort < diffStbd) ? stbdAngle : portAngle];
+    }
   }
 
   const diffCfg = (typeof getDifficultyConfig === 'function') ? getDifficultyConfig() : { playerDamageDealtMult: 1 };
@@ -229,25 +254,53 @@ function fireFrostAxes(enemy, target = null) {
   const targetX = tgt.x || enemy.x;
   const targetY = tgt.y || enemy.y;
   const baseAngle = Math.atan2(targetY - enemy.y, targetX - enemy.x);
-  const projSpeed = 7.2 + enemy.tier * 0.4;
+  const projSpeed = 7.4 + enemy.tier * 0.4;
 
   for (let i = 0; i < count; i++) {
-    const ang = baseAngle + (i - (count - 1) / 2) * 0.24;
+    const ang = baseAngle + (i - (count - 1) / 2) * 0.22;
     entities.projectiles.push({
       type: 'frost_axe',
       sourceClan: 'viking',
-      x: enemy.x + Math.cos(ang) * (enemy.radius + 8),
-      y: enemy.y + Math.sin(ang) * (enemy.radius + 8),
+      x: enemy.x + Math.cos(ang) * (enemy.radius + 6),
+      y: enemy.y + Math.sin(ang) * (enemy.radius + 6),
       vx: Math.cos(ang) * projSpeed,
       vy: Math.sin(ang) * projSpeed,
       angle: ang,
-      radius: 6,
+      spinAngle: Math.random() * Math.PI * 2,
+      spinSpeed: 24.0,
+      radius: 4.5,
       damage: enemy.damage * 1.05,
       isPlayer: false,
       life: 1.6,
       clan: 'viking'
     });
   }
+}
+
+function fireFrostBallista(tower, target = null) {
+  const tgt = target || playerState;
+  const targetX = tgt.x || playerState.x;
+  const targetY = tgt.y || playerState.y;
+  const baseAngle = Math.atan2(targetY - tower.y, targetX - tower.x);
+  const projSpeed = 8.6;
+
+  if (sound && sound.playCannon) sound.playCannon(tower.x, tower.y);
+  entities.projectiles.push({
+    type: 'frost_axe',
+    sourceClan: 'viking',
+    x: tower.x + Math.cos(baseAngle) * (tower.radius + 10),
+    y: tower.y + Math.sin(baseAngle) * (tower.radius + 10),
+    vx: Math.cos(baseAngle) * projSpeed,
+    vy: Math.sin(baseAngle) * projSpeed,
+    angle: baseAngle,
+    spinAngle: 0,
+    spinSpeed: 26.0,
+    radius: 5,
+    damage: tower.damage,
+    isPlayer: false,
+    life: 1.8,
+    clan: 'viking'
+  });
 }
 
 function fireRocketVolley(enemy, target = null) {

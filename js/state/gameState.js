@@ -168,6 +168,14 @@ function initTerritorialDefenses() {
   // 2. Territorial Active Defenses for ALL Islands across the world
   entities.towers = [];
   WORLD_ISLANDS.forEach(isl => {
+    // Initialize Island Provocation & Conquest State
+    isl.isProvoked = (isl.clan === 'blood' || isl.isFlesh || isl.isSkullIsland);
+    isl.conquestActive = false;
+    isl.reinforcementWavesLeft = 0;
+    isl.reinforcementTimer = 0;
+    isl.reinforcementWaveCurrent = 0;
+    isl.reinforcementTotalWaves = 0;
+
     // 0. Peaceful zones: Shop Islands & Conquered Islands have no hostile defenses
     if (isl.isShopIsland || isl.isConquered) {
       return;
@@ -201,7 +209,7 @@ function initTerritorialDefenses() {
       return;
     }
 
-    // 1. Build Asymmetric Defense Formations (1 Induk Primary + 1-3 Peranakan Secondary)
+    // 1. Build Territorial Defense Squads (Induk Primary + Peranakan Flankers)
     const tier = isl.tier || 4;
     const diffCfg = (typeof getDifficultyConfig === 'function') ? getDifficultyConfig() : { enemyHpMultiplier: 1.0 };
     const hpMult = diffCfg.enemyHpMultiplier || 1.0;
@@ -210,25 +218,23 @@ function initTerritorialDefenses() {
 
     if (isl.clan === 'blood' || isl.isFlesh || isl.isSkullIsland) {
       // TIER 1: Laut Darah - Sarang Induk / Pulau Tengkorak
-      // 1-2 Colossal Kraken Tentacles (Induk) + 2-3 Minor Parasite Flesh Spitters (Peranakan)
       const primaryCount = isl.id === 'hive_nest' ? 2 : 1;
       if (primaryCount === 1) {
-        defenseSquad.push({ type: 'tentacle', isPeranakan: false, offset: 0, hp: 520, dmg: 38, rad: 26, name: `${isl.name} - Tentakel Induk Leviathan` });
-        defenseSquad.push({ type: 'flesh_spitter', isPeranakan: true, offset: -0.65, hp: 170, dmg: 16, rad: 18, name: `Kantung Parasit Pembusuk Barat` });
-        defenseSquad.push({ type: 'flesh_spitter', isPeranakan: true, offset: 0.65, hp: 170, dmg: 16, rad: 18, name: `Kantung Parasit Pembusuk Timur` });
+        defenseSquad.push({ type: 'tentacle', isPeranakan: false, hp: 520, dmg: 38, rad: 26, name: `${isl.name} - Tentakel Induk Leviathan` });
+        defenseSquad.push({ type: 'flesh_spitter', isPeranakan: true, hp: 170, dmg: 16, rad: 18, name: `Kantung Parasit Pembusuk Barat` });
+        defenseSquad.push({ type: 'flesh_spitter', isPeranakan: true, hp: 170, dmg: 16, rad: 18, name: `Kantung Parasit Pembusuk Timur` });
       } else {
-        defenseSquad.push({ type: 'tentacle', isPeranakan: false, offset: -0.4, hp: 520, dmg: 38, rad: 26, name: `Tentakel Induk Abisal I` });
-        defenseSquad.push({ type: 'tentacle', isPeranakan: false, offset: 0.4, hp: 520, dmg: 38, rad: 26, name: `Tentakel Induk Abisal II` });
-        defenseSquad.push({ type: 'flesh_spitter', isPeranakan: true, offset: -0.85, hp: 170, dmg: 16, rad: 18, name: `Kantung Parasit Penjaga` });
-        defenseSquad.push({ type: 'flesh_spitter', isPeranakan: true, offset: 0.85, hp: 170, dmg: 16, rad: 18, name: `Tentakel Cambuk Lendir` });
+        defenseSquad.push({ type: 'tentacle', isPeranakan: false, hp: 520, dmg: 38, rad: 26, name: `Tentakel Induk Abisal I` });
+        defenseSquad.push({ type: 'tentacle', isPeranakan: false, hp: 520, dmg: 38, rad: 26, name: `Tentakel Induk Abisal II` });
+        defenseSquad.push({ type: 'flesh_spitter', isPeranakan: true, hp: 170, dmg: 16, rad: 18, name: `Kantung Parasit Penjaga` });
+        defenseSquad.push({ type: 'flesh_spitter', isPeranakan: true, hp: 170, dmg: 16, rad: 18, name: `Tentakel Cambuk Lendir` });
       }
 
     } else if (isl.clan === 'mist') {
       // TIER 2: Sekte Kabut
-      // 1 Menara Spire Okultis Marmer (Induk) + 2 Pylon Arwah Tengkorak Melayang (Peranakan)
-      defenseSquad.push({ type: 'mist_spire', isPeranakan: false, offset: 0, hp: 420, dmg: 28, rad: 30, name: `${isl.name} - Spire Okultis Utama` });
-      defenseSquad.push({ type: 'skull_pylon', isPeranakan: true, offset: -0.65, hp: 160, dmg: 15, rad: 18, name: `Pylon Tengkorak Arwah Barat` });
-      defenseSquad.push({ type: 'skull_pylon', isPeranakan: true, offset: 0.65, hp: 160, dmg: 15, rad: 18, name: `Pylon Tengkorak Arwah Timur` });
+      defenseSquad.push({ type: 'mist_spire', isPeranakan: false, hp: 420, dmg: 28, rad: 30, name: `${isl.name} - Spire Okultis Utama` });
+      defenseSquad.push({ type: 'skull_pylon', isPeranakan: true, hp: 160, dmg: 15, rad: 18, name: `Pylon Tengkorak Arwah Barat` });
+      defenseSquad.push({ type: 'skull_pylon', isPeranakan: true, hp: 160, dmg: 15, rad: 18, name: `Pylon Tengkorak Arwah Timur` });
 
     } else if (isl.clan === 'iron') {
       // TIER 2 or 3: Pemburu Besi Hitam
@@ -236,7 +242,6 @@ function initTerritorialDefenses() {
       defenseSquad.push({
         type: 'steam_harpoon',
         isPeranakan: false,
-        offset: 0,
         hp: isTier2 ? 420 : 340,
         dmg: isTier2 ? 30 : 25,
         rad: 28,
@@ -245,7 +250,6 @@ function initTerritorialDefenses() {
       defenseSquad.push({
         type: 'steam_vent',
         isPeranakan: true,
-        offset: -0.6,
         hp: isTier2 ? 160 : 135,
         dmg: 14,
         rad: 18,
@@ -254,11 +258,64 @@ function initTerritorialDefenses() {
       defenseSquad.push({
         type: 'steam_vent',
         isPeranakan: true,
-        offset: 0.6,
         hp: isTier2 ? 160 : 135,
         dmg: 14,
         rad: 18,
         name: `Tungku Cerobong Uap Kanan`
+      });
+
+    } else if (isl.clan === 'viking') {
+      // TIER 2 or 3: Klan Penakluk Viking (Runestone Watchtowers & Ice Ballista)
+      defenseSquad.push({
+        type: 'viking_ballista',
+        isPeranakan: false,
+        hp: 440,
+        dmg: 32,
+        rad: 30,
+        name: `${isl.name} - Ballista Pelontar Es Nordik`
+      });
+      defenseSquad.push({
+        type: 'viking_watchtower',
+        isPeranakan: true,
+        hp: 165,
+        dmg: 16,
+        rad: 20,
+        name: `Menara Pasak Fjord Barat`
+      });
+      defenseSquad.push({
+        type: 'viking_watchtower',
+        isPeranakan: true,
+        hp: 165,
+        dmg: 16,
+        rad: 20,
+        name: `Menara Pasak Fjord Timur`
+      });
+
+    } else if (isl.clan === 'wokou') {
+      // TIER 3 or 4: Perompak Jung Wokou (Firework Pagoda & Bamboo Rocket Nest)
+      defenseSquad.push({
+        type: 'wokou_pagoda',
+        isPeranakan: false,
+        hp: 410,
+        dmg: 28,
+        rad: 30,
+        name: `${isl.name} - Pagoda Baterai Mesiu Naga`
+      });
+      defenseSquad.push({
+        type: 'wokou_rocket_nest',
+        isPeranakan: true,
+        hp: 155,
+        dmg: 14,
+        rad: 18,
+        name: `Gardu Panah Roket Bambu I`
+      });
+      defenseSquad.push({
+        type: 'wokou_rocket_nest',
+        isPeranakan: true,
+        hp: 155,
+        dmg: 14,
+        rad: 18,
+        name: `Gardu Panah Roket Bambu II`
       });
 
     } else {
@@ -267,39 +324,52 @@ function initTerritorialDefenses() {
       defenseSquad.push({
         type: 'cannon_bastion',
         isPeranakan: false,
-        offset: isTier4 ? 0.3 : 0,
-        hp: isTier4 ? 220 : 320,
+        hp: isTier4 ? 240 : 340,
         dmg: isTier4 ? 18 : 24,
         rad: 26,
         name: `${isl.name} - Bastion Meriam Emas`
       });
-
       defenseSquad.push({
         type: 'swivel_outpost',
         isPeranakan: true,
-        offset: isTier4 ? -0.45 : -0.65,
-        hp: isTier4 ? 110 : 130,
-        dmg: 10,
+        hp: isTier4 ? 110 : 135,
+        dmg: 11,
         rad: 18,
-        name: `Gardu Pengintai Senapan Putar I`
+        name: `Gardu Pengintai Senapan Putar Barat`
       });
-
       if (!isTier4) {
         defenseSquad.push({
           type: 'swivel_outpost',
           isPeranakan: true,
-          offset: 0.65,
-          hp: 130,
-          dmg: 10,
+          hp: 135,
+          dmg: 11,
           rad: 18,
-          name: `Gardu Pengintai Senapan Putar II`
+          name: `Gardu Pengintai Senapan Putar Timur`
         });
       }
     }
 
+    // 2. Radially Distribute Defenses Around Island Perimeter (Not clustered at one spot!)
+    const dockAngle = (isl.dockAngle !== undefined ? isl.dockAngle : 0);
+    const N = defenseSquad.length;
+    let assignedAngles = [];
+    if (N === 2) {
+      assignedAngles = [dockAngle + Math.PI - 1.25, dockAngle + Math.PI + 1.25];
+    } else if (N === 3) {
+      assignedAngles = [dockAngle + Math.PI, dockAngle + Math.PI - 1.7, dockAngle + Math.PI + 1.7];
+    } else if (N >= 4) {
+      assignedAngles = [
+        dockAngle + Math.PI,
+        dockAngle + Math.PI - 1.4,
+        dockAngle + Math.PI + 1.4,
+        dockAngle + Math.PI * 0.5
+      ];
+    } else {
+      assignedAngles = [dockAngle + Math.PI];
+    }
+
     defenseSquad.forEach((def, idx) => {
-      const baseFacing = (isl.dockAngle !== undefined ? isl.dockAngle : 0) + Math.PI;
-      const angle = baseFacing + def.offset;
+      const angle = assignedAngles[idx] || (dockAngle + Math.PI + (idx * 1.5));
       const rAtAng = typeof getIslandRadiusAt === 'function' ? getIslandRadiusAt(isl, angle) : (isl.radius || 300);
       const dist = rAtAng + (def.type === 'tentacle' ? 24 : 18);
       const scaledHp = Math.round(def.hp * hpMult);
@@ -515,17 +585,19 @@ function pickDestinationIsland(shipOrClan, currentIslandId = null) {
 function spawnBataviaConvoy(ex, ey, angle) {
   const convoyId = 'convoy_batavia_' + Math.random().toString(36).substr(2, 6);
   const destIsl = pickDestinationIsland('gold');
-  // Flagship Galleon Leader
+  // Flagship Treasury Galleon Leader (Carries royal cargo, drops gold chests upon sinking)
   entities.enemies.push(createEnemyEntity('gold', 1, ex, ey, angle, {
     convoyId,
     formationType: 'batavia_column',
     formationRole: 'leader',
     formationIndex: 0,
+    isTreasuryShip: true,
+    name: 'Galleon Kas Diraja Batavia',
     voyageState: 'voyaging',
     destinationIslandId: destIsl ? destIsl.id : 'haven'
   }));
 
-  // Column Escorts: spaced at 75px intervals behind leader for clean, majestic formation
+  // Column Escorts: spaced at 75px intervals behind leader
   const escortCount = 2 + Math.floor(Math.random() * 2);
   for (let i = 1; i <= escortCount; i++) {
     const dist = i * 75;
@@ -536,6 +608,7 @@ function spawnBataviaConvoy(ex, ey, angle) {
       formationType: 'batavia_column',
       formationRole: 'escort_' + i,
       formationIndex: i,
+      name: 'Korvet Pengawal Upeti',
       voyageState: 'voyaging',
       destinationIslandId: destIsl ? destIsl.id : 'haven'
     }));
@@ -545,17 +618,19 @@ function spawnBataviaConvoy(ex, ey, angle) {
 function spawnIronWedge(ex, ey, angle) {
   const convoyId = 'convoy_iron_' + Math.random().toString(36).substr(2, 6);
   const destIsl = pickDestinationIsland('iron');
-  // Heavy Ironclad Leader at apex of wedge
+  // Heavy Ironclad Juggernaut at apex of wedge
   entities.enemies.push(createEnemyEntity('iron', 1, ex, ey, angle, {
     convoyId,
     formationType: 'iron_wedge',
     formationRole: 'leader',
     formationIndex: 0,
+    hasSteamRam: true,
+    name: 'Baji Pemecah Karang Baja',
     voyageState: 'voyaging',
     destinationIslandId: destIsl ? destIsl.id : 'haven'
   }));
 
-  // Left & Right Flank Rams at angle ± 2.4 rad, distance 78px
+  // Left & Right Flank Spiked Rams at angle ± 2.4 rad, distance 78px
   const lx = ex + Math.cos(angle + 2.4) * 78;
   const ly = ey + Math.sin(angle + 2.4) * 78;
   entities.enemies.push(createEnemyEntity('iron', 0, lx, ly, angle, {
@@ -563,6 +638,7 @@ function spawnIronWedge(ex, ey, angle) {
     formationType: 'iron_wedge',
     formationRole: 'wing_left',
     formationIndex: 1,
+    name: 'Sekoci Baji Berduri Sayap Barat',
     voyageState: 'voyaging',
     destinationIslandId: destIsl ? destIsl.id : 'haven'
   }));
@@ -574,6 +650,7 @@ function spawnIronWedge(ex, ey, angle) {
     formationType: 'iron_wedge',
     formationRole: 'wing_right',
     formationIndex: 2,
+    name: 'Sekoci Baji Berduri Sayap Timur',
     voyageState: 'voyaging',
     destinationIslandId: destIsl ? destIsl.id : 'haven'
   }));
@@ -586,6 +663,7 @@ function spawnIronWedge(ex, ey, angle) {
       formationType: 'iron_wedge',
       formationRole: 'escort_rear',
       formationIndex: 3,
+      name: 'Tongkang Peleburan Arang',
       voyageState: 'voyaging',
       destinationIslandId: destIsl ? destIsl.id : 'haven'
     }));
@@ -607,6 +685,7 @@ function spawnMistRitual(ex, ey) {
       formationRole: i === 0 ? 'leader' : 'ritual_cultist',
       formationIndex: i,
       formationTotal: cultistCount,
+      name: i === 0 ? 'Bahtera Arwah Gentayangan' : 'Sekoci Sesaji Pemuja',
       ritualCenter: ritualCenter
     }));
   }
@@ -614,24 +693,25 @@ function spawnMistRitual(ex, ey) {
 
 function spawnMonsterPair(ex, ey, angle) {
   const convoyId = 'monster_' + Math.random().toString(36).substr(2, 6);
-  // Alpha Adult Monster
+  // Alpha Leviathan / Hydra
   entities.enemies.push(createEnemyEntity('blood', 1, ex, ey, angle, {
     convoyId: convoyId,
     formationType: 'monster_pair',
     formationRole: 'monster_alpha',
-    name: 'Monster Palung Induk'
+    name: 'Ular Palung Daging (Hydra Induk)'
   }));
 
-  // Agile Juvenile Companion
-  const juvAngle = angle + 2.2;
-  const jx = ex + Math.cos(juvAngle) * 65;
-  const jy = ey + Math.sin(juvAngle) * 65;
-  entities.enemies.push(createEnemyEntity('blood', 0, jx, jy, angle, {
-    convoyId: convoyId,
-    formationType: 'monster_pair',
-    formationRole: 'monster_juvenile',
-    name: 'Anak Monster Palung'
-  }));
+  // 2 Agile Juvenile Blood Larvae swarming alongside
+  [-2.2, 2.2].forEach((offsetAng, idx) => {
+    const jx = ex + Math.cos(angle + offsetAng) * 65;
+    const jy = ey + Math.sin(angle + offsetAng) * 65;
+    entities.enemies.push(createEnemyEntity('blood', 0, jx, jy, angle, {
+      convoyId: convoyId,
+      formationType: 'monster_pair',
+      formationRole: 'monster_juvenile_' + (idx + 1),
+      name: 'Larva Daging Pemangsa'
+    }));
+  });
 }
 
 function spawnSolitaryShip(ex, ey, angle, clan, distFromCenter) {
@@ -650,18 +730,20 @@ function spawnSolitaryShip(ex, ey, angle, clan, distFromCenter) {
 function spawnVikingRaidFlotilla(ex, ey, angle) {
   const convoyId = 'convoy_viking_' + Math.random().toString(36).substr(2, 6);
   const destIsl = pickDestinationIsland('viking');
-  // Flagship Skeid / Drakkar Leader
+  // Flagship Skeid / Drakkar Jarl Leader (Equipped with War Horn & Frost Ballistas)
   entities.enemies.push(createEnemyEntity('viking', 1, ex, ey, angle, {
     convoyId,
     formationType: 'viking_line',
     formationRole: 'leader',
     formationIndex: 0,
+    hasWarHorn: true,
+    name: 'Drakkar Jarl Penakluk Fjord',
     voyageState: 'voyaging',
     destinationIslandId: destIsl ? destIsl.id : 'haven'
   }));
 
-  // Line Abreast Flankers (Sejajar kiri dan kanan untuk serbuan massal)
-  [-55, 55].forEach((offsetSide, idx) => {
+  // Line Abreast Snekkja Berserkers (Flanking left & right for rapid boarding dash)
+  [-60, 60].forEach((offsetSide, idx) => {
     const lx = ex + Math.cos(angle + Math.PI / 2) * offsetSide - Math.cos(angle) * 35;
     const ly = ey + Math.sin(angle + Math.PI / 2) * offsetSide - Math.sin(angle) * 35;
     entities.enemies.push(createEnemyEntity('viking', 0, lx, ly, angle, {
@@ -669,6 +751,7 @@ function spawnVikingRaidFlotilla(ex, ey, angle) {
       formationType: 'viking_line',
       formationRole: 'flanker_' + (idx + 1),
       formationIndex: idx + 1,
+      name: 'Snekkja Salju Berserker',
       voyageState: 'voyaging',
       destinationIslandId: destIsl ? destIsl.id : 'haven'
     }));
@@ -678,20 +761,22 @@ function spawnVikingRaidFlotilla(ex, ey, angle) {
 function spawnWokouWolfpack(ex, ey, angle) {
   const convoyId = 'convoy_wokou_' + Math.random().toString(36).substr(2, 6);
   const destIsl = pickDestinationIsland('wokou');
-  // War Junk Leader
+  // War Junk Leader (Equipped with Firework Smokescreen & Rocket Batteries)
   entities.enemies.push(createEnemyEntity('wokou', 1, ex, ey, angle, {
     convoyId,
     formationType: 'wokou_pack',
     formationRole: 'leader',
     formationIndex: 0,
+    hasSmokeScreen: true,
+    name: 'Jung Perang Kaisar Naga',
     voyageState: 'voyaging',
     destinationIslandId: destIsl ? destIsl.id : 'haven'
   }));
 
-  // Agile Rocket Sampans trailing in chevron
+  // Agile Rocket Sampans trailing in crescent chevron
   const flankers = [
-    { dist: 65, sideAng: 2.3 },
-    { dist: 65, sideAng: -2.3 }
+    { dist: 70, sideAng: 2.2 },
+    { dist: 70, sideAng: -2.2 }
   ];
   flankers.forEach((flk, idx) => {
     const fx = ex + Math.cos(angle + flk.sideAng) * flk.dist;
@@ -701,6 +786,7 @@ function spawnWokouWolfpack(ex, ey, angle) {
       formationType: 'wokou_pack',
       formationRole: 'wing_' + (idx + 1),
       formationIndex: idx + 1,
+      name: 'Sampan Mesiu Roket Api',
       voyageState: 'voyaging',
       destinationIslandId: destIsl ? destIsl.id : 'haven'
     }));
