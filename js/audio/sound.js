@@ -108,6 +108,8 @@ class SoundFX {
     this.corrosiveSizzleAudio = null;
     this.corrosiveSizzleActive = false;
     this.corrosiveSizzleTimer = 0;
+    this.conquestFanfareAudio = null;
+    this.fanfareDuckingTimer = 0;
 
     this.loadSettings();
   }
@@ -170,6 +172,9 @@ class SoundFX {
       if (this.denseFogAudio) this.denseFogAudio.volume = 0;
       if (this.bloodSeaAudio) this.bloodSeaAudio.volume = 0;
       if (this.corrosiveSizzleAudio) this.corrosiveSizzleAudio.volume = 0;
+      if (this.conquestFanfareAudio) this.conquestFanfareAudio.volume = 0;
+    } else if (this.conquestFanfareAudio) {
+      this.conquestFanfareAudio.volume = Math.max(0, Math.min(1, 0.95 * this.masterVolume * this.sfxVolume));
     }
   }
 
@@ -275,6 +280,42 @@ class SoundFX {
     }
   }
 
+  // Priority buffer playback that bypasses _maxVoices limiter
+  _playPriorityBuffer(buffer, gain, playbackRate = 1.0, onEndedCallback = null) {
+    if (this._muted || !buffer) return null;
+    this.init();
+    if (!this.ctx) return null;
+    try {
+      const src = this.ctx.createBufferSource();
+      src.buffer = buffer;
+      src.playbackRate.value = playbackRate;
+
+      const gainNode = this.ctx.createGain();
+      gainNode.gain.setValueAtTime(gain, this.ctx.currentTime);
+
+      src.connect(gainNode);
+      gainNode.connect(this.destinationNode);
+
+      let isEnded = false;
+      src.onended = () => {
+        if (isEnded) return;
+        isEnded = true;
+        try {
+          src.disconnect();
+          gainNode.disconnect();
+        } catch (e) {}
+        if (typeof onEndedCallback === 'function') {
+          try { onEndedCallback(); } catch (e) {}
+        }
+      };
+
+      src.start();
+      return src;
+    } catch (err) {
+      return null;
+    }
+  }
+
   suspendAudio() {
     if (this.ctx && this.ctx.state === 'running') {
       this.ctx.suspend();
@@ -286,6 +327,7 @@ class SoundFX {
     if (this.denseFogAudio) this.denseFogAudio.pause();
     if (this.bloodSeaAudio) this.bloodSeaAudio.pause();
     if (this.corrosiveSizzleAudio) this.corrosiveSizzleAudio.pause();
+    if (this.conquestFanfareAudio) this.conquestFanfareAudio.pause();
   }
 
   resumeAudio() {
@@ -347,6 +389,14 @@ class SoundFX {
       this.corrosiveSizzleAudio = new Audio('./sound effect/Corrosive_Blood_Sizzle.wav');
       this.corrosiveSizzleAudio.loop = true;
       this.corrosiveSizzleAudio.volume = 0;
+    }
+    if (!this.conquestFanfareAudio) {
+      this.conquestFanfareAudio = new Audio('./sound effect/Island_Conquest_Fanfare.wav');
+      this.conquestFanfareAudio.loop = false;
+      this.conquestFanfareAudio.volume = this._muted ? 0 : Math.max(0, Math.min(1, 0.95 * this.masterVolume * this.sfxVolume));
+      this.conquestFanfareAudio.addEventListener('ended', () => {
+        this.fanfareDuckingTimer = 0;
+      });
     }
   }
 
@@ -581,7 +631,12 @@ class SoundFX {
 
   updateBattleMusic(inHeavyBattle, dt) {
     this.startAmbience();
-    this.targetBattleVolume = (inHeavyBattle && !this._muted) ? 0.32 : 0;
+    if (this.fanfareDuckingTimer > 0) {
+      this.fanfareDuckingTimer -= dt;
+      this.targetBattleVolume = 0.03;
+    } else {
+      this.targetBattleVolume = (inHeavyBattle && !this._muted) ? 0.32 : 0;
+    }
 
     // Smooth volumetric fade transition (2.5s fade-in, 3.0s fade-out)
     if (this.targetBattleVolume > this.battleMusicVolume) {
@@ -1507,8 +1562,32 @@ class SoundFX {
   playConquestFanfare() {
     if (this._muted) return;
     this.init();
+    this.fanfareDuckingTimer = 8.5;
+    const fanfareVol = Math.max(0, Math.min(1, 0.95 * this.masterVolume * this.sfxVolume));
+
+    // 1. Try independent streaming audio (immune to SFX voice concurrency limits)
+    if (this.conquestFanfareAudio) {
+      try {
+        this.conquestFanfareAudio.volume = fanfareVol;
+        this.conquestFanfareAudio.currentTime = 0;
+        const p = this.conquestFanfareAudio.play();
+        if (p !== undefined) {
+          p.catch(() => {
+            // Autoplay policy fallback to high-priority Web Audio buffer
+            if (this.conquestFanfareBuffer) {
+              this._playPriorityBuffer(this.conquestFanfareBuffer, fanfareVol, 1.0);
+            }
+          });
+        }
+        return;
+      } catch (err) {
+        // Fallback below
+      }
+    }
+
+    // 2. High-priority Web Audio buffer playback (bypasses _maxVoices limiter)
     if (this.conquestFanfareBuffer) {
-      this._safePlayBuffer(this.conquestFanfareBuffer, 0.85 * (this.masterVolume * this.sfxVolume), 1.0);
+      this._playPriorityBuffer(this.conquestFanfareBuffer, fanfareVol, 1.0);
     } else {
       this.playLoot();
     }

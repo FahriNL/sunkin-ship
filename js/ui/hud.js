@@ -579,6 +579,10 @@ function updateHealthMeters(roundedHp, maxHp) {
       if (roundedHp >= maxHp) btnRepair.classList.add('opacity-50');
     }
   }
+
+  if (typeof updateShipyardRepairButton === 'function') {
+    updateShipyardRepairButton();
+  }
 }
 
 /* ==========================================================================

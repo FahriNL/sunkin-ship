@@ -221,6 +221,12 @@ const shipyardBloodText = document.getElementById('shipyardBloodText');
 const cutawayHoverLabel = document.getElementById('cutawayHoverLabel');
 const shipOverallTierTitle = document.getElementById('shipOverallTierTitle');
 const maxProgressLabel = document.getElementById('maxProgressLabel');
+const btnTabUpgradeCards = document.getElementById('btnTabUpgradeCards');
+const btnTabUpgradeCutaway = document.getElementById('btnTabUpgradeCutaway');
+const upgradeCardsContainer = document.getElementById('upgradeCardsContainer');
+const upgradeCutawayContainer = document.getElementById('upgradeCutawayContainer');
+
+let activeShipyardTab = 'cards';
 
 // 6 Functional Ship Compartments matching UPGRADE_CONFIG
 const SHIP_COMPARTMENTS = {
@@ -929,6 +935,182 @@ function selectCompartment(key, shouldScroll = false) {
   }
 }
 
+// Switch between Mobile Cards View and Architectural Cutaway View
+function switchShipyardTab(tab) {
+  activeShipyardTab = tab;
+  const isCards = (tab === 'cards');
+
+  if (btnTabUpgradeCards && btnTabUpgradeCutaway) {
+    if (isCards) {
+      btnTabUpgradeCards.className = 'flex-1 py-2 px-3 rounded-xl font-cinzel font-bold text-xs sm:text-sm transition flex items-center justify-center gap-1.5 cursor-pointer bg-amber-500 text-slate-950 shadow-md';
+      btnTabUpgradeCutaway.className = 'flex-1 py-2 px-3 rounded-xl font-cinzel font-bold text-xs sm:text-sm transition flex items-center justify-center gap-1.5 cursor-pointer text-slate-400 hover:text-amber-300';
+    } else {
+      btnTabUpgradeCutaway.className = 'flex-1 py-2 px-3 rounded-xl font-cinzel font-bold text-xs sm:text-sm transition flex items-center justify-center gap-1.5 cursor-pointer bg-amber-500 text-slate-950 shadow-md';
+      btnTabUpgradeCards.className = 'flex-1 py-2 px-3 rounded-xl font-cinzel font-bold text-xs sm:text-sm transition flex items-center justify-center gap-1.5 cursor-pointer text-slate-400 hover:text-amber-300';
+    }
+  }
+
+  if (upgradeCardsContainer) {
+    upgradeCardsContainer.classList.toggle('hidden', !isCards);
+  }
+  if (upgradeCutawayContainer) {
+    upgradeCutawayContainer.classList.toggle('hidden', isCards);
+  }
+
+  if (isCards) {
+    stopCutawayLoop();
+    renderUpgradeCardsView();
+  } else {
+    startCutawayLoop();
+    renderCompartmentChips();
+    renderCompartmentDetail(cutawayState.selectedKey);
+  }
+}
+
+// Render the 6 Touch-Friendly Mobile Upgrade Cards
+function renderUpgradeCardsView() {
+  if (!upgradeCardsContainer) return;
+  upgradeCardsContainer.innerHTML = '';
+
+  for (const comp of Object.values(SHIP_COMPARTMENTS)) {
+    const key = comp.key;
+    const lvl = (playerState.upgrades && playerState.upgrades[key]) || 0;
+    const conf = UPGRADE_CONFIG[key];
+    const isMax = lvl >= conf.maxLevel;
+
+    const goldCost = isMax ? 0 : Math.floor(conf.baseCost * Math.pow(conf.costMult, Math.max(0, lvl - (key === 'rearDefense' ? 0 : 1))));
+    const bloodCost = (!isMax && lvl >= conf.bloodCostStart) ? (lvl - conf.bloodCostStart + 1) * 3 : 0;
+    const hasGold = playerState.gold >= goldCost;
+    const hasBlood = playerState.bloodEssence >= bloodCost;
+    const canAfford = !isMax && hasGold && hasBlood;
+
+    let notchesHtml = '';
+    for (let i = 1; i <= conf.maxLevel; i++) {
+      const isDone = (i <= lvl);
+      const isNext = (i === lvl + 1);
+      notchesHtml += `
+        <div class="flex-1 h-2 rounded-full overflow-hidden border ${
+          isDone ? 'bg-gradient-to-r from-amber-500 to-amber-400 border-amber-300 shadow-sm' :
+          (isNext && canAfford ? 'bg-amber-950/60 border-amber-400/80 animate-pulse' : 'bg-slate-900 border-white/5')
+        }"></div>
+      `;
+    }
+
+    const card = document.createElement('div');
+    card.className = `p-3 sm:p-4 rounded-2xl border transition-all flex flex-col justify-between gap-2.5 shadow-lg ${
+      isMax ? 'bg-slate-950/70 border-amber-500/20' :
+      (canAfford ? 'bg-slate-950/90 border-amber-500/40 hover:border-amber-400/80' : 'bg-slate-950/60 border-white/10')
+    }`;
+
+    card.innerHTML = `
+      <!-- Card Header: Icon, Name, Level Badge -->
+      <div class="flex items-start justify-between gap-2">
+        <div class="flex items-center gap-2.5">
+          <div class="p-2 sm:p-2.5 rounded-2xl bg-amber-950/70 border border-amber-500/40 text-amber-300 shrink-0 shadow-inner">
+            ${SVG_ICONS[comp.iconKey] || SVG_ICONS.hull}
+          </div>
+          <div>
+            <h3 class="font-cinzel text-xs sm:text-sm font-bold text-slate-100">${comp.name}</h3>
+            <p class="text-[10px] sm:text-[10.5px] text-slate-400 leading-tight mt-0.5">${comp.subtitle}</p>
+          </div>
+        </div>
+        <span class="text-[9.5px] sm:text-[10px] px-2 py-0.5 rounded-full font-mono font-bold shrink-0 ${
+          isMax ? 'bg-amber-400 text-slate-950 shadow-sm' : 'bg-slate-800 text-amber-300 border border-amber-500/30'
+        }">
+          ${isMax ? 'MAX' : `Lv.${lvl} / ${conf.maxLevel}`}
+        </span>
+      </div>
+
+      <!-- Segmented Level Progress Bar -->
+      <div class="space-y-1">
+        <div class="flex justify-between text-[9.5px] text-slate-400 font-mono">
+          <span>Tingkat Efektivitas</span>
+          <span class="text-amber-400 font-bold">${lvl} / ${conf.maxLevel}</span>
+        </div>
+        <div class="flex items-center gap-1 w-full">
+          ${notchesHtml}
+        </div>
+      </div>
+
+      <!-- Stat Comparison Box -->
+      <div class="bg-slate-900/80 rounded-xl px-2.5 py-1.5 border border-white/5 flex items-center justify-between text-xs">
+        <span class="text-[9.5px] uppercase tracking-wider font-bold text-slate-400">${comp.statName}:</span>
+        <span class="text-[11px] font-bold text-amber-300 font-mono">
+          ${isMax ? getStatValue(key, lvl) + ' (Maksimal)' : comp.getStatDesc(lvl)}
+        </span>
+      </div>
+
+      <!-- Footer: Cost & 1-Tap Upgrade Button -->
+      <div class="flex items-center justify-between gap-2 pt-1 border-t border-white/10">
+        <!-- Cost badges -->
+        <div class="flex items-center gap-2 text-[11px] font-mono font-bold">
+          ${!isMax ? `
+            <div class="flex items-center gap-1 ${hasGold ? 'text-amber-400' : 'text-rose-400'}">
+              <span class="w-2 h-2 rounded-full ${hasGold ? 'bg-amber-400' : 'bg-rose-500'} inline-block shadow-sm"></span>
+              <span>${goldCost} Koin</span>
+            </div>
+            ${bloodCost > 0 ? `
+              <div class="flex items-center gap-1 ${hasBlood ? 'text-rose-300' : 'text-rose-500'}">
+                <span class="w-2 h-2 rounded-full ${hasBlood ? 'bg-rose-500' : 'bg-rose-700'} inline-block shadow-sm"></span>
+                <span>${bloodCost} Darah</span>
+              </div>
+            ` : ''}
+          ` : '<span class="text-amber-400/80 text-[10.5px] font-bold font-cinzel">Tingkat Puncak Armada</span>'}
+        </div>
+
+        <!-- 1-Tap Direct Upgrade Action Button -->
+        <button type="button" class="btn-direct-upgrade px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold font-cinzel transition tracking-wide flex items-center justify-center gap-1.5 shadow-md ${
+          isMax 
+            ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-white/5' 
+            : (canAfford 
+                ? 'bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 text-slate-950 border border-amber-300 active:scale-95 shadow-amber-900/40 cursor-pointer' 
+                : 'bg-slate-800 text-slate-400 cursor-not-allowed border border-white/10 opacity-70')
+        }" ${!canAfford ? 'disabled' : ''} data-key="${key}">
+          <svg class="w-3.5 h-3.5 ${isMax ? 'hidden' : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m18 15-6-6-6 6"/></svg>
+          <span>${isMax ? 'SELESAI' : (canAfford ? 'TINGKATKAN' : 'KURANG')}</span>
+        </button>
+      </div>
+    `;
+
+    const btnDirectUpgrade = card.querySelector('.btn-direct-upgrade');
+    if (btnDirectUpgrade && canAfford) {
+      btnDirectUpgrade.addEventListener('click', (e) => {
+        e.stopPropagation();
+        performCompartmentUpgrade(key);
+      });
+    }
+
+    upgradeCardsContainer.appendChild(card);
+  }
+}
+
+// Update the Quick Repair button in the Shipyard footer
+function updateShipyardRepairButton() {
+  if (!btnRepairShip) return;
+  const maxHp = getStatValue('hull', playerState.upgrades.hull);
+  const roundedHp = Math.round(playerState.hp);
+  if (roundedHp >= maxHp) {
+    btnRepairShip.className = 'bg-slate-800/80 text-emerald-400/70 font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 border border-emerald-500/20 cursor-default select-none shadow-sm';
+    btnRepairShip.innerHTML = `
+      <svg class="w-3.5 h-3.5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+      <span>Lambung Prima (100%)</span>
+    `;
+    btnRepairShip.disabled = true;
+  } else {
+    btnRepairShip.className = 'bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-1.5 rounded-xl active:scale-95 transition flex items-center gap-1.5 shadow-md cursor-pointer';
+    btnRepairShip.innerHTML = `
+      <svg class="w-3.5 h-3.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+      <span>Perbaiki Lambung (15 Koin)</span>
+      <kbd class="kbd-badge bg-black/40 text-[9px] hidden sm:inline-block">R</kbd>
+    `;
+    btnRepairShip.disabled = false;
+  }
+}
+
+// Attach Tab Switcher Listeners
+if (btnTabUpgradeCards) btnTabUpgradeCards.addEventListener('click', () => switchShipyardTab('cards'));
+if (btnTabUpgradeCutaway) btnTabUpgradeCutaway.addEventListener('click', () => switchShipyardTab('cutaway'));
+
 // Render the 6 Touch-Friendly Selector Chips underneath the canvas
 function renderCompartmentChips() {
   if (!compartmentChipsBar) return;
@@ -1169,16 +1351,20 @@ function renderUpgradeUI() {
   // Update Total Level Progress
   const totalLevels = Object.values(playerState.upgrades || {}).reduce((a, b) => a + b, 0);
   if (maxProgressLabel) {
-    maxProgressLabel.innerText = `${totalLevels}/36 Tingkat`;
+    maxProgressLabel.innerText = `${totalLevels}/36`;
   }
 
   // Update Port Docking Location subtitle
   if (shipyardLocationLabel) {
     const portName = playerState.dockedPortName || "Dermaga Nusa Damai";
-    shipyardLocationLabel.innerText = `Dermaga Berlabuh: ${portName} • Sentuh kompartemen untuk meneliti & meningkatkan`;
+    shipyardLocationLabel.innerText = `Dermaga Berlabuh: ${portName}`;
   }
 
-  // Render quick chips & detail panel immediately
+  // Update quick repair button in shipyard footer
+  updateShipyardRepairButton();
+
+  // Render both viewports (cards & cutaway)
+  renderUpgradeCardsView();
   renderCompartmentChips();
   renderCompartmentDetail(cutawayState.selectedKey);
 }
@@ -1229,11 +1415,14 @@ function openUpgradeModal() {
   closeLoreModal();
   closeHelpModal();
   closeMapModal();
+  switchShipyardTab(activeShipyardTab);
   renderUpgradeUI();
   upgradeModal.classList.remove('modal-enter', 'hidden');
   upgradeModal.classList.add('modal-active');
   isGamePaused = true;
-  startCutawayLoop();
+  if (activeShipyardTab === 'cutaway') {
+    startCutawayLoop();
+  }
 }
 
 function closeUpgradeModal() {
@@ -2150,6 +2339,7 @@ function quickRepairShip() {
   }
   if (playerState.gold >= 15) {
     playerState.gold -= 15;
+    playerState.hp = maxHp;
     if (typeof sound !== 'undefined' && typeof sound.playRepair === 'function') {
       sound.playRepair();
     } else {
@@ -2157,6 +2347,7 @@ function quickRepairShip() {
     }
     showToast("Kapal diperbaiki sepenuhnya! (-15 Koin)", "anchor");
     updateHUD();
+    updateShipyardRepairButton();
     saveGame();
   } else {
     showToast("Emas tidak cukup untuk reparasi (Butuh 15 Koin).", "alert");
