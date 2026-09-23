@@ -201,6 +201,37 @@ function getIslandCachedData(isl) {
       y: -12,
       tiers: 3
     });
+  } else if (isl.isUninhabited) {
+    // Uninhabited Decorative Islets: Pure nature, zero man-made infrastructure
+    if (isl.isRockOnly) {
+      // Natural jagged basalt crags & sea boulders
+      const rockCount = Math.max(4, Math.floor((isl.radius || 50) / 12));
+      for (let i = 0; i < rockCount; i++) {
+        const ang = (i / rockCount) * Math.PI * 2 + 0.35;
+        const r = (isl.radius * 0.45) * (0.35 + (i % 3) * 0.22);
+        props.push({
+          type: 'basalt_rock',
+          x: Math.cos(ang) * r,
+          y: Math.sin(ang) * r,
+          size: 10 + (i % 3) * 6,
+          rot: ang
+        });
+      }
+    } else if (!isl.isSandOnly) {
+      // Natural tropical atoll: only a few wild palm trees
+      const treeCount = Math.max(3, Math.min(6, Math.floor((isl.radius || 60) / 14)));
+      for (let i = 0; i < treeCount; i++) {
+        const ang = (i / treeCount) * Math.PI * 2 + 0.4;
+        const r = (isl.radius * 0.42) * (0.4 + (i % 3) * 0.2);
+        props.push({
+          type: 'palm_tree',
+          x: Math.cos(ang) * r,
+          y: Math.sin(ang) * r,
+          scale: 0.7 + (i % 3) * 0.2,
+          curve: ((i % 2 === 0 ? 1 : -1) * (0.2 + (i % 3) * 0.15))
+        });
+      }
+    }
   } else {
     // Batavia / Haven / Merchant / Neutral: Tropical palm trees & harbor cargo
     const treeCount = isl.radius > 250 ? 12 : 8;
@@ -232,7 +263,7 @@ function getIslandCachedData(isl) {
   }
 
   // Pre-cache Lighthouse settings if island has a lighthouse
-  if (isl.hasLighthouse) {
+  if (isl.hasLighthouse && !isl.isUninhabited) {
     isl._cachedLighthouse = {
       x: -14,
       y: -14,
@@ -246,7 +277,7 @@ function getIslandCachedData(isl) {
   isl._cachedInner = innerPoints;
   isl._cachedReef = reefPoints;
   isl._cachedHill = hillPoints;
-  isl._cachedPier = { dx, dy, pAngle: isl.dockAngle };
+  isl._cachedPier = isl.isUninhabited ? null : { dx, dy, pAngle: isl.dockAngle };
   isl._cachedProps = props;
 
   return isl;
@@ -306,9 +337,13 @@ function drawWorldIsland(ctx, isl) {
   ctx.stroke();
 
   // -------------------------------------------------------------
-  // LAYER 1: Sandy Beach (Organic Spline Contour)
+  // LAYER 1: Sandy Beach / Rock Face (Organic Spline Contour)
   // -------------------------------------------------------------
-  ctx.fillStyle = palette.sand || isl.sandColor || '#ca8a04';
+  if (isl.isRockOnly) {
+    ctx.fillStyle = isl.color || '#334155';
+  } else {
+    ctx.fillStyle = palette.sand || isl.sandColor || '#ca8a04';
+  }
   ctx.beginPath();
   ctx.moveTo(outerPoints[0].x, outerPoints[0].y);
   for (let i = 1; i < outerPoints.length; i++) {
@@ -321,55 +356,32 @@ function drawWorldIsland(ctx, isl) {
   ctx.closePath();
   ctx.fill();
 
-  ctx.strokeStyle = 'rgba(0, 0, 0, 0.18)';
-  ctx.lineWidth = 1;
+  ctx.strokeStyle = isl.isRockOnly ? 'rgba(15, 23, 42, 0.45)' : 'rgba(0, 0, 0, 0.18)';
+  ctx.lineWidth = isl.isRockOnly ? 1.8 : 1;
   ctx.stroke();
 
-  // -------------------------------------------------------------
-  // LAYER 2: Main Lowland Terrain (Lush / Basalt / Swamp)
-  // -------------------------------------------------------------
-  ctx.fillStyle = palette.lowland || isl.color || '#166534';
-  ctx.beginPath();
-  ctx.moveTo(innerPoints[0].x, innerPoints[0].y);
-  for (let i = 1; i < innerPoints.length; i++) {
-    const prev = innerPoints[i - 1];
-    const curr = innerPoints[i];
-    const mx = (prev.x + curr.x) * 0.5;
-    const my = (prev.y + curr.y) * 0.5;
-    ctx.quadraticCurveTo(prev.x, prev.y, mx, my);
+  if (isl.isSandOnly) {
+    // Sandbar details: Concentric subtle sand ripples
+    ctx.strokeStyle = 'rgba(254, 240, 138, 0.22)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(0, 0, (isl.radius || 40) * 0.5, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(2, 1, (isl.radius || 40) * 0.28, 0, Math.PI * 2);
+    ctx.stroke();
   }
-  ctx.closePath();
-  ctx.fill();
-
-  ctx.strokeStyle = 'rgba(0, 0, 0, 0.22)';
-  ctx.lineWidth = 1.2;
-  ctx.stroke();
 
   // -------------------------------------------------------------
-  // LAYER 3: Central Hill Plateau & 3D Cliff Drop-Shadow
+  // LAYER 2: Main Lowland Terrain (Lush / Basalt / Swamp) - Skipped for Sand-Only Islets
   // -------------------------------------------------------------
-  if (hillPoints && hillPoints.length > 0 && !isl.isFlesh) {
-    // 3a. Cliff Drop-Shadow (Cast towards south-east: +6, +8)
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.32)';
+  if (!isl.isSandOnly) {
+    ctx.fillStyle = isl.isRockOnly ? '#1e293b' : (palette.lowland || isl.color || '#166534');
     ctx.beginPath();
-    ctx.moveTo(hillPoints[0].x + 6, hillPoints[0].y + 8);
-    for (let i = 1; i < hillPoints.length; i++) {
-      const prev = hillPoints[i - 1];
-      const curr = hillPoints[i];
-      const mx = (prev.x + curr.x) * 0.5 + 6;
-      const my = (prev.y + curr.y) * 0.5 + 8;
-      ctx.quadraticCurveTo(prev.x + 6, prev.y + 8, mx, my);
-    }
-    ctx.closePath();
-    ctx.fill();
-
-    // 3b. Highland Plateau Face
-    ctx.fillStyle = palette.highland || '#14532d';
-    ctx.beginPath();
-    ctx.moveTo(hillPoints[0].x, hillPoints[0].y);
-    for (let i = 1; i < hillPoints.length; i++) {
-      const prev = hillPoints[i - 1];
-      const curr = hillPoints[i];
+    ctx.moveTo(innerPoints[0].x, innerPoints[0].y);
+    for (let i = 1; i < innerPoints.length; i++) {
+      const prev = innerPoints[i - 1];
+      const curr = innerPoints[i];
       const mx = (prev.x + curr.x) * 0.5;
       const my = (prev.y + curr.y) * 0.5;
       ctx.quadraticCurveTo(prev.x, prev.y, mx, my);
@@ -377,10 +389,47 @@ function drawWorldIsland(ctx, isl) {
     ctx.closePath();
     ctx.fill();
 
-    // 3c. Cliff top highlight rim
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
-    ctx.lineWidth = 1.2;
+    ctx.strokeStyle = isl.isRockOnly ? 'rgba(0, 0, 0, 0.5)' : 'rgba(0, 0, 0, 0.22)';
+    ctx.lineWidth = isl.isRockOnly ? 1.6 : 1.2;
     ctx.stroke();
+
+    // -------------------------------------------------------------
+    // LAYER 3: Central Hill Plateau & 3D Cliff Drop-Shadow
+    // -------------------------------------------------------------
+    if (hillPoints && hillPoints.length > 0 && !isl.isFlesh) {
+      // 3a. Cliff Drop-Shadow (Cast towards south-east: +6, +8)
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.32)';
+      ctx.beginPath();
+      ctx.moveTo(hillPoints[0].x + 6, hillPoints[0].y + 8);
+      for (let i = 1; i < hillPoints.length; i++) {
+        const prev = hillPoints[i - 1];
+        const curr = hillPoints[i];
+        const mx = (prev.x + curr.x) * 0.5 + 6;
+        const my = (prev.y + curr.y) * 0.5 + 8;
+        ctx.quadraticCurveTo(prev.x + 6, prev.y + 8, mx, my);
+      }
+      ctx.closePath();
+      ctx.fill();
+
+      // 3b. Highland Plateau Face
+      ctx.fillStyle = isl.isRockOnly ? '#0f172a' : (palette.highland || '#14532d');
+      ctx.beginPath();
+      ctx.moveTo(hillPoints[0].x, hillPoints[0].y);
+      for (let i = 1; i < hillPoints.length; i++) {
+        const prev = hillPoints[i - 1];
+        const curr = hillPoints[i];
+        const mx = (prev.x + curr.x) * 0.5;
+        const my = (prev.y + curr.y) * 0.5;
+        ctx.quadraticCurveTo(prev.x, prev.y, mx, my);
+      }
+      ctx.closePath();
+      ctx.fill();
+
+      // 3c. Cliff top highlight rim
+      ctx.strokeStyle = isl.isRockOnly ? 'rgba(148, 163, 184, 0.25)' : 'rgba(255, 255, 255, 0.12)';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+    }
   }
 
   // -------------------------------------------------------------
@@ -756,15 +805,16 @@ function drawWorldIsland(ctx, isl) {
   }
 
   // -------------------------------------------------------------
-  // LAYER 5: Pier extending from shoreline
+  // LAYER 5: Pier extending from shoreline (Only on inhabited harbors/outposts)
   // -------------------------------------------------------------
-  const pier = isl._cachedPier;
-  const pLen = 65;
-  const pAngle = pier.pAngle;
+  if (!isl.isUninhabited && isl._cachedPier) {
+    const pier = isl._cachedPier;
+    const pLen = 65;
+    const pAngle = pier.pAngle;
 
-  ctx.save();
-  ctx.translate(pier.dx, pier.dy);
-  ctx.rotate(pAngle);
+    ctx.save();
+    ctx.translate(pier.dx, pier.dy);
+    ctx.rotate(pAngle);
 
   if (isl.isSkullIsland && isl._cachedRibs) {
     // Leviathan Ribcage Pier
@@ -883,6 +933,7 @@ function drawWorldIsland(ctx, isl) {
   }
 
   ctx.restore(); // Finish pier
+  }
 
   // -------------------------------------------------------------
   // LAYER 6: Rotating Lighthouse Beacon
@@ -958,7 +1009,16 @@ function drawWorldIsland(ctx, isl) {
   ctx.font = 'bold 9px sans-serif';
   let subtitle = "";
   let subColor = "#fbbf24";
-  if (isl.id === 'haven') {
+  if (isl.isUninhabited) {
+    if (isl.isSandOnly) {
+      subtitle = "GOSONG PASIR ALAMI • HIASAN SAMUDRA";
+    } else if (isl.isRockOnly) {
+      subtitle = "CADAS KARANG SAMUDRA • HIASAN ALAMI";
+    } else {
+      subtitle = "ATOL KARANG ALAMI • HIASAN SAMUDRA";
+    }
+    subColor = '#94a3b8';
+  } else if (isl.id === 'haven') {
     subtitle = "PANGKALAN UTAMA ARMADA (HOME PORT)";
     subColor = '#38bdf8';
   } else if (isl.isShopIsland) {
@@ -1130,17 +1190,46 @@ function drawVectorShip(ctx, ship, isPlayer = false, tier = 1) {
     ctx.ellipse(-2, 0, (hullLength / 2) - 5, (hullWidth / 2) - 4, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // 3. Side Broadside Cannons based on Cannons Level
-    const cannonCountPerSide = Math.min(4, 1 + Math.floor(cannonLvl / 2));
-    ctx.fillStyle = cannonLvl >= 5 ? '#d97706' : '#1e293b';
+    // 3. Side Broadside Cannons based on Equipped Cannons & Unlocked Slots
+    const maxSlots = Math.min(4, Math.max(1, cannonLvl));
+    const cannonCountPerSide = maxSlots;
     for (let i = 0; i < cannonCountPerSide; i++) {
       const frac = cannonCountPerSide === 1 ? 0.5 : (i / (cannonCountPerSide - 1));
       const offsetX = -hullLength * 0.28 + frac * (hullLength * 0.56);
-      const barrelLen = 3.5 + (cannonLvl >= 4 ? 2 : 0);
+      const barrelLen = 3.8 + (cannonLvl >= 4 ? 2 : 0);
+      const eq = (playerState.equippedCannons && playerState.equippedCannons[i]) || null;
+
+      let bColor = '#334155';
+      let trimColor = '#0f172a';
+      if (eq && eq.durability > 0) {
+        if (eq.type === 'mist') {
+          bColor = '#0891b2'; trimColor = '#22d3ee';
+        } else if (eq.type === 'frost') {
+          bColor = '#0284c7'; trimColor = '#7dd3fc';
+        } else if (eq.type === 'wokou') {
+          bColor = '#e11d48'; trimColor = '#facc15';
+        } else if (eq.type === 'chitin') {
+          bColor = '#881337'; trimColor = '#f43f5e';
+        } else {
+          bColor = cannonLvl >= 5 ? '#d97706' : '#475569';
+          trimColor = '#f59e0b';
+        }
+      } else {
+        // Empty or broken slot
+        bColor = 'rgba(15, 23, 42, 0.5)';
+        trimColor = 'rgba(148, 163, 184, 0.3)';
+      }
+
+      ctx.fillStyle = bColor;
       // Port side barrel
       ctx.fillRect(offsetX - 2, -hullWidth / 2 - barrelLen + 1, 3.5, barrelLen);
       // Starboard side barrel
       ctx.fillRect(offsetX - 2, hullWidth / 2 - 1, 3.5, barrelLen);
+
+      // Muzzle cap highlight
+      ctx.fillStyle = trimColor;
+      ctx.fillRect(offsetX - 2, -hullWidth / 2 - barrelLen + 1, 3.5, 1.2);
+      ctx.fillRect(offsetX - 2, hullWidth / 2 + barrelLen - 2.2, 3.5, 1.2);
     }
 
     // 4. Stern Chasers & Mine Station based on rearDefense
@@ -1179,6 +1268,38 @@ function drawVectorShip(ctx, ship, isPlayer = false, tier = 1) {
       ctx.quadraticCurveTo(mx + 2.5 * mScale, 0, mx - 4, -sWidth);
       ctx.fill();
       ctx.stroke();
+    }
+
+    // 5b. Masthead Wind Pennant (Wimpel penunjuk arah angin di tiang kapal)
+    if (typeof windAngle !== 'undefined') {
+      const mainMastX = speedLvl >= 4 ? -2 : (speedLvl >= 2 ? -hullLength * 0.12 : -4);
+      const localWindAngle = windAngle - (ship.angle + bobAngle);
+      const pennantFlutter = Math.sin(_now * 0.009) * 0.18;
+      const pennantLen = 13 + Math.min(4, tier);
+
+      ctx.save();
+      ctx.translate(mainMastX, 0);
+      ctx.rotate(localWindAngle + pennantFlutter);
+
+      // Gold mast truck cap
+      ctx.fillStyle = '#f59e0b';
+      ctx.beginPath();
+      ctx.arc(0, 0, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Fluttering triangular ribbon streamer pointing along wind direction
+      ctx.fillStyle = relicLvl >= 4 ? '#fca5a5' : '#fef08a';
+      ctx.strokeStyle = relicLvl >= 4 ? '#b91c1c' : '#d97706';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(0, -1.8);
+      ctx.quadraticCurveTo(pennantLen * 0.55, Math.sin(_now * 0.014) * 2.2, pennantLen, 0);
+      ctx.quadraticCurveTo(pennantLen * 0.55, -Math.sin(_now * 0.014) * 2.2, 0, 1.8);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.restore();
     }
 
     // 6. Stern Flag / Pennant
@@ -3508,79 +3629,136 @@ function drawSinkingShip(ctx, s) {
   ctx.restore();
 }
 
-// Render Oceanic Seagulls (Burung Camar Laut Terbang & Mengepak Sayap)
+// Render Oceanic Seagulls (Burung Camar Laut Terbang & Singgah di Kapal / Pulau)
 function drawSeagull(ctx, s) {
+  const birdAlpha = s.alpha !== undefined ? s.alpha : 1.0;
+  if (birdAlpha <= 0.01) return;
+
   ctx.save();
+  ctx.globalAlpha = (ctx.globalAlpha || 1.0) * birdAlpha;
   ctx.translate(s.x, s.y);
 
-  // 1. Soft Shadow cast on Sea Water
-  ctx.save();
-  ctx.fillStyle = 'rgba(15, 23, 42, 0.22)';
-  ctx.translate(0, s.altitude);
-  ctx.rotate(s.heading);
-  ctx.beginPath();
-  ctx.ellipse(0, 0, 6, 2.5, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-
-  // 2. Flying Bird Body
-  ctx.rotate(s.heading);
-  const flap = Math.sin(s.wingPhase) * 5.5;
-
   const isCarrion = !!s.isCarrion;
+  const isPerched = s.state === 'perched';
   const wingColor = isCarrion ? '#1e293b' : '#ffffff';
   const tipColor = isCarrion ? '#020617' : '#64748b';
   const bodyColor = isCarrion ? '#0f172a' : '#f8fafc';
   const beakColor = isCarrion ? '#475569' : '#f59e0b';
 
-  // Wings
-  ctx.strokeStyle = wingColor;
-  ctx.lineWidth = 2.2;
-  ctx.lineCap = 'round';
-
-  // Left Wing
-  ctx.beginPath();
-  ctx.moveTo(0, 0);
-  ctx.quadraticCurveTo(-2, -6 + flap, -1, -11 + flap * 1.4);
-  ctx.stroke();
-
-  // Right Wing
-  ctx.beginPath();
-  ctx.moveTo(0, 0);
-  ctx.quadraticCurveTo(-2, 6 - flap, -1, 11 - flap * 1.4);
-  ctx.stroke();
-
-  // Wingtips
-  ctx.strokeStyle = tipColor;
-  ctx.lineWidth = 1.8;
-  ctx.beginPath();
-  ctx.moveTo(-1, -8 + flap * 1.2);
-  ctx.lineTo(-1, -11 + flap * 1.4);
-  ctx.moveTo(-1, 8 - flap * 1.2);
-  ctx.lineTo(-1, 11 - flap * 1.4);
-  ctx.stroke();
-
-  // Sleek Body
-  ctx.fillStyle = bodyColor;
-  ctx.beginPath();
-  ctx.ellipse(1, 0, 5.5, 2.2, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Beak
-  ctx.fillStyle = beakColor;
-  ctx.beginPath();
-  ctx.moveTo(5.5, -0.8);
-  ctx.lineTo(8.5, 0);
-  ctx.lineTo(5.5, 0.8);
-  ctx.closePath();
-  ctx.fill();
-
-  // Carrion Crow Glowing Crimson Eye
-  if (isCarrion) {
-    ctx.fillStyle = '#ef4444';
+  // 1. Soft Shadow cast on Sea Water or Ship Deck
+  ctx.save();
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.22)';
+  if (isPerched) {
+    ctx.rotate(s.heading);
     ctx.beginPath();
-    ctx.arc(3.5, -0.8, 0.9, 0, Math.PI * 2);
+    ctx.ellipse(0, 1.2, 4.5, 2.0, 0, 0, Math.PI * 2);
     ctx.fill();
+  } else {
+    ctx.translate(0, s.altitude || 20);
+    ctx.rotate(s.heading);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 6, 2.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+
+  // 2. Bird Body
+  ctx.rotate(s.heading);
+
+  if (isPerched) {
+    // Left & Right Folded Wings resting against body flanks
+    ctx.fillStyle = wingColor;
+    ctx.beginPath();
+    ctx.ellipse(-0.8, -2.0, 3.8, 1.2, -0.12, 0, Math.PI * 2);
+    ctx.ellipse(-0.8, 2.0, 3.8, 1.2, 0.12, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Dark Wingtips folded over the tail
+    ctx.strokeStyle = tipColor;
+    ctx.lineWidth = 1.4;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(1, -2.0);
+    ctx.lineTo(-4.5, -1.0);
+    ctx.moveTo(1, 2.0);
+    ctx.lineTo(-4.5, 1.0);
+    ctx.stroke();
+
+    // Sleek Plump Resting Torso
+    ctx.fillStyle = bodyColor;
+    ctx.beginPath();
+    ctx.ellipse(0.5, 0, 5.0, 2.4, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Head with Beak
+    ctx.fillStyle = beakColor;
+    ctx.beginPath();
+    ctx.moveTo(4.8, -0.7);
+    ctx.lineTo(7.6, 0);
+    ctx.lineTo(4.8, 0.7);
+    ctx.closePath();
+    ctx.fill();
+
+    // Carrion Crow Glowing Crimson Eye
+    if (isCarrion) {
+      ctx.fillStyle = '#ef4444';
+      ctx.beginPath();
+      ctx.arc(3.0, -0.7, 0.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else {
+    // Flight Rendering: Outstretched Flapping Wings
+    const flap = Math.sin(s.wingPhase) * 5.5;
+
+    // Wings
+    ctx.strokeStyle = wingColor;
+    ctx.lineWidth = 2.2;
+    ctx.lineCap = 'round';
+
+    // Left Wing
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(-2, -6 + flap, -1, -11 + flap * 1.4);
+    ctx.stroke();
+
+    // Right Wing
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(-2, 6 - flap, -1, 11 - flap * 1.4);
+    ctx.stroke();
+
+    // Wingtips
+    ctx.strokeStyle = tipColor;
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.moveTo(-1, -8 + flap * 1.2);
+    ctx.lineTo(-1, -11 + flap * 1.4);
+    ctx.moveTo(-1, 8 - flap * 1.2);
+    ctx.lineTo(-1, 11 - flap * 1.4);
+    ctx.stroke();
+
+    // Sleek Flying Body
+    ctx.fillStyle = bodyColor;
+    ctx.beginPath();
+    ctx.ellipse(1, 0, 5.5, 2.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Beak
+    ctx.fillStyle = beakColor;
+    ctx.beginPath();
+    ctx.moveTo(5.5, -0.8);
+    ctx.lineTo(8.5, 0);
+    ctx.lineTo(5.5, 0.8);
+    ctx.closePath();
+    ctx.fill();
+
+    // Carrion Crow Glowing Crimson Eye
+    if (isCarrion) {
+      ctx.fillStyle = '#ef4444';
+      ctx.beginPath();
+      ctx.arc(3.5, -0.8, 0.9, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
   ctx.restore();
@@ -3672,6 +3850,76 @@ function getMistSprite(isBlood) {
     return mistSpriteNormal;
   }
 }
+
+// Pre-rendered offscreen cloud shadow sprites for ultra-fast mobile GPU blitting (60 FPS)
+let cloudShadowSpriteNormal = null;
+let cloudShadowSpriteBlood = null;
+
+function createCloudShadowSprite(isBlood) {
+  const w = 440;
+  const h = 280;
+  const offCanvas = document.createElement('canvas');
+  offCanvas.width = w;
+  offCanvas.height = h;
+  const offCtx = offCanvas.getContext('2d');
+
+  // Multi-lobed billowy cumulus cloud shadow with soft Gaussian-style radial feathering
+  const lobes = [
+    { cx: 220, cy: 140, r: 110 },
+    { cx: 140, cy: 130, r: 90 },
+    { cx: 300, cy: 150, r: 95 },
+    { cx: 195, cy: 85,  r: 80 },
+    { cx: 265, cy: 95,  r: 75 },
+    { cx: 155, cy: 195, r: 72 },
+    { cx: 255, cy: 195, r: 78 },
+    { cx: 95,  cy: 145, r: 60 },
+    { cx: 345, cy: 135, r: 65 }
+  ];
+
+  for (let i = 0; i < lobes.length; i++) {
+    const lobe = lobes[i];
+    const grad = offCtx.createRadialGradient(lobe.cx, lobe.cy, lobe.r * 0.12, lobe.cx, lobe.cy, lobe.r);
+    if (isBlood) {
+      grad.addColorStop(0, 'rgba(45, 8, 14, 0.45)');
+      grad.addColorStop(0.55, 'rgba(80, 12, 22, 0.22)');
+      grad.addColorStop(1, 'rgba(45, 8, 14, 0)');
+    } else {
+      grad.addColorStop(0, 'rgba(15, 23, 42, 0.42)');
+      grad.addColorStop(0.55, 'rgba(15, 23, 42, 0.18)');
+      grad.addColorStop(1, 'rgba(15, 23, 42, 0)');
+    }
+    offCtx.fillStyle = grad;
+    offCtx.beginPath();
+    offCtx.arc(lobe.cx, lobe.cy, lobe.r, 0, Math.PI * 2);
+    offCtx.fill();
+  }
+
+  return offCanvas;
+}
+
+function getCloudShadowSprite(isBlood) {
+  if (isBlood) {
+    if (!cloudShadowSpriteBlood) cloudShadowSpriteBlood = createCloudShadowSprite(true);
+    return cloudShadowSpriteBlood;
+  } else {
+    if (!cloudShadowSpriteNormal) cloudShadowSpriteNormal = createCloudShadowSprite(false);
+    return cloudShadowSpriteNormal;
+  }
+}
+
+// Persistent cloud shadow field configuration with spatial offsets & parallax drift rates
+const CLOUD_SHADOW_DEFS = [
+  { x: 350,  y: 200,  w: 520, h: 310, rot: 0.15,  spd: 1.05 },
+  { x: 1250, y: 450,  w: 580, h: 340, rot: -0.22, spd: 0.95 },
+  { x: 2100, y: 150,  w: 470, h: 280, rot: 0.08,  spd: 1.12 },
+  { x: 700,  y: 950,  w: 540, h: 320, rot: -0.12, spd: 0.98 },
+  { x: 1650, y: 800,  w: 610, h: 360, rot: 0.25,  spd: 1.02 },
+  { x: 2500, y: 1100, w: 490, h: 290, rot: -0.18, spd: 1.08 },
+  { x: 400,  y: 1650, w: 560, h: 330, rot: 0.10,  spd: 0.92 },
+  { x: 1450, y: 1500, w: 530, h: 315, rot: -0.05, spd: 1.00 }
+];
+const CLOUD_PERIOD_X = 2800;
+const CLOUD_PERIOD_Y = 2000;
 
 function render() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -4325,26 +4573,71 @@ function render() {
     });
   }
 
-  // Render Rolling Cloud Shadows for Overcast and Storms
-  if (typeof weatherState !== 'undefined' && weatherState.intensity > 0.05) {
-    const activeCfg = (typeof WEATHER_CONFIGS !== 'undefined') ? (WEATHER_CONFIGS[weatherState.type] || WEATHER_CONFIGS.clear) : null;
-    if (activeCfg && (activeCfg.id === 'overcast' || activeCfg.id === 'storm' || activeCfg.id === 'blood_tempest')) {
-      ctx.save();
-      const cloudAlpha = (activeCfg.id === 'overcast' ? 0.22 : 0.32) * weatherState.intensity;
-      ctx.fillStyle = activeCfg.id === 'blood_tempest' ? `rgba(45, 10, 15, ${cloudAlpha})` : `rgba(15, 23, 42, ${cloudAlpha})`;
-      
-      const cloudSpeed = time * 28;
-      const numClouds = 6;
-      for (let c = 0; c < numClouds; c++) {
-        const cx = Math.floor(viewLeft / 1200) * 1200 + (c % 3) * 450 + (cloudSpeed * (1 + (c % 2) * 0.4)) % 1800 - 300;
-        const cy = Math.floor(viewTop / 900) * 900 + Math.floor(c / 3) * 480 + (c * 75);
-        if (isVisible(cx, cy, 300)) {
-          ctx.beginPath();
-          ctx.ellipse(cx, cy, 220 + (c % 3) * 40, 140 + (c % 2) * 30, (c * 0.4), 0, Math.PI * 2);
-          ctx.fill();
+  // Render Rolling Cloud Shadows across All Weather Events (100% Pop-Free & Mobile-Optimized)
+  if (typeof weatherState !== 'undefined' && weatherState.intensity > 0.02) {
+    const weatherType = weatherState.type || 'clear';
+    let baseCloudAlpha = 0;
+    if (weatherType === 'overcast') baseCloudAlpha = 0.28;
+    else if (weatherType === 'rain') baseCloudAlpha = 0.32;
+    else if (weatherType === 'gale') baseCloudAlpha = 0.30;
+    else if (weatherType === 'storm') baseCloudAlpha = 0.40;
+    else if (weatherType === 'thunderstorm') baseCloudAlpha = 0.48;
+    else if (weatherType === 'blood_tempest') baseCloudAlpha = 0.52;
+    else if (weatherType === 'mist') baseCloudAlpha = 0.22;
+    else if (weatherType === 'dense_fog') baseCloudAlpha = 0.26;
+
+    const finalCloudAlpha = baseCloudAlpha * weatherState.intensity;
+
+    if (finalCloudAlpha > 0.01) {
+      const isBlood = (weatherType === 'blood_tempest') || Boolean(biome && biome.isBloodSea);
+      const sprite = getCloudShadowSprite(isBlood);
+
+      // Cloud drift velocity vector along wind
+      const effWind = (typeof windAngle !== 'undefined') ? windAngle : 0.5;
+      const windSpeedMult = (weatherType === 'gale' || weatherType === 'storm' || weatherType === 'blood_tempest') ? 1.4 : 1.0;
+      const baseSpeed = 22 * windSpeedMult;
+      const driftX = Math.cos(effWind) * baseSpeed * time;
+      const driftY = Math.sin(effWind) * baseSpeed * time;
+
+      const halfPX = CLOUD_PERIOD_X * 0.5;
+      const halfPY = CLOUD_PERIOD_Y * 0.5;
+      const fadeStart = CLOUD_PERIOD_X * 0.36; // ~1008px
+      const fadeEnd = CLOUD_PERIOD_X * 0.48;   // ~1344px
+
+      for (let c = 0; c < CLOUD_SHADOW_DEFS.length; c++) {
+        const cDef = CLOUD_SHADOW_DEFS[c];
+        const worldX = cDef.x + driftX * cDef.spd;
+        const worldY = cDef.y + driftY * cDef.spd;
+
+        // Continuous wrapping relative to camera/player center (zero grid snaps, zero pop)
+        const relX = ((worldX - playerState.x) % CLOUD_PERIOD_X + CLOUD_PERIOD_X * 1.5) % CLOUD_PERIOD_X - halfPX;
+        const relY = ((worldY - playerState.y) % CLOUD_PERIOD_Y + CLOUD_PERIOD_Y * 1.5) % CLOUD_PERIOD_Y - halfPY;
+        const cx = playerState.x + relX;
+        const cy = playerState.y + relY;
+
+        // Radial distance falloff towards wrapping boundary: guarantees 0% edge pop
+        const distFromCam = Math.hypot(relX, relY);
+        if (distFromCam >= fadeEnd) continue;
+
+        // Frustum cull if outside camera viewport + buffer
+        if (!isVisible(cx, cy, cDef.w * 0.55)) continue;
+
+        let edgeFade = 1.0;
+        if (distFromCam > fadeStart) {
+          edgeFade = 1.0 - (distFromCam - fadeStart) / (fadeEnd - fadeStart);
         }
+
+        const alpha = finalCloudAlpha * edgeFade;
+        if (alpha <= 0.005) continue;
+
+        // Draw cloud shadow with GPU texture blit
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.translate(cx, cy);
+        ctx.rotate(cDef.rot);
+        ctx.drawImage(sprite, -cDef.w * 0.5, -cDef.h * 0.5, cDef.w, cDef.h);
+        ctx.restore();
       }
-      ctx.restore();
     }
   }
 
@@ -4463,97 +4756,257 @@ function render() {
   // WEATHER ENVIRONMENTAL SCREEN OVERLAYS & PRECIPITATION
   // =========================================================================
 
-  // 1. Render Rain & Blood Rain Streaks
+  // 1. Render Multi-Layer Rain, Blood Rain, Splash Ripples & Sea Haze
   if (typeof weatherState !== 'undefined' && weatherState.intensity > 0.05) {
     const activeCfg = (typeof WEATHER_CONFIGS !== 'undefined') ? (WEATHER_CONFIGS[weatherState.type] || WEATHER_CONFIGS.clear) : null;
     if (activeCfg && activeCfg.rainDensity > 0) {
       ctx.save();
       const isBlood = Boolean(activeCfg.isBlood);
-      const rainCount = Math.floor(75 * activeCfg.rainDensity * weatherState.intensity);
-      const rainAngle = windAngle + Math.PI * 0.15;
-      const dx = Math.cos(rainAngle) * 22;
-      const dy = Math.sin(rainAngle) * 22 + 18;
+      const intensity = weatherState.intensity;
+      const rainDensity = activeCfg.rainDensity;
+      const effectiveWind = (typeof windAngle !== 'undefined') ? windAngle : 0.5;
+      const rainAngle = effectiveWind + Math.PI * 0.12;
+      const cosA = Math.cos(rainAngle);
+      const sinA = Math.sin(rainAngle);
+      const speedX = cosA * 24;
+      const speedY = sinA * 24 + 20;
 
+      // Layer A: Background Fine Drizzle (Tirai gerimis halus latar belakang)
+      const bgCount = Math.floor(65 * rainDensity * intensity);
       ctx.strokeStyle = isBlood 
-        ? `rgba(225, 29, 72, ${(0.48 * weatherState.intensity).toFixed(2)})`
-        : `rgba(203, 213, 225, ${(0.38 * weatherState.intensity).toFixed(2)})`;
-      ctx.lineWidth = isBlood ? 1.8 : 1.2;
-
+        ? `rgba(225, 29, 72, ${(0.22 * intensity).toFixed(2)})`
+        : `rgba(203, 213, 225, ${(0.20 * intensity).toFixed(2)})`;
+      ctx.lineWidth = 0.8;
       ctx.beginPath();
-      for (let r = 0; r < rainCount; r++) {
-        const rx = ((r * 137.5 + time * 680 * Math.cos(rainAngle)) % width + width) % width;
-        const ry = ((r * 241.3 + time * 880) % height + height) % height;
+      for (let r = 0; r < bgCount; r++) {
+        const rx = ((r * 113.7 + time * 520 * cosA) % width + width) % width;
+        const ry = ((r * 197.3 + time * 720) % height + height) % height;
         ctx.moveTo(rx, ry);
-        ctx.lineTo(rx - dx * 0.6, ry - dy * 0.6);
+        ctx.lineTo(rx - speedX * 0.4, ry - speedY * 0.4);
       }
       ctx.stroke();
+
+      // Layer B: Foreground Crisp Rain Drops (Butiran hujan tajam berkecepatan tinggi)
+      const fgCount = Math.floor(50 * rainDensity * intensity);
+      ctx.strokeStyle = isBlood 
+        ? `rgba(251, 113, 133, ${(0.52 * intensity).toFixed(2)})`
+        : `rgba(241, 245, 249, ${(0.42 * intensity).toFixed(2)})`;
+      ctx.lineWidth = isBlood ? 1.6 : 1.2;
+      ctx.beginPath();
+      for (let r = 0; r < fgCount; r++) {
+        const rx = ((r * 157.1 + time * 820 * cosA) % width + width) % width;
+        const ry = ((r * 283.5 + time * 1050) % height + height) % height;
+        const dropLen = 0.65 + ((r % 5) * 0.08);
+        ctx.moveTo(rx, ry);
+        ctx.lineTo(rx - speedX * dropLen, ry - speedY * dropLen);
+      }
+      ctx.stroke();
+
+      // Layer C: Sea Surface Splash Ripples & Droplet Micro-Crowns (Riak benturan air laut)
+      const splashCount = Math.min(22, Math.floor(16 * rainDensity * intensity));
+      for (let s = 0; s < splashCount; s++) {
+        const cycle = ((time * 2.4 + s * 0.161) % 1.0);
+        const sx = ((s * 211.3 + (s % 3) * 60) % width + width) % width;
+        const sy = ((s * 137.9 + (s % 5) * 80) % height + height) % height;
+        const rippleRadX = 2.0 + cycle * 7.5;
+        const rippleRadY = rippleRadX * 0.42;
+        const rippleAlpha = (1.0 - cycle) * (isBlood ? 0.38 : 0.28) * intensity;
+
+        ctx.strokeStyle = isBlood 
+          ? `rgba(244, 63, 94, ${rippleAlpha.toFixed(2)})` 
+          : `rgba(224, 242, 254, ${rippleAlpha.toFixed(2)})`;
+        ctx.lineWidth = 0.9;
+        ctx.beginPath();
+        ctx.ellipse(sx, sy, rippleRadX, rippleRadY, 0, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Tiny bounce droplet on surface impact
+        if (cycle < 0.45) {
+          const bounceH = Math.sin((cycle / 0.45) * Math.PI) * 3.5;
+          ctx.fillStyle = isBlood ? 'rgba(254, 205, 211, 0.45)' : 'rgba(255, 255, 255, 0.45)';
+          ctx.beginPath();
+          ctx.arc(sx, sy - bounceH, 0.8, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // Layer D: Humid Sea-Surface Rain Spray & Vapor Haze
+      const rainHaze = ctx.createLinearGradient(0, height * 0.5, 0, height);
+      rainHaze.addColorStop(0, 'rgba(0, 0, 0, 0)');
+      rainHaze.addColorStop(1, isBlood 
+        ? `rgba(136, 19, 55, ${(0.14 * intensity).toFixed(2)})` 
+        : `rgba(186, 230, 253, ${(0.08 * intensity).toFixed(2)})`);
+      ctx.fillStyle = rainHaze;
+      ctx.fillRect(0, height * 0.5, width, height * 0.5);
+
       ctx.restore();
     }
   }
 
-  // 2. Dense Fog Screen Overlay (Zone >= 62,000m)
-  if (typeof weatherState !== 'undefined' && weatherState.type === 'dense_fog' && weatherState.intensity > 0.05) {
-    ctx.save();
-    const fogAlpha = Math.min(0.96, weatherState.intensity * 0.95);
-    const minDim = Math.min(width, height);
-    const maxDim = Math.max(width, height);
-    const clearRadius = minDim * 0.14; // Narrow clear sight aperture around ship
-    const outerRadius = maxDim * 0.62;
+  // 2. Wind Breeze Streamlines & Ocean Spray (Noticeable, sleek, and non-intrusive)
+  if (typeof weatherState !== 'undefined' && weatherState.intensity > 0.05) {
+    const activeCfg = (typeof WEATHER_CONFIGS !== 'undefined') ? (WEATHER_CONFIGS[weatherState.type] || WEATHER_CONFIGS.clear) : null;
+    const isWindyWeather = activeCfg && (activeCfg.hasWindDrift || activeCfg.id === 'gale' || activeCfg.id === 'storm' || activeCfg.id === 'thunderstorm' || activeCfg.id === 'blood_tempest');
+    if (isWindyWeather) {
+      ctx.save();
+      const windInt = weatherState.intensity;
+      const effectiveWind = (typeof windAngle !== 'undefined') ? windAngle : 0.5;
+      const cosW = Math.cos(effectiveWind);
+      const sinW = Math.sin(effectiveWind);
+      const perpX = -sinW;
+      const perpY = cosW;
+      const streamCount = 7;
 
-    const fogGrad = ctx.createRadialGradient(
-      width / 2, height / 2, clearRadius,
-      width / 2, height / 2, outerRadius
-    );
-    fogGrad.addColorStop(0, 'rgba(226, 232, 240, 0)');
-    fogGrad.addColorStop(0.35, `rgba(203, 213, 225, ${(0.55 * fogAlpha).toFixed(2)})`);
-    fogGrad.addColorStop(0.7, `rgba(148, 163, 184, ${(0.85 * fogAlpha).toFixed(2)})`);
-    fogGrad.addColorStop(1, `rgba(71, 85, 105, ${fogAlpha.toFixed(2)})`);
-    ctx.fillStyle = fogGrad;
-    ctx.fillRect(0, 0, width, height);
+      ctx.lineWidth = 1.2;
+      for (let w = 0; w < streamCount; w++) {
+        const cycle = ((time * 0.38 + w * 0.143) % 1.0);
+        const maxDiag = Math.max(width, height) + 300;
+        const startDist = -150 + cycle * maxDiag;
+        const laneOffset = (((w * 193.7) % height) + height) % height - (height * 0.5);
+        
+        const cx = width * 0.5 + cosW * startDist + perpX * laneOffset;
+        const cy = height * 0.5 + sinW * startDist + perpY * laneOffset;
+        
+        const lineLen = 110 + (w % 3) * 35;
+        const endX = cx + cosW * lineLen;
+        const endY = cy + sinW * lineLen;
+        
+        // Gentle sine undulation curve
+        const wave = Math.sin(time * 2.2 + w * 1.6) * 11;
+        const midX = (cx + endX) * 0.5 + perpX * wave;
+        const midY = (cy + endY) * 0.5 + perpY * wave;
 
-    // Swirling dense fog veils
-    ctx.fillStyle = `rgba(241, 245, 249, ${(0.18 * fogAlpha).toFixed(2)})`;
-    for (let f = 0; f < 5; f++) {
-      const fAng = (f / 5) * Math.PI * 2 + time * 0.15;
-      const fDist = minDim * 0.38;
-      const fx = width / 2 + Math.cos(fAng) * fDist;
-      const fy = height / 2 + Math.sin(fAng) * fDist;
-      ctx.beginPath();
-      ctx.ellipse(fx, fy, 160, 95, fAng, 0, Math.PI * 2);
-      ctx.fill();
+        // Gradient fading at head and tail
+        const streamGrad = ctx.createLinearGradient(cx, cy, endX, endY);
+        const alphaPeak = (Math.sin(cycle * Math.PI) * 0.22 * windInt).toFixed(2);
+        const streamColor = activeCfg.isBlood ? '254, 205, 211' : '224, 242, 254';
+        streamGrad.addColorStop(0, `rgba(${streamColor}, 0)`);
+        streamGrad.addColorStop(0.3, `rgba(${streamColor}, ${alphaPeak})`);
+        streamGrad.addColorStop(1, `rgba(${streamColor}, 0)`);
+
+        ctx.strokeStyle = streamGrad;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.quadraticCurveTo(midX, midY, endX, endY);
+        ctx.stroke();
+
+        // Micro-sea-spray speck at stream head
+        const sprayAlpha = (Math.sin(cycle * Math.PI) * 0.35 * windInt).toFixed(2);
+        ctx.fillStyle = activeCfg.isBlood ? `rgba(244, 63, 94, ${sprayAlpha})` : `rgba(255, 255, 255, ${sprayAlpha})`;
+        ctx.beginPath();
+        ctx.arc(endX, endY, 1.1, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
     }
-    ctx.restore();
   }
 
-  // 3. Dense Blood Fog Overlay (Zone >= 75,000m - Blood Tempest)
-  if (typeof weatherState !== 'undefined' && weatherState.type === 'blood_tempest' && weatherState.intensity > 0.05) {
-    ctx.save();
-    const bloodFogAlpha = Math.min(0.92, weatherState.intensity * 0.88);
-    const minDim = Math.min(width, height);
-    const maxDim = Math.max(width, height);
+  // 3. Volumetric Sea Fog, Ethereal Mist, & Blood Fog Screen Overlays
+  if (typeof weatherState !== 'undefined' && weatherState.intensity > 0.05) {
+    const isDenseFog = weatherState.type === 'dense_fog';
+    const isMist = weatherState.type === 'mist';
+    const isBloodFog = weatherState.type === 'blood_tempest';
 
-    const bloodFogGrad = ctx.createRadialGradient(
-      width / 2, height / 2, minDim * 0.20,
-      width / 2, height / 2, maxDim * 0.65
-    );
-    bloodFogGrad.addColorStop(0, 'rgba(153, 27, 27, 0)');
-    bloodFogGrad.addColorStop(0.5, `rgba(127, 29, 29, ${(0.6 * bloodFogAlpha).toFixed(2)})`);
-    bloodFogGrad.addColorStop(1, `rgba(69, 10, 10, ${bloodFogAlpha.toFixed(2)})`);
-    ctx.fillStyle = bloodFogGrad;
-    ctx.fillRect(0, 0, width, height);
+    if (isDenseFog || isMist || isBloodFog) {
+      ctx.save();
+      const intensity = weatherState.intensity;
+      const minDim = Math.min(width, height);
+      const maxDim = Math.max(width, height);
+      const effectiveWind = (typeof windAngle !== 'undefined') ? windAngle : 0.5;
+      const cosW = Math.cos(effectiveWind);
+      const sinW = Math.sin(effectiveWind);
 
-    // Occult pulsing crimson swirls
-    ctx.fillStyle = `rgba(185, 28, 28, ${(0.22 * bloodFogAlpha).toFixed(2)})`;
-    for (let b = 0; b < 4; b++) {
-      const bAng = (b / 4) * Math.PI * 2 - time * 0.2;
-      const bDist = minDim * 0.35;
-      const bx = width / 2 + Math.cos(bAng) * bDist;
-      const by = height / 2 + Math.sin(bAng) * bDist;
-      ctx.beginPath();
-      ctx.ellipse(bx, by, 140, 80, bAng, 0, Math.PI * 2);
-      ctx.fill();
+      // A. Player Ship Lantern Volumetric Light Halo (Cahaya lentera menembus kabut)
+      const lanternHaloRad = minDim * (isDenseFog ? 0.32 : 0.42);
+      const lanternHalo = ctx.createRadialGradient(
+        width / 2, height / 2, 18,
+        width / 2, height / 2, lanternHaloRad
+      );
+      if (isBloodFog) {
+        lanternHalo.addColorStop(0, `rgba(254, 205, 211, ${(0.16 * intensity).toFixed(2)})`);
+        lanternHalo.addColorStop(0.4, `rgba(225, 29, 72, ${(0.06 * intensity).toFixed(2)})`);
+      } else if (isMist) {
+        lanternHalo.addColorStop(0, `rgba(224, 242, 254, ${(0.18 * intensity).toFixed(2)})`);
+        lanternHalo.addColorStop(0.4, `rgba(165, 243, 252, ${(0.07 * intensity).toFixed(2)})`);
+      } else {
+        lanternHalo.addColorStop(0, `rgba(254, 240, 138, ${(0.18 * intensity).toFixed(2)})`);
+        lanternHalo.addColorStop(0.4, `rgba(251, 191, 36, ${(0.06 * intensity).toFixed(2)})`);
+      }
+      lanternHalo.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = lanternHalo;
+      ctx.fillRect(0, 0, width, height);
+
+      // B. Cinematic Ambient Oceanic Mist Vignette
+      const fogAlpha = Math.min(0.95, intensity * (isDenseFog ? 0.94 : (isBloodFog ? 0.88 : 0.68)));
+      const clearRadius = minDim * (isDenseFog ? 0.16 : 0.22);
+      const outerRadius = maxDim * 0.65;
+
+      const vignetteGrad = ctx.createRadialGradient(
+        width / 2, height / 2, clearRadius,
+        width / 2, height / 2, outerRadius
+      );
+
+      if (isDenseFog) {
+        vignetteGrad.addColorStop(0, 'rgba(226, 232, 240, 0)');
+        vignetteGrad.addColorStop(0.32, `rgba(203, 213, 225, ${(0.28 * fogAlpha).toFixed(2)})`);
+        vignetteGrad.addColorStop(0.68, `rgba(148, 163, 184, ${(0.68 * fogAlpha).toFixed(2)})`);
+        vignetteGrad.addColorStop(1, `rgba(30, 41, 59, ${(0.95 * fogAlpha).toFixed(2)})`);
+      } else if (isMist) {
+        vignetteGrad.addColorStop(0, 'rgba(224, 242, 254, 0)');
+        vignetteGrad.addColorStop(0.35, `rgba(196, 181, 253, ${(0.24 * fogAlpha).toFixed(2)})`);
+        vignetteGrad.addColorStop(0.70, `rgba(129, 140, 248, ${(0.52 * fogAlpha).toFixed(2)})`);
+        vignetteGrad.addColorStop(1, `rgba(30, 27, 75, ${(0.80 * fogAlpha).toFixed(2)})`);
+      } else {
+        // Blood Tempest
+        vignetteGrad.addColorStop(0, 'rgba(254, 205, 211, 0)');
+        vignetteGrad.addColorStop(0.35, `rgba(225, 29, 72, ${(0.34 * fogAlpha).toFixed(2)})`);
+        vignetteGrad.addColorStop(0.70, `rgba(159, 18, 57, ${(0.72 * fogAlpha).toFixed(2)})`);
+        vignetteGrad.addColorStop(1, `rgba(69, 10, 10, ${(0.94 * fogAlpha).toFixed(2)})`);
+      }
+      ctx.fillStyle = vignetteGrad;
+      ctx.fillRect(0, 0, width, height);
+
+      // C. Volumetric Rolling Sea Fog Banks (Awan kabut bergulung alami bergradien lembut)
+      const puffCount = 8;
+      const driftSpeed = 32;
+      for (let p = 0; p < puffCount; p++) {
+        const seed = p * 137.5;
+        const speedMult = 0.75 + (p % 3) * 0.22;
+        const driftDist = time * driftSpeed * speedMult + seed * 25;
+        const wrapW = width + 500;
+        const wrapH = height + 500;
+        const px = (((seed * 4.3 + cosW * driftDist) % wrapW + wrapW) % wrapW) - 250;
+        const py = (((seed * 7.7 + sinW * driftDist) % wrapH + wrapH) % wrapH) - 250;
+
+        // Natural undulating "breathing" puff radius
+        const puffRad = 170 + (p % 4) * 45 + Math.sin(time * 0.7 + p * 1.3) * 20;
+        const puffGrad = ctx.createRadialGradient(px, py, 12, px, py, puffRad);
+
+        if (isDenseFog) {
+          const puffPeak = (0.16 * fogAlpha).toFixed(2);
+          puffGrad.addColorStop(0, `rgba(241, 245, 249, ${puffPeak})`);
+          puffGrad.addColorStop(0.48, `rgba(203, 213, 225, ${(0.08 * fogAlpha).toFixed(2)})`);
+          puffGrad.addColorStop(1, 'rgba(148, 163, 184, 0)');
+        } else if (isMist) {
+          const puffPeak = (0.15 * fogAlpha).toFixed(2);
+          puffGrad.addColorStop(0, `rgba(224, 231, 255, ${puffPeak})`);
+          puffGrad.addColorStop(0.48, `rgba(165, 180, 252, ${(0.07 * fogAlpha).toFixed(2)})`);
+          puffGrad.addColorStop(1, 'rgba(99, 102, 241, 0)');
+        } else {
+          const puffPeak = (0.18 * fogAlpha).toFixed(2);
+          puffGrad.addColorStop(0, `rgba(225, 29, 72, ${puffPeak})`);
+          puffGrad.addColorStop(0.48, `rgba(159, 18, 57, ${(0.08 * fogAlpha).toFixed(2)})`);
+          puffGrad.addColorStop(1, 'rgba(76, 5, 25, 0)');
+        }
+
+        ctx.fillStyle = puffGrad;
+        ctx.beginPath();
+        ctx.arc(px, py, puffRad, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.restore();
     }
-    ctx.restore();
   }
 
   // 4. Fullscreen Lightning Flash

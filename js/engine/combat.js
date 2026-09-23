@@ -71,45 +71,201 @@ function fireCannons(source, target = null, isPlayer = false, customAimAngle = n
   }
 
   const diffCfg = (typeof getDifficultyConfig === 'function') ? getDifficultyConfig() : { playerDamageDealtMult: 1 };
-  let damage = isPlayer ? getStatValue('cannons', playerState.upgrades.cannons) : source.damage;
-  if (isPlayer && diffCfg.playerDamageDealtMult) {
-    damage *= diffCfg.playerDamageDealtMult;
+
+  if (isPlayer) {
+    const activeCannons = (playerState.equippedCannons || []).filter(c => c && c.durability > 0);
+    if (activeCannons.length === 0) {
+      showToast("Meriam kapal kosong atau aus! Buka Galangan Kapal [U] / Inventori [I].", "alert");
+      if (typeof sound !== 'undefined' && typeof sound.playSplash === 'function') sound.playSplash();
+      return;
+    }
+
+    angles.forEach(sideAngle => {
+      const muzzleX = source.x + Math.cos(sideAngle) * (source.radius || 20);
+      const muzzleY = source.y + Math.sin(sideAngle) * (source.radius || 20);
+
+      activeCannons.forEach((c, idx) => {
+        const cConf = (typeof CANNON_TYPES !== 'undefined' && CANNON_TYPES[c.type]) ? CANNON_TYPES[c.type] : {
+          damage: 22,
+          projectileType: 'cannonball',
+          color: '#94a3b8'
+        };
+
+        const muzzleColor = cConf.color || '#f59e0b';
+        for (let m = 0; m < 3; m++) {
+          entities.particles.push({
+            x: muzzleX,
+            y: muzzleY,
+            vx: Math.cos(sideAngle) * (2.2 + Math.random() * 3) + (Math.random() - 0.5) * 1.5,
+            vy: Math.sin(sideAngle) * (2.2 + Math.random() * 3) + (Math.random() - 0.5) * 1.5,
+            life: 0.22,
+            color: muzzleColor,
+            size: 2.2 + Math.random() * 2.5
+          });
+        }
+
+        const count = activeCannons.length;
+        const spread = (idx - (count - 1) / 2) * 0.14;
+        const fireDir = sideAngle + spread;
+        const dmg = cConf.damage * (diffCfg.playerDamageDealtMult || 1);
+
+        if (c.type === 'wokou') {
+          // Wokou Bamboo Rocket Salvo (3 rapid burst rockets)
+          for (let r = 0; r < 3; r++) {
+            const rSpread = fireDir + (r - 1) * 0.08;
+            entities.projectiles.push({
+              type: 'rocket_arrow',
+              sourceClan: 'player',
+              x: muzzleX,
+              y: muzzleY,
+              vx: Math.cos(rSpread) * 8.6,
+              vy: Math.sin(rSpread) * 8.6,
+              angle: rSpread,
+              radius: 5,
+              damage: dmg * 0.45,
+              isPlayer: true,
+              life: 1.35
+            });
+          }
+        } else if (c.type === 'mist') {
+          // Mist Spirit Occult Wisps (Homing towards nearest hostile enemy or tower)
+          let mistTarget = null;
+          let nearestDistSq = 480 * 480;
+          for (let eIdx = 0; eIdx < entities.enemies.length; eIdx++) {
+            const en = entities.enemies[eIdx];
+            const dSq = (en.x - muzzleX) * (en.x - muzzleX) + (en.y - muzzleY) * (en.y - muzzleY);
+            if (dSq < nearestDistSq) {
+              nearestDistSq = dSq;
+              mistTarget = en;
+            }
+          }
+          entities.projectiles.push({
+            type: 'spirit',
+            sourceClan: 'player',
+            target: mistTarget,
+            x: muzzleX,
+            y: muzzleY,
+            vx: Math.cos(fireDir) * 6.8,
+            vy: Math.sin(fireDir) * 6.8,
+            angle: fireDir,
+            speed: 6.8,
+            turnRate: 3.5,
+            radius: 6,
+            damage: dmg,
+            isPlayer: true,
+            life: 2.5
+          });
+        } else if (c.type === 'frost') {
+          // Viking Norse Frost Throwing Battleaxe (Slows target on hit)
+          entities.projectiles.push({
+            type: 'frost_axe',
+            sourceClan: 'player',
+            x: muzzleX,
+            y: muzzleY,
+            vx: Math.cos(fireDir) * 7.8,
+            vy: Math.sin(fireDir) * 7.8,
+            angle: fireDir,
+            spinAngle: Math.random() * Math.PI * 2,
+            spinSpeed: 24.0,
+            radius: 5,
+            damage: dmg,
+            isPlayer: true,
+            life: 1.45
+          });
+        } else if (c.type === 'chitin') {
+          // Abyssal Bio-Organic Chitin Spike (Corrosive Bleed)
+          entities.projectiles.push({
+            type: 'spike',
+            sourceClan: 'player',
+            x: muzzleX,
+            y: muzzleY,
+            vx: Math.cos(fireDir) * 8.2,
+            vy: Math.sin(fireDir) * 8.2,
+            angle: fireDir,
+            radius: 5,
+            damage: dmg,
+            isPlayer: true,
+            life: 1.3
+          });
+        } else {
+          // Standard Heavy Iron Cannonball
+          entities.projectiles.push({
+            type: 'cannonball',
+            sourceClan: 'player',
+            x: muzzleX,
+            y: muzzleY,
+            vx: Math.cos(fireDir) * 7.6,
+            vy: Math.sin(fireDir) * 7.6,
+            radius: 4.8,
+            damage: dmg,
+            isPlayer: true,
+            life: 1.35
+          });
+        }
+      });
+    });
+
+    // Durability consumption & shattering sequence
+    for (let cIdx = playerState.equippedCannons.length - 1; cIdx >= 0; cIdx--) {
+      const c = playerState.equippedCannons[cIdx];
+      if (!c || c.durability <= 0) continue;
+      c.durability -= 1;
+
+      if (c.durability <= 0) {
+        c.durability = 0;
+        const cConf = (typeof CANNON_TYPES !== 'undefined' && CANNON_TYPES[c.type]) ? CANNON_TYPES[c.type] : null;
+        if (cConf && cConf.isOrbSpecial) {
+          // Special Orb Cannon shatters completely and vanishes forever!
+          playerState.equippedCannons.splice(cIdx, 1);
+          showToast(`${c.name} telah aus dan pecah hancur berkeping-keping!`, "skull");
+          addFloatingText("MERIAM PECAH!", playerState.x, playerState.y - 25, '#ef4444', true);
+          if (typeof sound !== 'undefined' && typeof sound.playHit === 'function') sound.playHit(playerState.x, playerState.y);
+        } else {
+          // Standard Cannon is jammed/worn out - needs port workshop refurbish
+          showToast(`${c.name} aus dan macet! Perlu perbaikan di pelabuhan.`, "alert");
+          addFloatingText("MERIAM MACET!", playerState.x, playerState.y - 25, '#f59e0b', true);
+        }
+      }
+    }
+  } else {
+    // Enemy AI cannon firing
+    const damage = source.damage || 14;
+    const count = Math.max(1, source.tier || 1);
+
+    angles.forEach(sideAngle => {
+      const muzzleX = source.x + Math.cos(sideAngle) * (source.radius || 20);
+      const muzzleY = source.y + Math.sin(sideAngle) * (source.radius || 20);
+
+      for (let m = 0; m < 4; m++) {
+        entities.particles.push({
+          x: muzzleX,
+          y: muzzleY,
+          vx: Math.cos(sideAngle) * (2.5 + Math.random() * 3) + (Math.random() - 0.5) * 1.5,
+          vy: Math.sin(sideAngle) * (2.5 + Math.random() * 3) + (Math.random() - 0.5) * 1.5,
+          life: 0.22,
+          color: '#f59e0b',
+          size: 2.5 + Math.random() * 3
+        });
+      }
+
+      for (let i = 0; i < count; i++) {
+        const spread = (i - (count - 1) / 2) * 0.12;
+        const fireDir = sideAngle + spread;
+        entities.projectiles.push({
+          type: 'cannonball',
+          sourceClan: source.clan,
+          x: muzzleX,
+          y: muzzleY,
+          vx: Math.cos(fireDir) * 6.4,
+          vy: Math.sin(fireDir) * 6.4,
+          radius: 4,
+          damage,
+          isPlayer: false,
+          life: 1.35
+        });
+      }
+    });
   }
-  const count = isPlayer ? Math.min(4, 1 + Math.floor(playerState.upgrades.cannons / 2)) : Math.max(1, source.tier || 1);
-
-  angles.forEach(sideAngle => {
-    const muzzleX = source.x + Math.cos(sideAngle) * (source.radius || 20);
-    const muzzleY = source.y + Math.sin(sideAngle) * (source.radius || 20);
-
-    for (let m = 0; m < 4; m++) {
-      entities.particles.push({
-        x: muzzleX,
-        y: muzzleY,
-        vx: Math.cos(sideAngle) * (2.5 + Math.random() * 3) + (Math.random() - 0.5) * 1.5,
-        vy: Math.sin(sideAngle) * (2.5 + Math.random() * 3) + (Math.random() - 0.5) * 1.5,
-        life: 0.22,
-        color: '#f59e0b',
-        size: 2.5 + Math.random() * 3
-      });
-    }
-
-    for (let i = 0; i < count; i++) {
-      const spread = (i - (count - 1) / 2) * 0.12;
-      const fireDir = sideAngle + spread;
-      entities.projectiles.push({
-        type: 'cannonball',
-        sourceClan: isPlayer ? 'player' : source.clan,
-        x: muzzleX,
-        y: muzzleY,
-        vx: Math.cos(fireDir) * (isPlayer ? 7.6 : 6.4),
-        vy: Math.sin(fireDir) * (isPlayer ? 7.6 : 6.4),
-        radius: isPlayer ? 4.8 : 4,
-        damage,
-        isPlayer,
-        life: 1.35
-      });
-    }
-  });
 }
 
 function triggerPlayerRearDefense() {

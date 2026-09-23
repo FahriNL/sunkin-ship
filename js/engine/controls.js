@@ -186,6 +186,12 @@ window.addEventListener('keydown', (e) => {
     if (isGameStarted && !isGamePaused) quickRepairShip();
     return;
   }
+  if (e.code === 'KeyI' || e.code === 'KeyB') {
+    if (isGameStarted) {
+      if (typeof toggleInventoryModal === 'function') toggleInventoryModal();
+    }
+    return;
+  }
 
   // Gate ship movement & firing while game is in menu or paused
   if (!isGameStarted || isGamePaused) return;

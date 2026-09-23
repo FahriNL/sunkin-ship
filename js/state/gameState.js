@@ -21,6 +21,19 @@ let playerState = {
   exploredSectors: {}, // { "x,y": true }
   isDockedAtPort: true,
   dockedPort: null,
+  resources: {
+    wood: 14,
+    rope: 6,
+    iron: 5,
+    stone: 4,
+    bamboo: 0,
+    mistOrb: 0,
+    snowOrb: 0,
+    firePowder: 0,
+    chitin: 0
+  },
+  cannonInventory: [],
+  equippedCannons: [],
   upgrades: {
     hull: 1,
     speed: 1,
@@ -176,8 +189,8 @@ function initTerritorialDefenses() {
     isl.reinforcementWaveCurrent = 0;
     isl.reinforcementTotalWaves = 0;
 
-    // 0. Peaceful zones: Shop Islands & Conquered Islands have no hostile defenses
-    if (isl.isShopIsland || isl.isConquered) {
+    // 0. Peaceful zones: Shop Islands, Conquered Islands & Uninhabited Islets have no hostile defenses
+    if (isl.isShopIsland || isl.isConquered || isl.isUninhabited) {
       return;
     }
 
@@ -216,137 +229,139 @@ function initTerritorialDefenses() {
 
     const defenseSquad = [];
 
+    // Dynamically scale base HP & Damage according to Island Tier (Tier 1 = Abyssal/Legendary, Tier 4 = Outer patrol)
+    const primaryHp = tier === 1 ? 520 : (tier === 2 ? 420 : (tier === 3 ? 340 : 250));
+    const primaryDmg = tier === 1 ? 38 : (tier === 2 ? 30 : (tier === 3 ? 24 : 18));
+    const flankHp = tier === 1 ? 200 : (tier === 2 ? 165 : (tier === 3 ? 135 : 100));
+    const flankDmg = tier === 1 ? 18 : (tier === 2 ? 15 : (tier === 3 ? 12 : 9));
+
     if (isl.clan === 'blood' || isl.isFlesh || isl.isSkullIsland) {
-      // TIER 1: Laut Darah - Sarang Induk / Pulau Tengkorak
+      // Laut Darah - Sarang Induk / Pulau Daging / Karang Belulang
       const primaryCount = isl.id === 'hive_nest' ? 2 : 1;
       if (primaryCount === 1) {
-        defenseSquad.push({ type: 'tentacle', isPeranakan: false, hp: 520, dmg: 38, rad: 26, name: `${isl.name} - Tentakel Induk Leviathan` });
-        defenseSquad.push({ type: 'flesh_spitter', isPeranakan: true, hp: 170, dmg: 16, rad: 18, name: `Kantung Parasit Pembusuk Barat` });
-        defenseSquad.push({ type: 'flesh_spitter', isPeranakan: true, hp: 170, dmg: 16, rad: 18, name: `Kantung Parasit Pembusuk Timur` });
+        defenseSquad.push({ type: 'tentacle', isPeranakan: false, hp: primaryHp, dmg: primaryDmg, rad: 26, name: `${isl.name} - Tentakel Induk Leviathan` });
+        defenseSquad.push({ type: 'flesh_spitter', isPeranakan: true, hp: flankHp, dmg: flankDmg, rad: 18, name: `Kantung Parasit Pembusuk Barat` });
+        defenseSquad.push({ type: 'flesh_spitter', isPeranakan: true, hp: flankHp, dmg: flankDmg, rad: 18, name: `Kantung Parasit Pembusuk Timur` });
       } else {
-        defenseSquad.push({ type: 'tentacle', isPeranakan: false, hp: 520, dmg: 38, rad: 26, name: `Tentakel Induk Abisal I` });
-        defenseSquad.push({ type: 'tentacle', isPeranakan: false, hp: 520, dmg: 38, rad: 26, name: `Tentakel Induk Abisal II` });
-        defenseSquad.push({ type: 'flesh_spitter', isPeranakan: true, hp: 170, dmg: 16, rad: 18, name: `Kantung Parasit Penjaga` });
-        defenseSquad.push({ type: 'flesh_spitter', isPeranakan: true, hp: 170, dmg: 16, rad: 18, name: `Tentakel Cambuk Lendir` });
+        defenseSquad.push({ type: 'tentacle', isPeranakan: false, hp: primaryHp, dmg: primaryDmg, rad: 26, name: `Tentakel Induk Abisal I` });
+        defenseSquad.push({ type: 'tentacle', isPeranakan: false, hp: primaryHp, dmg: primaryDmg, rad: 26, name: `Tentakel Induk Abisal II` });
+        defenseSquad.push({ type: 'flesh_spitter', isPeranakan: true, hp: flankHp, dmg: flankDmg, rad: 18, name: `Kantung Parasit Penjaga` });
+        defenseSquad.push({ type: 'flesh_spitter', isPeranakan: true, hp: flankHp, dmg: flankDmg, rad: 18, name: `Tentakel Cambuk Lendir` });
       }
 
     } else if (isl.clan === 'mist') {
-      // TIER 2: Sekte Kabut
-      defenseSquad.push({ type: 'mist_spire', isPeranakan: false, hp: 420, dmg: 28, rad: 30, name: `${isl.name} - Spire Okultis Utama` });
-      defenseSquad.push({ type: 'skull_pylon', isPeranakan: true, hp: 160, dmg: 15, rad: 18, name: `Pylon Tengkorak Arwah Barat` });
-      defenseSquad.push({ type: 'skull_pylon', isPeranakan: true, hp: 160, dmg: 15, rad: 18, name: `Pylon Tengkorak Arwah Timur` });
+      // Sekte Kabut
+      defenseSquad.push({ type: 'mist_spire', isPeranakan: false, hp: primaryHp, dmg: primaryDmg, rad: 30, name: `${isl.name} - Spire Okultis Utama` });
+      defenseSquad.push({ type: 'skull_pylon', isPeranakan: true, hp: flankHp, dmg: flankDmg, rad: 18, name: `Pylon Tengkorak Arwah Barat` });
+      defenseSquad.push({ type: 'skull_pylon', isPeranakan: true, hp: flankHp, dmg: flankDmg, rad: 18, name: `Pylon Tengkorak Arwah Timur` });
 
     } else if (isl.clan === 'iron') {
-      // TIER 2 or 3: Pemburu Besi Hitam
-      const isTier2 = tier <= 2;
+      // Pemburu Besi Hitam
       defenseSquad.push({
         type: 'steam_harpoon',
         isPeranakan: false,
-        hp: isTier2 ? 420 : 340,
-        dmg: isTier2 ? 30 : 25,
+        hp: primaryHp,
+        dmg: primaryDmg,
         rad: 28,
         name: `${isl.name} - Turret Harpoon Baja Uap`
       });
       defenseSquad.push({
         type: 'steam_vent',
         isPeranakan: true,
-        hp: isTier2 ? 160 : 135,
-        dmg: 14,
+        hp: flankHp,
+        dmg: flankDmg,
         rad: 18,
         name: `Tungku Cerobong Uap Kiri`
       });
       defenseSquad.push({
         type: 'steam_vent',
         isPeranakan: true,
-        hp: isTier2 ? 160 : 135,
-        dmg: 14,
+        hp: flankHp,
+        dmg: flankDmg,
         rad: 18,
         name: `Tungku Cerobong Uap Kanan`
       });
 
     } else if (isl.clan === 'viking') {
-      // TIER 2 or 3: Klan Penakluk Viking (Runestone Watchtowers & Ice Ballista)
+      // Klan Penakluk Viking (Runestone Watchtowers & Ice Ballista)
       defenseSquad.push({
         type: 'viking_ballista',
         isPeranakan: false,
-        hp: 440,
-        dmg: 32,
+        hp: primaryHp + 20,
+        dmg: primaryDmg + 2,
         rad: 30,
         name: `${isl.name} - Ballista Pelontar Es Nordik`
       });
       defenseSquad.push({
         type: 'viking_watchtower',
         isPeranakan: true,
-        hp: 165,
-        dmg: 16,
+        hp: flankHp,
+        dmg: flankDmg,
         rad: 20,
         name: `Menara Pasak Fjord Barat`
       });
       defenseSquad.push({
         type: 'viking_watchtower',
         isPeranakan: true,
-        hp: 165,
-        dmg: 16,
+        hp: flankHp,
+        dmg: flankDmg,
         rad: 20,
         name: `Menara Pasak Fjord Timur`
       });
 
     } else if (isl.clan === 'wokou') {
-      // TIER 3 or 4: Perompak Jung Wokou (Firework Pagoda & Bamboo Rocket Nest)
+      // Perompak Jung Wokou (Firework Pagoda & Bamboo Rocket Nest)
       defenseSquad.push({
         type: 'wokou_pagoda',
         isPeranakan: false,
-        hp: 410,
-        dmg: 28,
+        hp: primaryHp - 10,
+        dmg: primaryDmg - 2,
         rad: 30,
         name: `${isl.name} - Pagoda Baterai Mesiu Naga`
       });
       defenseSquad.push({
         type: 'wokou_rocket_nest',
         isPeranakan: true,
-        hp: 155,
-        dmg: 14,
+        hp: flankHp,
+        dmg: flankDmg,
         rad: 18,
         name: `Gardu Panah Roket Bambu I`
       });
       defenseSquad.push({
         type: 'wokou_rocket_nest',
         isPeranakan: true,
-        hp: 155,
-        dmg: 14,
+        hp: flankHp,
+        dmg: flankDmg,
         rad: 18,
         name: `Gardu Panah Roket Bambu II`
       });
 
     } else {
-      // TIER 3 or 4: Sindikat Emas Batavia / Neutral
-      const isTier4 = tier >= 4;
+      // Sindikat Emas Batavia / Neutral
       defenseSquad.push({
         type: 'cannon_bastion',
         isPeranakan: false,
-        hp: isTier4 ? 240 : 340,
-        dmg: isTier4 ? 18 : 24,
+        hp: primaryHp,
+        dmg: primaryDmg,
         rad: 26,
         name: `${isl.name} - Bastion Meriam Emas`
       });
       defenseSquad.push({
         type: 'swivel_outpost',
         isPeranakan: true,
-        hp: isTier4 ? 110 : 135,
-        dmg: 11,
+        hp: flankHp,
+        dmg: flankDmg,
         rad: 18,
-        name: `Gardu Pengintai Senapan Putar Barat`
+        name: `Pos Meriam Putar Barat`
       });
-      if (!isTier4) {
-        defenseSquad.push({
-          type: 'swivel_outpost',
-          isPeranakan: true,
-          hp: 135,
-          dmg: 11,
-          rad: 18,
-          name: `Gardu Pengintai Senapan Putar Timur`
-        });
-      }
+      defenseSquad.push({
+        type: 'swivel_outpost',
+        isPeranakan: true,
+        hp: flankHp,
+        dmg: flankDmg,
+        rad: 18,
+        name: `Pos Meriam Putar Timur`
+      });
     }
 
     // 2. Radially Distribute Defenses Around Island Perimeter (Not clustered at one spot!)
@@ -487,9 +502,10 @@ function seedWorldMerchants() {
 
 // Entity Factory for Ships and Abyssal Sea Monsters
 function createEnemyEntity(clanKey, tierIndex, x, y, angle, options = {}) {
-  const clanData = CLAN_LORE[clanKey] || CLAN_LORE.gold;
+  const normClan = (clanKey === 'batavia') ? 'gold' : (clanKey || 'gold');
+  const clanData = CLAN_LORE[normClan] || CLAN_LORE.gold;
   const tierData = clanData.tiers[Math.max(0, Math.min(2, tierIndex))];
-  const isMonster = clanKey === 'blood';
+  const isMonster = normClan === 'blood';
   const diffCfg = (typeof getDifficultyConfig === 'function') ? getDifficultyConfig() : { enemyHpMultiplier: 1.0 };
   const baseHp = options.hp || tierData.hp;
   const scaledHp = Math.round(baseHp * (diffCfg.enemyHpMultiplier || 1.0));
@@ -1074,9 +1090,36 @@ function loadSavedGame() {
       if (!playerState.mapLevel) playerState.mapLevel = 1;
       if (!playerState.exploredSectors) playerState.exploredSectors = {};
 
-      // Sync conquered state to world islands
+      // Migrate & ensure survival resources integrity
+      if (!playerState.resources || typeof playerState.resources !== 'object') {
+        playerState.resources = { wood: 14, rope: 6, iron: 5, stone: 4, bamboo: 0, mistOrb: 0, snowOrb: 0, firePowder: 0, chitin: 0 };
+      } else {
+        const defRes = { wood: 14, rope: 6, iron: 5, stone: 4, bamboo: 0, mistOrb: 0, snowOrb: 0, firePowder: 0, chitin: 0 };
+        for (const k in defRes) {
+          if (typeof playerState.resources[k] !== 'number') playerState.resources[k] = defRes[k];
+        }
+      }
+      if (!Array.isArray(playerState.cannonInventory)) playerState.cannonInventory = [];
+      if (!Array.isArray(playerState.equippedCannons)) playerState.equippedCannons = [];
+
+      // Ensure player has starter cannon equipped if slots are empty
+      const maxSlots = getMaxCannonSlots(playerState.upgrades.cannons || 1);
+      if (playerState.equippedCannons.length === 0) {
+        playerState.equippedCannons.push({
+          id: 'starter_gun_1',
+          type: 'standard',
+          name: 'Meriam Besi Standar',
+          durability: 90,
+          maxDurability: 90
+        });
+      }
+      if (playerState.equippedCannons.length > maxSlots) {
+        playerState.equippedCannons.length = maxSlots;
+      }
+
+      // Sync conquered state to world islands (ignore uninhabited islets)
       WORLD_ISLANDS.forEach(isl => {
-        if (playerState.conqueredIslands.includes(isl.id)) {
+        if (!isl.isUninhabited && playerState.conqueredIslands.includes(isl.id)) {
           isl.isConquered = true;
         }
       });
@@ -1086,6 +1129,17 @@ function loadSavedGame() {
       playerState.y = PLAYER_SPAWN.y;
       playerState.angle = PLAYER_SPAWN.angle;
       playerState.hp = getStatValue('hull', playerState.upgrades.hull);
+    } else {
+      // First-time new game state setup
+      if (playerState.equippedCannons.length === 0) {
+        playerState.equippedCannons.push({
+          id: 'starter_gun_1',
+          type: 'standard',
+          name: 'Meriam Besi Standar',
+          durability: 90,
+          maxDurability: 90
+        });
+      }
     }
 
     initTerritorialDefenses();
@@ -1106,11 +1160,15 @@ function saveGame() {
   }
 }
 
+function getMaxCannonSlots(level) {
+  return Math.min(4, Math.max(1, level || 1));
+}
+
 function getStatValue(type, level) {
   switch (type) {
     case 'hull': return 100 + (level - 1) * 75; // Max 475 HP
     case 'speed': return 3.2 + (level - 1) * 0.65; // Max speed 6.45
-    case 'cannons': return 12 + (level - 1) * 8; // Cannon damage
+    case 'cannons': return getMaxCannonSlots(level); // Active cannon slots capacity (1 to 4)
     case 'rearDefense': return level * 9; // Rear defense damage / mine damage
     case 'stealthCamo': return 1 - (level - 1) * 0.12; // Detection multiplier (1.0 down to 0.40)
     case 'relicSiphon': return (level - 1) * 4.5; // Life steal amount
@@ -1125,6 +1183,29 @@ function getShipTier() {
   if (sum >= 16) return { name: "Brigantine Tempur", rank: 3, color: "#38bdf8" };
   if (sum >= 9)  return { name: "Caravel Penjelajah", rank: 2, color: "#34d399" };
   return { name: "Sekoci Pemburu", rank: 1, color: "#fbbf24" };
+}
+
+function canAcceptResource(resKey) {
+  if (!playerState || !playerState.resources) return false;
+  // If player already holds this resource type, it stacks freely in existing slot
+  if ((playerState.resources[resKey] || 0) > 0) return true;
+  // Otherwise check if cargo has open slot
+  const resCount = Object.keys(playerState.resources).filter(k => (playerState.resources[k] || 0) > 0).length;
+  const cannonCount = Array.isArray(playerState.cannonInventory) ? playerState.cannonInventory.length : 0;
+  const maxSlots = typeof MAX_CARGO_SLOTS !== 'undefined' ? MAX_CARGO_SLOTS : 16;
+  return (resCount + cannonCount) < maxSlots;
+}
+
+function addPlayerResource(resKey, amount) {
+  if (!playerState.resources) playerState.resources = {};
+  if (!canAcceptResource(resKey)) {
+    if (typeof showToast === 'function') {
+      showToast("Pundi Kargo Penuh! Tidak dapat menampung jenis barang baru.", "alert");
+    }
+    return false;
+  }
+  playerState.resources[resKey] = (playerState.resources[resKey] || 0) + amount;
+  return true;
 }
 
 // Initial state load

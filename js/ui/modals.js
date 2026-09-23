@@ -275,13 +275,11 @@ const SHIP_COMPARTMENTS = {
     iconKey: "cannons",
     rect: { x: 270, y: 210, w: 370, h: 75 },
     badgePos: { x: 455, y: 248 },
-    statName: "Daya Hancur & Jumlah Meriam",
+    statName: "Kapasitas Slot Meriam (Cannon Slots)",
     getStatDesc: (lvl) => {
-      const curDmg = getStatValue('cannons', lvl);
-      const nxtDmg = getStatValue('cannons', lvl + 1);
-      const curBalls = Math.min(4, 1 + Math.floor(lvl / 2));
-      const nxtBalls = Math.min(4, 1 + Math.floor((lvl + 1) / 2));
-      return `${curBalls} Meriam (${curDmg} Dmg) -> ${nxtBalls} Meriam (${nxtDmg} Dmg)`;
+      const curSlots = (typeof getMaxCannonSlots === 'function') ? getMaxCannonSlots(lvl) : Math.min(4, 1 + Math.floor(lvl / 2));
+      const nxtSlots = (typeof getMaxCannonSlots === 'function') ? getMaxCannonSlots(lvl + 1) : Math.min(4, 1 + Math.floor((lvl + 1) / 2));
+      return `${curSlots} Slot Meriam Aktif -> ${nxtSlots} Slot Meriam (+1 Slot Baru)`;
     }
   },
   hull: {
@@ -646,49 +644,207 @@ function drawMasterCutawayGraphic(ctx, t, highlightKey = null, highlightPulse = 
       ctx.fill();
 
     } else if (comp.key === 'cannons') {
-      // 2. GUN DECK (cannons)
-      const numGuns = Math.min(3, 1 + Math.floor(cannonLvl / 2));
-      for (let g = 0; g < numGuns; g++) {
-        const gx = r.x + 45 + g * 110;
-        const gy = r.y + 45;
+      // 2. GUN DECK (cannons) - Procedural Rendering of Equipped Faction Cannons
+      const maxSlots = (typeof getMaxCannonSlots === 'function') 
+        ? getMaxCannonSlots(cannonLvl) 
+        : Math.min(4, 1 + Math.floor(cannonLvl / 2));
+      const equipped = playerState.equippedCannons || [];
+      const slotSpacing = (r.w - 75) / maxSlots;
 
-        // Wood gun carriage
-        ctx.fillStyle = '#78350f';
-        ctx.fillRect(gx - 14, gy + 8, 28, 12);
-        // Carriage wheels
-        ctx.fillStyle = '#1c0d06';
-        ctx.beginPath();
-        ctx.arc(gx - 10, gy + 20, 5, 0, Math.PI * 2);
-        ctx.arc(gx + 10, gy + 20, 5, 0, Math.PI * 2);
-        ctx.fill();
+      for (let s = 0; s < maxSlots; s++) {
+        const gx = r.x + 35 + s * slotSpacing + slotSpacing * 0.45;
+        const gy = r.y + 36;
+        const cannon = equipped[s];
 
-        // Cannon barrel (longer & bronze as level increases)
-        ctx.fillStyle = cannonLvl >= 5 ? '#d97706' : (cannonLvl >= 3 ? '#92400e' : '#1e293b');
-        ctx.fillRect(gx - 18, gy - 2, 34, 10);
-        ctx.fillRect(gx + 14, gy, 6, 6);
+        if (cannon) {
+          const type = cannon.type || 'standard';
+          const durRatio = Math.max(0, Math.min(1, cannon.durability / cannon.maxDurability));
+          const isJammed = cannon.durability <= 0;
 
-        // Cannon recoil ropes
-        ctx.strokeStyle = '#b45309';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(gx - 12, gy + 12);
-        ctx.lineTo(gx - 22, gy + 22);
-        ctx.stroke();
+          ctx.save();
+          if (type === 'mist') {
+            // MIST OCCULT CANNON: Spectral cyan runes, occult glow, ghostly wisps
+            ctx.shadowColor = '#06b6d4';
+            ctx.shadowBlur = isJammed ? 0 : 8;
+
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(gx - 13, gy + 8, 26, 12);
+            ctx.strokeStyle = '#22d3ee';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(gx - 13, gy + 8, 26, 12);
+
+            ctx.fillStyle = '#164e63';
+            ctx.beginPath();
+            ctx.arc(gx - 9, gy + 20, 5, 0, Math.PI * 2);
+            ctx.arc(gx + 9, gy + 20, 5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#67e8f9';
+            ctx.stroke();
+
+            ctx.fillStyle = isJammed ? '#334155' : '#0891b2';
+            ctx.fillRect(gx - 17, gy - 2, 32, 10);
+            ctx.fillStyle = '#67e8f9';
+            ctx.fillRect(gx + 13, gy - 1, 5, 8);
+
+            if (!isJammed) {
+              const wispY = gy - 7 + Math.sin(t * 4 + s) * 3;
+              ctx.fillStyle = 'rgba(103, 232, 249, 0.8)';
+              ctx.beginPath();
+              ctx.arc(gx - 2, wispY, 2.5, 0, Math.PI * 2);
+              ctx.fill();
+            }
+
+          } else if (type === 'frost') {
+            // FROST VIKING CANNON: Pale blue/white metal, hanging icicles
+            ctx.shadowColor = '#38bdf8';
+            ctx.shadowBlur = isJammed ? 0 : 6;
+
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(gx - 13, gy + 8, 26, 12);
+            ctx.strokeStyle = '#7dd3fc';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(gx - 13, gy + 8, 26, 12);
+
+            ctx.fillStyle = '#0369a1';
+            ctx.beginPath();
+            ctx.arc(gx - 9, gy + 20, 5, 0, Math.PI * 2);
+            ctx.arc(gx + 9, gy + 20, 5, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = isJammed ? '#475569' : '#0284c7';
+            ctx.fillRect(gx - 17, gy - 2, 32, 10);
+            ctx.fillStyle = '#e0f2fe';
+            ctx.fillRect(gx + 13, gy - 1, 5, 8);
+
+            if (!isJammed) {
+              ctx.fillStyle = 'rgba(224, 242, 254, 0.9)';
+              ctx.beginPath();
+              ctx.moveTo(gx - 5, gy + 8);
+              ctx.lineTo(gx - 2, gy + 14);
+              ctx.lineTo(gx + 1, gy + 8);
+              ctx.fill();
+            }
+
+          } else if (type === 'wokou') {
+            // WOKOU BAMBOO ROCKET SALVO: Triple green bamboo cluster, red lacquer carriage
+            ctx.fillStyle = '#991b1b';
+            ctx.fillRect(gx - 14, gy + 8, 28, 12);
+            ctx.strokeStyle = '#f59e0b';
+            ctx.lineWidth = 1.2;
+            ctx.strokeRect(gx - 14, gy + 8, 28, 12);
+
+            ctx.fillStyle = '#451a03';
+            ctx.beginPath();
+            ctx.arc(gx - 9, gy + 20, 5, 0, Math.PI * 2);
+            ctx.arc(gx + 9, gy + 20, 5, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = isJammed ? '#3f6212' : '#16a34a';
+            ctx.fillRect(gx - 16, gy - 4, 30, 4);
+            ctx.fillRect(gx - 18, gy + 1, 32, 4);
+            ctx.fillRect(gx - 16, gy + 6, 30, 4);
+
+            ctx.fillStyle = '#fbbf24';
+            ctx.fillRect(gx - 6, gy - 5, 3, 16);
+            ctx.fillRect(gx + 8, gy - 5, 3, 16);
+
+          } else if (type === 'chitin') {
+            // CHITIN BIO-ORGANIC CANNON: Deep crimson shell, monster teeth, pulsating veins
+            ctx.shadowColor = '#e11d48';
+            ctx.shadowBlur = isJammed ? 0 : 7;
+
+            ctx.fillStyle = '#4c0519';
+            ctx.fillRect(gx - 13, gy + 8, 26, 12);
+            ctx.strokeStyle = '#f43f5e';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(gx - 13, gy + 8, 26, 12);
+
+            ctx.fillStyle = '#881337';
+            ctx.beginPath();
+            ctx.arc(gx - 9, gy + 20, 5, 0, Math.PI * 2);
+            ctx.arc(gx + 9, gy + 20, 5, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = isJammed ? '#4c0519' : '#9f1239';
+            ctx.fillRect(gx - 16, gy - 2, 30, 10);
+
+            ctx.fillStyle = '#fecdd3';
+            ctx.beginPath();
+            ctx.moveTo(gx + 14, gy - 3);
+            ctx.lineTo(gx + 20, gy + 3);
+            ctx.lineTo(gx + 14, gy + 9);
+            ctx.closePath();
+            ctx.fill();
+
+          } else {
+            // STANDARD IRON CANNON
+            ctx.fillStyle = '#78350f';
+            ctx.fillRect(gx - 14, gy + 8, 28, 12);
+            ctx.fillStyle = '#1c0d06';
+            ctx.beginPath();
+            ctx.arc(gx - 10, gy + 20, 5, 0, Math.PI * 2);
+            ctx.arc(gx + 10, gy + 20, 5, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = isJammed ? '#475569' : (cannonLvl >= 5 ? '#d97706' : '#1e293b');
+            ctx.fillRect(gx - 18, gy - 2, 34, 10);
+            ctx.fillRect(gx + 14, gy, 6, 6);
+          }
+          ctx.restore();
+
+          // Durability Gauge Mini-Bar under gun
+          const barW = 28;
+          const barH = 3;
+          const barX = gx - barW / 2;
+          const barY = gy + 27;
+
+          ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+          ctx.fillRect(barX, barY, barW, barH);
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+          ctx.lineWidth = 0.5;
+          ctx.strokeRect(barX, barY, barW, barH);
+
+          ctx.fillStyle = isJammed ? '#ef4444' : (durRatio > 0.5 ? '#10b981' : (durRatio > 0.25 ? '#f59e0b' : '#ef4444'));
+          ctx.fillRect(barX, barY, barW * durRatio, barH);
+
+          ctx.font = 'bold 7px "Plus Jakarta Sans", monospace';
+          ctx.fillStyle = isJammed ? '#f87171' : '#cbd5e1';
+          ctx.textAlign = 'center';
+          ctx.fillText(isJammed ? 'RUSAK' : `${cannon.durability}/${cannon.maxDurability}`, gx, barY + 9);
+
+        } else {
+          // EMPTY UNLOCKED CANNON SLOT
+          ctx.save();
+          ctx.strokeStyle = 'rgba(217, 119, 6, 0.4)';
+          ctx.lineWidth = 1;
+          ctx.setLineDash([3, 3]);
+          ctx.strokeRect(gx - 16, gy - 4, 32, 30);
+          ctx.setLineDash([]);
+
+          ctx.font = 'bold 9px sans-serif';
+          ctx.fillStyle = 'rgba(251, 191, 36, 0.5)';
+          ctx.textAlign = 'center';
+          ctx.fillText('+', gx, gy + 10);
+          ctx.font = '7px sans-serif';
+          ctx.fillStyle = 'rgba(148, 163, 184, 0.5)';
+          ctx.fillText('Slot Kosong', gx, gy + 20);
+          ctx.restore();
+        }
       }
 
-      // Stack of cannonballs & powder kegs
+      // Stack of cannonballs & powder kegs at far right
       ctx.fillStyle = '#0f172a';
       ctx.beginPath();
-      ctx.arc(r.x + 335, r.y + 60, 4.5, 0, Math.PI * 2);
-      ctx.arc(r.x + 344, r.y + 60, 4.5, 0, Math.PI * 2);
-      ctx.arc(r.x + 339.5, r.y + 52, 4.5, 0, Math.PI * 2);
+      ctx.arc(r.x + 342, r.y + 60, 4.5, 0, Math.PI * 2);
+      ctx.arc(r.x + 351, r.y + 60, 4.5, 0, Math.PI * 2);
+      ctx.arc(r.x + 346.5, r.y + 52, 4.5, 0, Math.PI * 2);
       ctx.fill();
 
       // Powder keg
       ctx.fillStyle = '#b91c1c';
-      ctx.fillRect(r.x + 348, r.y + 48, 12, 16);
+      ctx.fillRect(r.x + 354, r.y + 48, 12, 16);
       ctx.strokeStyle = '#fde047';
-      ctx.strokeRect(r.x + 348, r.y + 48, 12, 16);
+      ctx.strokeRect(r.x + 354, r.y + 48, 12, 16);
 
     } else if (comp.key === 'hull') {
       // 3. CARGO HOLD & BILGE (hull)
@@ -1206,26 +1362,60 @@ function renderUpgradeCardsView() {
   }
 }
 
-// Update the Quick Repair button in the Shipyard footer
+// Update the Dual Quick Repair buttons in the Shipyard footer
 function updateShipyardRepairButton() {
-  if (!btnRepairShip) return;
+  const btnResource = document.getElementById('btnRepairShipResource');
+  const btnGold = document.getElementById('btnRepairShipGold');
+  const txtResource = document.getElementById('txtRepairShipResource');
+  const txtGold = document.getElementById('txtRepairShipGold');
+
   const maxHp = getStatValue('hull', playerState.upgrades.hull);
   const roundedHp = Math.round(playerState.hp);
-  if (roundedHp >= maxHp) {
-    btnRepairShip.className = 'bg-slate-800/80 text-emerald-400/70 font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 border border-emerald-500/20 cursor-default select-none shadow-sm';
-    btnRepairShip.innerHTML = `
-      <svg class="w-3.5 h-3.5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
-      <span>Lambung Prima (100%)</span>
-    `;
-    btnRepairShip.disabled = true;
-  } else {
-    btnRepairShip.className = 'bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-1.5 rounded-xl active:scale-95 transition flex items-center gap-1.5 shadow-md cursor-pointer';
-    btnRepairShip.innerHTML = `
-      <svg class="w-3.5 h-3.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
-      <span>Perbaiki Lambung (15 Koin)</span>
-      <kbd class="kbd-badge bg-black/40 text-[9px] hidden sm:inline-block">R</kbd>
-    `;
-    btnRepairShip.disabled = false;
+  const isFullHp = roundedHp >= maxHp;
+  const isDocked = Boolean(playerState.isDockedAtPort);
+
+  const curWood = (playerState.resources && playerState.resources.wood) || 0;
+  const curRope = (playerState.resources && playerState.resources.rope) || 0;
+  const hasResources = curWood >= 4 && curRope >= 2;
+  const hasGold = (playerState.gold || 0) >= 25;
+
+  if (btnResource) {
+    if (isFullHp) {
+      btnResource.className = 'bg-slate-800/80 text-emerald-400/70 font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 border border-emerald-500/20 cursor-default select-none shadow-sm text-[11px]';
+      if (txtResource) txtResource.innerText = 'Lambung Prima (100%)';
+      btnResource.disabled = true;
+    } else if (!isDocked) {
+      btnResource.className = 'bg-slate-800/80 text-slate-500 font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 border border-white/5 cursor-not-allowed select-none opacity-60 text-[11px]';
+      if (txtResource) txtResource.innerText = 'Reparasi (Wajib di Dermaga)';
+      btnResource.disabled = true;
+    } else if (hasResources) {
+      btnResource.className = 'bg-emerald-700 hover:bg-emerald-600 text-white font-bold px-3 py-1.5 rounded-xl active:scale-95 transition flex items-center gap-1.5 shadow-md cursor-pointer text-[11px]';
+      if (txtResource) txtResource.innerText = 'Reparasi (4 Kayu + 2 Tali)';
+      btnResource.disabled = false;
+    } else {
+      btnResource.className = 'bg-slate-800 text-amber-300/80 font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 border border-amber-500/30 cursor-not-allowed opacity-75 text-[11px]';
+      if (txtResource) txtResource.innerText = `Kurang Bahan (${curWood}/4 Kayu, ${curRope}/2 Tali)`;
+      btnResource.disabled = true;
+    }
+  }
+
+  if (btnGold) {
+    if (isFullHp) {
+      btnGold.className = 'hidden';
+      btnGold.disabled = true;
+    } else if (!isDocked) {
+      btnGold.className = 'bg-slate-800/80 text-slate-500 font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 border border-white/5 cursor-not-allowed select-none opacity-60 text-[11px]';
+      if (txtGold) txtGold.innerText = 'Jasa (Wajib di Dermaga)';
+      btnGold.disabled = true;
+    } else if (hasGold) {
+      btnGold.className = 'bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold px-3 py-1.5 rounded-xl active:scale-95 transition flex items-center gap-1.5 shadow-md cursor-pointer text-[11px]';
+      if (txtGold) txtGold.innerText = 'Jasa Galangan (25 Koin)';
+      btnGold.disabled = false;
+    } else {
+      btnGold.className = 'bg-slate-800 text-slate-500 font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 border border-white/5 cursor-not-allowed opacity-60 text-[11px]';
+      if (txtGold) txtGold.innerText = `Emas Kurang (${playerState.gold || 0}/25 Koin)`;
+      btnGold.disabled = true;
+    }
   }
 }
 
@@ -1577,6 +1767,1082 @@ if (upgradeModal) {
   });
 }
 
+// ============================================================================
+// PHASE 3: INVENTORY, RPG CARGO SLOTS, & UNIFIED FACTION WORKSHOP (v2.9.1)
+// ============================================================================
+
+const inventoryModal = document.getElementById('inventoryModal');
+const btnOpenInventory = document.getElementById('btnOpenInventory');
+const btnCloseInventory = document.getElementById('btnCloseInventory');
+const btnOpenRecipeBook = document.getElementById('btnOpenRecipeBook');
+const recipeBookModal = document.getElementById('recipeBookModal');
+const btnCloseRecipeBook = document.getElementById('btnCloseRecipeBook');
+const btnReturnToInventoryFromBook = document.getElementById('btnReturnToInventoryFromBook');
+const recipeBookGrid = document.getElementById('recipeBookGrid');
+
+const invDockStatusBadge = document.getElementById('invDockStatusBadge');
+const invGoldText = document.getElementById('invGoldText');
+const invBloodText = document.getElementById('invBloodText');
+const invEquippedRack = document.getElementById('invEquippedRack');
+const invEquippedSlotCountBadge = document.getElementById('invEquippedSlotCountBadge');
+const invCargoGrid = document.getElementById('invCargoGrid');
+const invCargoOccupiedCount = document.getElementById('invCargoOccupiedCount');
+const invSlotInspector = document.getElementById('invSlotInspector');
+const invCraftableList = document.getElementById('invCraftableList');
+const invCraftPortIndicator = document.getElementById('invCraftPortIndicator');
+const btnQuickNavShipyard = document.getElementById('btnQuickNavShipyard');
+const btnPauseInventory = document.getElementById('btnPauseInventory');
+
+const btnMobileTabCargo = document.getElementById('btnMobileTabCargo');
+const btnMobileTabCraft = document.getElementById('btnMobileTabCraft');
+const invCargoCol = document.getElementById('invCargoCol');
+const invCraftCol = document.getElementById('invCraftCol');
+const cargoHoverTooltip = document.getElementById('cargoHoverTooltip');
+const cannonPickerModal = document.getElementById('cannonPickerModal');
+const btnCloseCannonPicker = document.getElementById('btnCloseCannonPicker');
+const btnCancelCannonPicker = document.getElementById('btnCancelCannonPicker');
+const cannonPickerList = document.getElementById('cannonPickerList');
+const cannonPickerTitle = document.getElementById('cannonPickerTitle');
+let targetEquipSlotIndex = -1;
+let mobileInventoryActiveTab = 'cargo';
+
+function setMobileInventoryTab(tab) {
+  mobileInventoryActiveTab = tab;
+  if (!btnMobileTabCargo || !btnMobileTabCraft) return;
+
+  if (tab === 'cargo') {
+    btnMobileTabCargo.className = "flex-1 py-1.5 rounded-lg text-[11px] font-cinzel font-bold text-amber-300 bg-amber-950/80 border border-amber-500/40 text-center transition cursor-pointer";
+    btnMobileTabCraft.className = "flex-1 py-1.5 rounded-lg text-[11px] font-cinzel font-bold text-slate-400 hover:text-slate-200 text-center transition cursor-pointer";
+    if (invCargoCol) invCargoCol.classList.remove('hidden');
+    if (invCraftCol) {
+      invCraftCol.classList.add('hidden');
+      invCraftCol.classList.remove('flex');
+    }
+  } else {
+    btnMobileTabCraft.className = "flex-1 py-1.5 rounded-lg text-[11px] font-cinzel font-bold text-emerald-300 bg-emerald-950/80 border border-emerald-500/40 text-center transition cursor-pointer";
+    btnMobileTabCargo.className = "flex-1 py-1.5 rounded-lg text-[11px] font-cinzel font-bold text-slate-400 hover:text-slate-200 text-center transition cursor-pointer";
+    if (invCargoCol) invCargoCol.classList.add('hidden');
+    if (invCraftCol) {
+      invCraftCol.classList.remove('hidden');
+      invCraftCol.classList.add('flex');
+    }
+  }
+}
+
+if (btnMobileTabCargo) btnMobileTabCargo.onclick = () => setMobileInventoryTab('cargo');
+if (btnMobileTabCraft) btnMobileTabCraft.onclick = () => setMobileInventoryTab('craft');
+
+function showCargoTooltip(e, item) {
+  if (!cargoHoverTooltip || !item) return;
+  let html = '';
+  if (item.kind === 'resource') {
+    const res = item.def;
+    const iconSvg = SVG_ICONS[res.iconKey || item.key] || SVG_ICONS.inventory;
+    html = `
+      <div class="flex items-center gap-2 mb-1.5">
+        <div class="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border" style="background: rgba(15,23,42,0.9); border-color: ${res.color || '#f59e0b'}; color: ${res.color || '#fbbf24'};">
+          ${iconSvg}
+        </div>
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center justify-between gap-1">
+            <h4 class="font-cinzel text-xs font-bold text-white truncate">${res.name}</h4>
+            <span class="font-mono text-[10px] text-amber-300 font-bold">x${item.count}</span>
+          </div>
+          <div class="flex items-center gap-1 mt-0.5">
+            <span class="text-[8px] px-1.5 py-0.2 rounded font-bold uppercase bg-amber-950 text-amber-300 border border-amber-500/30">${res.category || 'Bahan Baku'}</span>
+            <span class="text-[8px] px-1 py-0.2 rounded font-bold bg-slate-900 text-slate-300">${res.rarity || 'Biasa'}</span>
+          </div>
+        </div>
+      </div>
+      <p class="text-[10px] text-slate-300 leading-snug">${res.desc}</p>
+      ${res.dropSource ? `<div class="text-[9px] text-slate-400 mt-1 italic border-t border-white/10 pt-1">Sumber: ${res.dropSource}</div>` : ''}
+    `;
+  } else if (item.kind === 'cannon') {
+    const conf = item.def;
+    const iconSvg = SVG_ICONS[conf.itemIconKey] || SVG_ICONS.cannons;
+    html = `
+      <div class="flex items-center gap-2 mb-1.5">
+        <div class="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border" style="background: rgba(15,23,42,0.9); border-color: ${conf.color || '#f59e0b'}; color: ${conf.color || '#fbbf24'};">
+          ${iconSvg}
+        </div>
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center justify-between gap-1">
+            <h4 class="font-cinzel text-xs font-bold text-white truncate">${conf.name}</h4>
+            <span class="text-[8px] px-1.5 py-0.2 rounded font-bold uppercase bg-cyan-950 text-cyan-300 border border-cyan-500/30">${conf.factionName || 'Faksi'}</span>
+          </div>
+          <div class="text-[9px] text-amber-300 font-mono mt-0.5">Durabilitas: ${item.cannon.durability}/${item.cannon.maxDurability}</div>
+        </div>
+      </div>
+      <p class="text-[10px] text-slate-300 leading-snug">${conf.desc}</p>
+      <div class="flex items-center justify-between text-[9px] font-mono text-emerald-400 mt-1 border-t border-white/10 pt-1">
+        <span>Daya Hancur: ${conf.damage}</span>
+        <span class="text-amber-300 font-sans font-bold">Ketuk untuk Pasang</span>
+      </div>
+    `;
+  }
+
+  cargoHoverTooltip.innerHTML = html;
+  cargoHoverTooltip.classList.remove('invisible', 'opacity-0');
+  cargoHoverTooltip.classList.add('active');
+  moveCargoTooltip(e);
+}
+
+function moveCargoTooltip(e) {
+  if (!cargoHoverTooltip || !cargoHoverTooltip.classList.contains('active')) return;
+  const padding = 14;
+  let x = e.clientX + padding;
+  let y = e.clientY + padding;
+  const w = cargoHoverTooltip.offsetWidth || 230;
+  const h = cargoHoverTooltip.offsetHeight || 100;
+  if (x + w > window.innerWidth - 10) x = e.clientX - w - padding;
+  if (y + h > window.innerHeight - 10) y = e.clientY - h - padding;
+  cargoHoverTooltip.style.left = `${Math.max(10, x)}px`;
+  cargoHoverTooltip.style.top = `${Math.max(10, y)}px`;
+}
+
+function hideCargoTooltip() {
+  if (!cargoHoverTooltip) return;
+  cargoHoverTooltip.classList.remove('active');
+  cargoHoverTooltip.classList.add('invisible', 'opacity-0');
+}
+
+function handleBroadsideSlotClick(slotIdx) {
+  const unequippedCannons = playerState.cannonInventory || [];
+  if (unequippedCannons.length === 0) {
+    showToast("Belum ada meriam di kargo! Rakit senjata faksi di Bengkel Rakit terlebih dahulu.", "alert");
+    return;
+  }
+  if (unequippedCannons.length === 1) {
+    equipCannonFromCargo(0, slotIdx);
+    return;
+  }
+  openCannonPickerForSlot(slotIdx);
+}
+
+function openCannonPickerForSlot(slotIdx) {
+  targetEquipSlotIndex = slotIdx;
+  if (!cannonPickerModal || !cannonPickerList) return;
+
+  const cannons = (playerState.cannonInventory || []);
+  if (cannons.length === 0) {
+    showToast("Belum ada meriam di kargo! Rakit senjata di Bengkel Rakit dermaga terlebih dahulu.", "alert");
+    return;
+  }
+
+  if (cannonPickerTitle) {
+    cannonPickerTitle.innerText = `PASANG MERIAM GELADAK (SLOT #${slotIdx + 1})`;
+  }
+
+  cannonPickerList.innerHTML = '';
+  cannons.forEach((cannon, idx) => {
+    const conf = CANNON_TYPES[cannon.type] || CANNON_TYPES.standard;
+    const durRatio = cannon.durability / cannon.maxDurability;
+    const itemEl = document.createElement('div');
+    itemEl.className = 'p-2.5 sm:p-3 rounded-xl border bg-slate-900/90 hover:border-amber-400/80 flex items-center justify-between gap-3 transition shadow-md';
+    itemEl.style.borderColor = conf.color || 'rgba(217, 119, 6, 0.4)';
+    itemEl.innerHTML = `
+      <div class="flex items-center gap-2.5 min-w-0">
+        <div class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border" style="background: rgba(15,23,42,0.9); border-color: ${conf.color || '#f59e0b'}; color: ${conf.color || '#fbbf24'};">
+          ${SVG_ICONS[conf.itemIconKey] || SVG_ICONS.cannons}
+        </div>
+        <div class="min-w-0">
+          <div class="flex items-center gap-1.5">
+            <h4 class="font-cinzel text-xs font-bold text-white truncate">${conf.name}</h4>
+            <span class="text-[8.5px] px-1.5 py-0.2 rounded font-bold uppercase bg-amber-950 text-amber-300 border border-amber-500/30">${conf.factionName || 'Faksi'}</span>
+          </div>
+          <div class="flex items-center gap-2 text-[9.5px] font-mono text-slate-300 mt-0.5">
+            <span>Dmg: <strong class="text-amber-300">${conf.damage}</strong></span>
+            <span>Dur: <strong class="${durRatio > 0.5 ? 'text-emerald-400' : 'text-rose-400'}">${cannon.durability}/${cannon.maxDurability}</strong></span>
+          </div>
+        </div>
+      </div>
+      <button type="button" class="btn-picker-equip-now px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-cinzel font-bold text-xs shadow-md border border-emerald-300/40 active:scale-95 transition cursor-pointer shrink-0" data-idx="${idx}">
+        Pasang
+      </button>
+    `;
+
+    itemEl.querySelector('.btn-picker-equip-now').onclick = () => {
+      closeCannonPicker();
+      equipCannonFromCargo(idx, slotIdx);
+    };
+
+    cannonPickerList.appendChild(itemEl);
+  });
+
+  cannonPickerModal.classList.remove('hidden');
+}
+
+function closeCannonPicker() {
+  if (cannonPickerModal) cannonPickerModal.classList.add('hidden');
+  targetEquipSlotIndex = -1;
+}
+
+if (btnCloseCannonPicker) btnCloseCannonPicker.onclick = closeCannonPicker;
+if (btnCancelCannonPicker) btnCancelCannonPicker.onclick = closeCannonPicker;
+if (cannonPickerModal) {
+  cannonPickerModal.onclick = (e) => {
+    if (e.target === cannonPickerModal) closeCannonPicker();
+  };
+}
+
+let selectedCargoSlotIndex = -1;
+
+function getCargoOccupiedCount() {
+  if (!playerState) return 0;
+  const resCount = playerState.resources 
+    ? Object.keys(playerState.resources).filter(k => (playerState.resources[k] || 0) > 0).length 
+    : 0;
+  const cannonCount = Array.isArray(playerState.cannonInventory) ? playerState.cannonInventory.length : 0;
+  return resCount + cannonCount;
+}
+
+function getCargoOccupiedItems() {
+  const items = [];
+  if (!playerState) return items;
+
+  // 1. Resources (> 0)
+  if (playerState.resources && typeof RESOURCE_TYPES !== 'undefined') {
+    for (const [key, def] of Object.entries(RESOURCE_TYPES)) {
+      const count = playerState.resources[key] || 0;
+      if (count > 0) {
+        items.push({
+          kind: 'resource',
+          key,
+          def,
+          count
+        });
+      }
+    }
+  }
+
+  // 2. Unequipped Cannon Items in Cargo
+  if (Array.isArray(playerState.cannonInventory)) {
+    playerState.cannonInventory.forEach((cannon, idx) => {
+      const def = (typeof CANNON_TYPES !== 'undefined' && CANNON_TYPES[cannon.type]) || CANNON_TYPES.standard;
+      items.push({
+        kind: 'cannon',
+        cannon,
+        cannonIdx: idx,
+        def
+      });
+    });
+  }
+
+  return items;
+}
+
+function renderInventoryUI() {
+  if (!inventoryModal) return;
+
+  // Header Currencies
+  if (invGoldText) invGoldText.innerText = (playerState.gold || 0).toLocaleString('id-ID');
+  if (invBloodText) invBloodText.innerText = (playerState.bloodEssence || 0).toLocaleString('id-ID');
+
+  // Port Docking Status
+  const isDocked = Boolean(playerState.isDockedAtPort);
+  if (invDockStatusBadge) {
+    if (isDocked) {
+      const portName = playerState.dockedPortName || "Dermaga Pelabuhan";
+      invDockStatusBadge.className = 'text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full font-bold font-mono bg-emerald-950 text-emerald-300 border border-emerald-500/40 shadow-sm';
+      invDockStatusBadge.innerText = `Berlabuh: ${portName}`;
+    } else {
+      invDockStatusBadge.className = 'text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full font-bold font-mono bg-slate-900 text-amber-400/90 border border-amber-500/30';
+      invDockStatusBadge.innerText = 'Laut Lepas (Berlayar)';
+    }
+  }
+
+  if (invCraftPortIndicator) {
+    if (isDocked) {
+      invCraftPortIndicator.className = 'text-[9px] font-bold px-2 py-0.5 rounded-md bg-emerald-950 text-emerald-300 border border-emerald-500/40';
+      invCraftPortIndicator.innerText = 'Dermaga Siap';
+    } else {
+      invCraftPortIndicator.className = 'text-[9px] font-bold px-2 py-0.5 rounded-md bg-amber-950 text-amber-300 border border-amber-500/40';
+      invCraftPortIndicator.innerText = 'Wajib di Dermaga';
+    }
+  }
+
+  // Ensure playerState data integrity
+  if (!playerState.resources) {
+    playerState.resources = { wood: 0, rope: 0, iron: 0, stone: 0, bamboo: 0, mistOrb: 0, snowOrb: 0, firePowder: 0, chitin: 0 };
+  }
+  if (!playerState.equippedCannons) {
+    playerState.equippedCannons = [{ id: 'cannon_starter', type: 'standard', durability: 90, maxDurability: 90 }];
+  }
+  if (!playerState.cannonInventory) {
+    playerState.cannonInventory = [];
+  }
+
+  const maxSlots = (typeof getMaxCannonSlots === 'function') 
+    ? getMaxCannonSlots(playerState.upgrades.cannons || 1) 
+    : Math.min(4, 1 + Math.floor((playerState.upgrades.cannons || 1) / 2));
+  const equipped = playerState.equippedCannons || [];
+
+  if (invEquippedSlotCountBadge) {
+    invEquippedSlotCountBadge.innerText = `${equipped.length} / ${maxSlots} Terpasang`;
+  }
+
+  // 1. RENDER EQUIPPED CANNONS RACK (BROADSIDE SLOTS)
+  if (invEquippedRack) {
+    invEquippedRack.innerHTML = '';
+    for (let slotIdx = 0; slotIdx < maxSlots; slotIdx++) {
+      const cannon = equipped[slotIdx];
+      const slotEl = document.createElement('div');
+      slotEl.className = 'p-2 rounded-xl border bg-slate-950/85 flex flex-col justify-between gap-1.5 shadow-md relative overflow-hidden';
+
+      if (cannon) {
+        const conf = CANNON_TYPES[cannon.type] || CANNON_TYPES.standard;
+        const durRatio = Math.max(0, Math.min(1, cannon.durability / cannon.maxDurability));
+        const isJammed = cannon.durability <= 0;
+        const durColor = isJammed ? '#ef4444' : (durRatio > 0.5 ? '#10b981' : (durRatio > 0.25 ? '#f59e0b' : '#ef4444'));
+
+        slotEl.style.borderColor = isJammed ? 'rgba(239, 68, 68, 0.6)' : (conf.color || 'rgba(217, 119, 6, 0.4)');
+
+        let actionBtns = '';
+        if (cannon.type === 'standard' && cannon.durability < cannon.maxDurability) {
+          const curIron = playerState.resources.iron || 0;
+          const curWood = playerState.resources.wood || 0;
+          const canRepair = isDocked && curIron >= 2 && curWood >= 1;
+          actionBtns += `
+            <button type="button" class="btn-refurbish-cannon px-2 py-0.5 rounded-lg text-[9px] font-bold border transition flex items-center justify-center gap-1 ${
+              canRepair ? 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-400 cursor-pointer active:scale-95' : 'bg-slate-900 text-slate-500 border-white/10 cursor-not-allowed opacity-60'
+            }" data-slot="${slotIdx}" ${!canRepair ? 'disabled' : ''} title="${isDocked ? 'Butuh 2 Besi + 1 Kayu' : 'Hanya bisa diperbaiki di dermaga'}">
+              Servis (2 Besi)
+            </button>
+          `;
+        }
+
+        actionBtns += `
+          <button type="button" class="btn-unequip-cannon px-2 py-0.5 rounded-lg text-[9px] font-cinzel font-bold border border-white/10 bg-slate-900/90 hover:bg-slate-800 text-slate-300 hover:text-amber-300 transition cursor-pointer flex items-center justify-center gap-1" data-slot="${slotIdx}" title="Lepas meriam ke kargo">
+            ${SVG_ICONS.unequip || ''}
+            <span>Lepas</span>
+          </button>
+        `;
+
+        slotEl.innerHTML = `
+          <div class="flex items-center gap-2">
+            <div class="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border" style="background: rgba(15,23,42,0.9); border-color: ${conf.color || '#f59e0b'};">
+              ${SVG_ICONS[conf.itemIconKey] || SVG_ICONS.cannons}
+            </div>
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center justify-between">
+                <span class="text-[8.5px] font-mono text-amber-400 font-bold">#${slotIdx + 1}</span>
+                <span class="text-[8px] px-1 py-0.2 rounded font-bold uppercase ${conf.isOrbSpecial ? 'text-cyan-300 bg-cyan-950/60' : 'text-slate-300 bg-slate-800/80'}">${conf.factionName || 'Klasik'}</span>
+              </div>
+              <h5 class="font-cinzel text-[10px] font-bold text-slate-100 truncate">${conf.name}</h5>
+            </div>
+          </div>
+          <div>
+            <div class="flex justify-between items-center text-[8.5px] font-mono mb-0.5">
+              <span class="text-slate-400">Durabilitas:</span>
+              <span class="font-bold" style="color: ${durColor};">${cannon.durability}/${cannon.maxDurability}</span>
+            </div>
+            <div class="w-full h-1.5 rounded-full bg-slate-900 border border-white/10 overflow-hidden">
+              <div class="h-full rounded-full transition-all duration-300" style="width: ${(durRatio * 100).toFixed(0)}%; background-color: ${durColor};"></div>
+            </div>
+          </div>
+          <div class="flex items-center gap-1 mt-0.5">
+            ${actionBtns}
+          </div>
+        `;
+
+        slotEl.addEventListener('mouseenter', (e) => showCargoTooltip(e, { kind: 'cannon', def: conf, cannon }));
+        slotEl.addEventListener('mousemove', (e) => moveCargoTooltip(e));
+        slotEl.addEventListener('mouseleave', () => hideCargoTooltip());
+      } else {
+        // Empty Broadside Slot - Interactive with 1-click equip
+        const hasUnusedCannons = (playerState.cannonInventory || []).length > 0;
+        slotEl.className = `p-2 rounded-xl border border-dashed bg-slate-950/40 flex flex-col items-center justify-center text-center gap-1 min-h-[78px] broadside-slot-empty ${hasUnusedCannons ? 'highlight-ready' : 'border-white/10'}`;
+        slotEl.innerHTML = `
+          <div class="w-6 h-6 rounded-lg border border-dashed ${hasUnusedCannons ? 'border-emerald-400 text-emerald-300' : 'border-white/20 text-slate-500'} flex items-center justify-center font-mono text-xs">+</div>
+          <span class="text-[9.5px] font-cinzel font-bold ${hasUnusedCannons ? 'text-emerald-300' : 'text-slate-400'}">Slot #${slotIdx + 1} Kosong</span>
+          <span class="text-[8px] ${hasUnusedCannons ? 'text-emerald-400 font-semibold' : 'text-slate-500'}">${hasUnusedCannons ? 'Ketuk untuk Pasang' : 'Belum Ada Senjata'}</span>
+        `;
+        slotEl.onclick = (e) => {
+          e.stopPropagation();
+          handleBroadsideSlotClick(slotIdx);
+        };
+      }
+
+      invEquippedRack.appendChild(slotEl);
+    }
+  }
+
+  // 2. RENDER 16 CARGO SLOTS (GRID ALA RPG/SURVIVAL)
+  const occupiedItems = getCargoOccupiedItems();
+  const maxCargoCapacity = typeof MAX_CARGO_SLOTS !== 'undefined' ? MAX_CARGO_SLOTS : 16;
+
+  if (invCargoOccupiedCount) {
+    invCargoOccupiedCount.innerText = occupiedItems.length;
+    if (occupiedItems.length >= maxCargoCapacity) {
+      invCargoOccupiedCount.className = "text-rose-400 font-bold animate-pulse";
+    } else {
+      invCargoOccupiedCount.className = "text-amber-300 font-bold";
+    }
+  }
+
+  if (invCargoGrid) {
+    invCargoGrid.innerHTML = '';
+
+    for (let slotIdx = 0; slotIdx < maxCargoCapacity; slotIdx++) {
+      const item = occupiedItems[slotIdx];
+      const slotEl = document.createElement('div');
+
+      if (item) {
+        // Occupied Slot (Resource or Cannon)
+        const isSelected = selectedCargoSlotIndex === slotIdx;
+        let rarityClass = 'rarity-common';
+        if (item.kind === 'resource') {
+          if (item.def.rarity === 'Mistik') rarityClass = 'rarity-occult';
+          else if (item.def.rarity === 'Abisal') rarityClass = 'rarity-abyssal';
+          else if (item.def.rarity === 'Khusus' || item.def.rarity === 'Eksotis') rarityClass = 'rarity-rare';
+        } else if (item.kind === 'cannon') {
+          rarityClass = item.def.isOrbSpecial ? 'rarity-occult' : 'rarity-common';
+        }
+
+        slotEl.className = `cargo-slot cargo-slot-occupied ${rarityClass} ${isSelected ? 'active ring-2 ring-sky-400' : ''}`;
+
+        if (item.kind === 'resource') {
+          const iconSvg = SVG_ICONS[item.def.iconKey || item.key] || SVG_ICONS.inventory;
+          slotEl.innerHTML = `
+            <div class="w-8 h-8 flex items-center justify-center shrink-0" style="color: ${item.def.color || '#fbbf24'};">
+              ${iconSvg}
+            </div>
+            <span class="cargo-slot-count">x${item.count}</span>
+          `;
+          slotEl.title = `${item.def.name} (x${item.count}) - Klik untuk info`;
+        } else if (item.kind === 'cannon') {
+          const iconSvg = SVG_ICONS[item.def.itemIconKey] || SVG_ICONS.cannons;
+          const durRatio = item.cannon.durability / item.cannon.maxDurability;
+          const durBadgeColor = durRatio > 0.5 ? 'bg-emerald-950 text-emerald-300 border-emerald-500/40' : 'bg-rose-950 text-rose-300 border-rose-500/40';
+          slotEl.innerHTML = `
+            <span class="cargo-slot-durability ${durBadgeColor} border">${item.cannon.durability}</span>
+            <div class="w-8 h-8 flex items-center justify-center shrink-0" style="color: ${item.def.color || '#f59e0b'};">
+              ${iconSvg}
+            </div>
+            <span class="cargo-slot-count text-[9px] font-bold text-amber-300">SENJATA</span>
+          `;
+          slotEl.title = `${item.def.name} (${item.cannon.durability}/${item.cannon.maxDurability}) - Klik untuk pasang`;
+        }
+
+        slotEl.addEventListener('mouseenter', (e) => showCargoTooltip(e, item));
+        slotEl.addEventListener('mousemove', (e) => moveCargoTooltip(e));
+        slotEl.addEventListener('mouseleave', () => hideCargoTooltip());
+
+        slotEl.addEventListener('click', () => {
+          selectedCargoSlotIndex = slotIdx;
+          hideCargoTooltip();
+          renderInventoryUI();
+        });
+      } else {
+        // Empty Slot
+        slotEl.className = 'cargo-slot cargo-slot-empty';
+        slotEl.innerHTML = `<span class="text-xs font-mono font-bold select-none opacity-40">+</span>`;
+        slotEl.title = `Slot #${slotIdx + 1} Kosong`;
+        slotEl.addEventListener('click', () => {
+          selectedCargoSlotIndex = -1;
+          hideCargoTooltip();
+          renderInventoryUI();
+        });
+      }
+
+      invCargoGrid.appendChild(slotEl);
+    }
+  }
+
+  // 3. RENDER SELECTED ITEM INSPECTOR
+  if (invSlotInspector) {
+    const selectedItem = (selectedCargoSlotIndex >= 0 && selectedCargoSlotIndex < occupiedItems.length)
+      ? occupiedItems[selectedCargoSlotIndex]
+      : null;
+
+    if (selectedItem) {
+      if (selectedItem.kind === 'resource') {
+        const res = selectedItem.def;
+        const iconSvg = SVG_ICONS[res.iconKey || selectedItem.key] || SVG_ICONS.inventory;
+        invSlotInspector.innerHTML = `
+          <div class="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border shadow-inner" style="background: rgba(15,23,42,0.9); border-color: ${res.color || '#f59e0b'}; color: ${res.color || '#fbbf24'};">
+            ${iconSvg}
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center justify-between gap-1">
+              <h4 class="font-cinzel text-xs font-bold text-slate-100 truncate">${res.name}</h4>
+              <span class="font-mono text-xs font-bold text-amber-300">x${selectedItem.count} Unit</span>
+            </div>
+            <div class="flex items-center gap-1.5 mt-0.5">
+              <span class="text-[8.5px] px-1.5 py-0.2 rounded font-bold uppercase bg-amber-950 text-amber-300 border border-amber-500/30">${res.category || 'Bahan Baku'}</span>
+              <span class="text-[8.5px] px-1.5 py-0.2 rounded font-bold bg-slate-900 text-slate-300 border border-white/10">${res.rarity || 'Umum'}</span>
+              <span class="text-[8.5px] text-slate-400 italic ml-auto truncate max-w-[140px]">${res.dropSource || ''}</span>
+            </div>
+            <p class="text-[10px] text-slate-300 mt-1 leading-snug">${res.desc}</p>
+          </div>
+          <div class="shrink-0 flex flex-col gap-1">
+            <button type="button" class="btn-discard-item px-2.5 py-1 rounded-xl text-[10px] font-bold border border-rose-500/30 bg-rose-950/60 hover:bg-rose-900 text-rose-300 transition flex items-center gap-1 cursor-pointer active:scale-95" data-kind="resource" data-key="${selectedItem.key}">
+              ${SVG_ICONS.trash || ''}
+              <span>Buang</span>
+            </button>
+          </div>
+        `;
+      } else if (selectedItem.kind === 'cannon') {
+        const conf = selectedItem.def;
+        const iconSvg = SVG_ICONS[conf.itemIconKey] || SVG_ICONS.cannons;
+        const maxSlots = (typeof getMaxCannonSlots === 'function') 
+          ? getMaxCannonSlots(playerState.upgrades.cannons || 1) 
+          : 1;
+        const equippedCount = (playerState.equippedCannons || []).length;
+        const nextSlotIndex = Math.min(maxSlots - 1, equippedCount);
+        const hasEmptySlot = equippedCount < maxSlots;
+
+        invSlotInspector.innerHTML = `
+          <div class="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border shadow-inner" style="background: rgba(15,23,42,0.9); border-color: ${conf.color || '#f59e0b'}; color: ${conf.color || '#fbbf24'};">
+            ${iconSvg}
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center justify-between gap-1">
+              <h4 class="font-cinzel text-xs font-bold text-white truncate">${conf.name}</h4>
+              <span class="text-[8.5px] px-2 py-0.2 rounded font-bold uppercase bg-cyan-950 text-cyan-300 border border-cyan-500/30">${conf.factionName || 'Faksi'}</span>
+            </div>
+            <div class="text-[9.5px] text-slate-300 mt-0.5">${conf.desc}</div>
+            <div class="flex items-center gap-3 mt-1 text-[9.5px] font-mono">
+              <span class="text-amber-300">Daya Hancur: ${conf.damage}</span>
+              <span class="text-emerald-400">Durabilitas: ${selectedItem.cannon.durability}/${selectedItem.cannon.maxDurability}</span>
+            </div>
+          </div>
+          <div class="shrink-0 flex flex-col gap-1.5">
+            <button type="button" class="btn-equip-cannon-from-cargo px-3.5 py-1.5 rounded-xl text-[10px] sm:text-[10.5px] font-cinzel font-black border border-emerald-300 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white transition flex items-center gap-1.5 shadow-lg cursor-pointer active:scale-95" data-cannon-idx="${selectedItem.cannonIdx}" data-slot="${nextSlotIndex}">
+              ${SVG_ICONS.equip || ''}
+              <span>${hasEmptySlot ? `Pasang ke Slot #${nextSlotIndex + 1}` : 'Tukar ke Kapal'}</span>
+            </button>
+            <button type="button" class="btn-discard-item px-2 py-0.5 rounded-lg text-[9px] font-bold border border-rose-500/20 bg-rose-950/40 hover:bg-rose-900 text-rose-300 transition flex items-center justify-center gap-1 cursor-pointer" data-kind="cannon" data-key="${selectedItem.cannonIdx}">
+              <span>Buang Senjata</span>
+            </button>
+          </div>
+        `;
+      }
+    } else {
+      invSlotInspector.innerHTML = `
+        <div class="w-8 h-8 rounded-xl bg-slate-900 flex items-center justify-center text-slate-500 shrink-0">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        </div>
+        <div class="text-xs text-slate-400 italic">Pilih benda di dalam kargo untuk melihat detail, memasang senjata ke kapal, atau membuang muatan.</div>
+      `;
+    }
+  }
+
+  // 4. RENDER READY-TO-CRAFT STATION (HANYA ITEM YANG BISA DIRAKIT)
+  if (invCraftableList && typeof CANNON_TYPES !== 'undefined') {
+    invCraftableList.innerHTML = '';
+
+    const craftableEntries = Object.entries(CANNON_TYPES).filter(([typeKey, conf]) => {
+      if (!conf.recipe) return false;
+      return Object.entries(conf.recipe).every(([resKey, reqQty]) => {
+        if (resKey === 'bloodEssence') {
+          return (playerState.bloodEssence || 0) >= reqQty;
+        }
+        return (playerState.resources[resKey] || 0) >= reqQty;
+      });
+    });
+
+    if (craftableEntries.length > 0) {
+      craftableEntries.forEach(([typeKey, conf]) => {
+        const card = document.createElement('div');
+        card.className = 'craftable-card p-2.5 rounded-xl flex flex-col gap-2';
+
+        let recipeChips = '';
+        for (const [resKey, reqQty] of Object.entries(conf.recipe)) {
+          const resDef = (resKey === 'bloodEssence')
+            ? { name: 'Darah Abisal', color: '#f43f5e' }
+            : (RESOURCE_TYPES[resKey] || { name: resKey, color: '#f59e0b' });
+          const curQty = (resKey === 'bloodEssence') 
+            ? (playerState.bloodEssence || 0) 
+            : (playerState.resources[resKey] || 0);
+
+          recipeChips += `
+            <span class="inline-flex items-center gap-1 text-[9px] font-mono px-1.5 py-0.2 rounded bg-slate-900 border border-emerald-500/40 text-emerald-300">
+              <span>${resDef.name}:</span>
+              <strong class="text-white">${curQty}/${reqQty}</strong>
+              <span class="text-emerald-400">✓</span>
+            </span>
+          `;
+        }
+
+        card.innerHTML = `
+          <div class="flex items-start justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border" style="background: rgba(15,23,42,0.9); border-color: ${conf.color || '#f59e0b'}; color: ${conf.color || '#fbbf24'};">
+                ${SVG_ICONS[conf.itemIconKey] || SVG_ICONS.cannons}
+              </div>
+              <div>
+                <h4 class="font-cinzel text-xs font-bold text-white">${conf.name}</h4>
+                <div class="text-[9px] text-emerald-400 font-semibold">${conf.subtitle || conf.factionName}</div>
+              </div>
+            </div>
+            <span class="text-[8px] font-mono px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-500/40 font-bold uppercase">SIAP RAKIT</span>
+          </div>
+
+          <div class="text-[9.5px] text-slate-300 leading-snug">${conf.desc}</div>
+
+          <div class="flex flex-wrap gap-1">
+            ${recipeChips}
+          </div>
+
+          <div class="pt-1 border-t border-white/5 flex items-center justify-between">
+            <span class="text-[9px] font-mono text-amber-300">Durabilitas: ${conf.maxDurability} tembakan</span>
+            <button type="button" class="btn-craft-cannon px-3 py-1.5 rounded-xl text-[10px] font-cinzel font-black transition flex items-center gap-1.5 shadow-md active:scale-95 ${
+              isDocked 
+                ? 'bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white cursor-pointer border border-emerald-300/40' 
+                : 'bg-slate-800 text-slate-400 border border-white/10 cursor-not-allowed opacity-60'
+            }" data-type="${typeKey}" ${!isDocked ? 'disabled' : ''} title="${isDocked ? 'Rakit dan simpan ke Pundi Kargo' : 'Harus berlabuh di dermaga untuk merakit'}">
+              <svg class="w-3.5 h-3.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+              <span>RAKIT KE KARGO</span>
+            </button>
+          </div>
+        `;
+
+        invCraftableList.appendChild(card);
+      });
+    } else {
+      // Empty prompt when no weapons are ready to craft
+      invCraftableList.innerHTML = `
+        <div class="p-4 rounded-xl bg-slate-900/60 border border-white/5 text-center flex flex-col items-center gap-2 mt-2">
+          <div class="w-9 h-9 rounded-full bg-amber-950/60 border border-amber-500/30 flex items-center justify-center text-amber-400 shadow-inner">
+            <svg class="w-4 h-4 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          </div>
+          <div class="font-cinzel text-xs font-bold text-amber-200">Belum Ada Senjata yang Siap Dirakit</div>
+          <p class="text-[9.5px] text-slate-400 leading-relaxed max-w-xs">
+            Kumpulkan jarahan kayu, besi, atau orb dari kapal musuh. Buka <strong class="text-amber-300">Buku Resep</strong> untuk memeriksa formula lengkap material yang dibutuhkan.
+          </p>
+          <button type="button" class="btn-goto-recipe-book mt-1 px-3 py-1 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 font-cinzel font-bold text-[10px] transition cursor-pointer">
+            Buka Buku Resep
+          </button>
+        </div>
+      `;
+
+      const btnEmptyBook = invCraftableList.querySelector('.btn-goto-recipe-book');
+      if (btnEmptyBook) btnEmptyBook.addEventListener('click', openRecipeBookModal);
+    }
+  }
+
+  // Hook up event listeners for newly rendered buttons
+  attachInventoryDynamicListeners();
+}
+
+function attachInventoryDynamicListeners() {
+  // Unequip cannon
+  document.querySelectorAll('.btn-unequip-cannon').forEach(btn => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const slotIdx = parseInt(btn.dataset.slot, 10);
+      unequipCannon(slotIdx);
+    };
+  });
+
+  // Refurbish standard cannon
+  document.querySelectorAll('.btn-refurbish-cannon').forEach(btn => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const slotIdx = parseInt(btn.dataset.slot, 10);
+      refurbishStandardCannon(slotIdx);
+    };
+  });
+
+  // Equip cannon from cargo
+  document.querySelectorAll('.btn-equip-cannon-from-cargo').forEach(btn => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const cannonIdx = parseInt(btn.dataset.cannonIdx, 10);
+      const slotIdx = btn.dataset.slot !== undefined ? parseInt(btn.dataset.slot, 10) : -1;
+      equipCannonFromCargo(cannonIdx, slotIdx);
+    };
+  });
+
+  // Discard item from cargo
+  document.querySelectorAll('.btn-discard-item').forEach(btn => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const kind = btn.dataset.kind;
+      const keyOrIdx = btn.dataset.key;
+      discardCargoItem(kind, keyOrIdx);
+    };
+  });
+
+  // Craft cannon
+  document.querySelectorAll('.btn-craft-cannon').forEach(btn => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const type = btn.dataset.type;
+      craftCannon(type);
+    };
+  });
+}
+
+// Craft cannon and store into player's cargo inventory
+function craftCannon(type) {
+  if (!playerState.isDockedAtPort) {
+    showToast("Perakitan meriam faksi hanya dapat dilakukan di bengkel dermaga pelabuhan!", "alert");
+    return;
+  }
+
+  const occupied = getCargoOccupiedCount();
+  const maxCargoCapacity = typeof MAX_CARGO_SLOTS !== 'undefined' ? MAX_CARGO_SLOTS : 16;
+  if (occupied >= maxCargoCapacity) {
+    showToast(`Pundi Kargo Penuh (${occupied}/${maxCargoCapacity})! Kosongkan ruang muatan sebelum merakit senjata baru.`, "alert");
+    return;
+  }
+
+  const conf = CANNON_TYPES[type];
+  if (!conf || !conf.recipe) return;
+
+  // Verify resources
+  for (const [resKey, reqQty] of Object.entries(conf.recipe)) {
+    const curQty = (resKey === 'bloodEssence') 
+      ? (playerState.bloodEssence || 0) 
+      : (playerState.resources[resKey] || 0);
+    if (curQty < reqQty) {
+      showToast(`Bahan tidak mencukupi untuk merakit ${conf.name}!`, "alert");
+      return;
+    }
+  }
+
+  // Deduct resources
+  for (const [resKey, reqQty] of Object.entries(conf.recipe)) {
+    if (resKey === 'bloodEssence') {
+      playerState.bloodEssence -= reqQty;
+    } else {
+      playerState.resources[resKey] -= reqQty;
+    }
+  }
+
+  // Create new cannon item in cargo inventory
+  const newCannon = {
+    id: `cannon_${type}_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+    type,
+    durability: conf.maxDurability,
+    maxDurability: conf.maxDurability,
+    obtainedAt: Date.now()
+  };
+
+  if (!Array.isArray(playerState.cannonInventory)) {
+    playerState.cannonInventory = [];
+  }
+  playerState.cannonInventory.push(newCannon);
+
+  // Auto select this newly crafted cannon in cargo so inspector opens with "Pasang ke Kapal"
+  const updatedItems = getCargoOccupiedItems();
+  selectedCargoSlotIndex = updatedItems.findIndex(it => it.kind === 'cannon' && it.cannon && it.cannon.id === newCannon.id);
+  if (selectedCargoSlotIndex === -1) selectedCargoSlotIndex = updatedItems.length - 1;
+
+  const maxSlots = (typeof getMaxCannonSlots === 'function') 
+    ? getMaxCannonSlots(playerState.upgrades.cannons || 1) 
+    : 1;
+  const equippedCount = (playerState.equippedCannons || []).length;
+  if (equippedCount < maxSlots) {
+    showToast(`${conf.name} berhasil dirakit! Ketuk 'Pasang ke Kapal' atau ketuk slot kosong di atas.`, "check");
+  } else {
+    showToast(`${conf.name} berhasil dirakit & tersimpan di Pundi Kargo!`, "check");
+  }
+
+  if (typeof sound !== 'undefined' && typeof sound.playShipyardHammer === 'function') {
+    sound.playShipyardHammer();
+  } else if (typeof sound !== 'undefined') {
+    sound.playLoot();
+  }
+
+  renderInventoryUI();
+  updateHUD();
+  saveGame();
+}
+
+// Equip cannon from cargo into broadside slot
+function equipCannonFromCargo(cannonIdx, targetSlotIdx = -1) {
+  if (!Array.isArray(playerState.cannonInventory) || !playerState.cannonInventory[cannonIdx]) return;
+
+  const maxSlots = (typeof getMaxCannonSlots === 'function') 
+    ? getMaxCannonSlots(playerState.upgrades.cannons || 1) 
+    : Math.min(4, 1 + Math.floor((playerState.upgrades.cannons || 1) / 2));
+
+  if (!Array.isArray(playerState.equippedCannons)) playerState.equippedCannons = [];
+
+  const cannonToEquip = playerState.cannonInventory.splice(cannonIdx, 1)[0];
+  const conf = CANNON_TYPES[cannonToEquip.type] || CANNON_TYPES.standard;
+
+  if (targetSlotIdx >= 0 && targetSlotIdx < playerState.equippedCannons.length) {
+    // Replace existing occupied slot
+    const oldCannon = playerState.equippedCannons[targetSlotIdx];
+    playerState.equippedCannons[targetSlotIdx] = cannonToEquip;
+    if (oldCannon) playerState.cannonInventory.push(oldCannon);
+    showToast(`${conf.name} dipasang ke Slot #${targetSlotIdx + 1} menggantikan ${CANNON_TYPES[oldCannon?.type]?.name || 'meriam lama'}!`, "info");
+  } else if (playerState.equippedCannons.length < maxSlots) {
+    // Fill next available slot
+    playerState.equippedCannons.push(cannonToEquip);
+    showToast(`${conf.name} berhasil dipasang ke Slot #${playerState.equippedCannons.length}!`, "check");
+  } else {
+    // Swap with first equipped cannon
+    const oldCannon = playerState.equippedCannons.shift();
+    playerState.equippedCannons.push(cannonToEquip);
+    if (oldCannon) playerState.cannonInventory.push(oldCannon);
+    showToast(`${conf.name} dipasang menggantikan ${CANNON_TYPES[oldCannon?.type]?.name || 'meriam lama'}!`, "info");
+  }
+  playerState.equippedCannons = playerState.equippedCannons.filter(Boolean);
+
+  selectedCargoSlotIndex = -1;
+  hideCargoTooltip();
+  if (typeof sound !== 'undefined') {
+    if (typeof sound.playShipyardHammer === 'function') sound.playShipyardHammer();
+    else sound.playClick();
+  }
+  renderInventoryUI();
+  updateHUD();
+  saveGame();
+}
+
+// Unequip cannon from broadside back to cargo inventory
+function unequipCannon(slotIdx) {
+  if (!playerState.equippedCannons || !playerState.equippedCannons[slotIdx]) return;
+
+  const occupied = getCargoOccupiedCount();
+  const maxCargoCapacity = typeof MAX_CARGO_SLOTS !== 'undefined' ? MAX_CARGO_SLOTS : 16;
+  if (occupied >= maxCargoCapacity) {
+    showToast(`Pundi Kargo Penuh (${occupied}/${maxCargoCapacity})! Kosongkan slot muatan sebelum mencopot meriam.`, "alert");
+    return;
+  }
+
+  const removed = playerState.equippedCannons.splice(slotIdx, 1)[0];
+  if (!Array.isArray(playerState.cannonInventory)) playerState.cannonInventory = [];
+  playerState.cannonInventory.push(removed);
+
+  const conf = CANNON_TYPES[removed.type] || CANNON_TYPES.standard;
+  showToast(`${conf.name} dilepas dan disimpan ke Pundi Kargo.`, "info");
+
+  selectedCargoSlotIndex = -1;
+  if (typeof sound !== 'undefined') sound.playClick();
+  renderInventoryUI();
+  updateHUD();
+  saveGame();
+}
+
+// Refurbish standard iron cannon at port
+function refurbishStandardCannon(slotIdx) {
+  if (!playerState.isDockedAtPort) {
+    showToast("Servis meriam hanya dapat dilakukan saat berlabuh di dermaga!", "alert");
+    return;
+  }
+  const cannon = playerState.equippedCannons[slotIdx];
+  if (!cannon || cannon.type !== 'standard') return;
+
+  const curIron = playerState.resources.iron || 0;
+  const curWood = playerState.resources.wood || 0;
+  if (curIron < 2 || curWood < 1) {
+    showToast(`Bahan servis tidak cukup! Butuh 2 Besi & 1 Kayu (Miliki: ${curIron} Besi, ${curWood} Kayu).`, "alert");
+    return;
+  }
+
+  playerState.resources.iron -= 2;
+  playerState.resources.wood -= 1;
+  cannon.durability = cannon.maxDurability;
+
+  if (typeof sound !== 'undefined' && typeof sound.playRepair === 'function') {
+    sound.playRepair();
+  } else if (typeof sound !== 'undefined') {
+    sound.playCoin();
+  }
+
+  showToast("Meriam Besi Standar berhasil diservis dan siap tempur kembali!", "check");
+  renderInventoryUI();
+  updateHUD();
+  saveGame();
+}
+
+// Discard item from cargo
+function discardCargoItem(kind, keyOrIdx) {
+  if (kind === 'resource') {
+    const resDef = RESOURCE_TYPES[keyOrIdx];
+    const name = resDef ? resDef.name : keyOrIdx;
+    playerState.resources[keyOrIdx] = 0;
+    showToast(`${name} telah dibuang dari pundi kargo.`, "info");
+  } else if (kind === 'cannon') {
+    const idx = parseInt(keyOrIdx, 10);
+    if (playerState.cannonInventory && playerState.cannonInventory[idx]) {
+      const removed = playerState.cannonInventory.splice(idx, 1)[0];
+      const name = CANNON_TYPES[removed.type]?.name || 'Meriam';
+      showToast(`${name} telah dibuang ke laut.`, "info");
+    }
+  }
+
+  selectedCargoSlotIndex = -1;
+  if (typeof sound !== 'undefined') sound.playClick();
+  renderInventoryUI();
+  updateHUD();
+  saveGame();
+}
+
+// ============================================================================
+// RECIPE CODEX (BUKU RESEP BAHARI & CETAK BIRU FAKSI)
+// ============================================================================
+
+function renderRecipeBookUI() {
+  if (!recipeBookGrid || typeof CANNON_TYPES === 'undefined') return;
+  recipeBookGrid.innerHTML = '';
+
+  for (const [typeKey, conf] of Object.entries(CANNON_TYPES)) {
+    const card = document.createElement('div');
+    card.className = 'recipe-codex-card p-3 sm:p-4 rounded-2xl flex flex-col gap-2.5';
+
+    let recipeStatusList = '';
+    let isFullyCraftable = true;
+
+    for (const [resKey, reqQty] of Object.entries(conf.recipe)) {
+      const resDef = (resKey === 'bloodEssence')
+        ? { name: 'Darah Abisal', color: '#f43f5e' }
+        : (RESOURCE_TYPES[resKey] || { name: resKey, color: '#f59e0b' });
+      const curQty = (resKey === 'bloodEssence') 
+        ? (playerState.bloodEssence || 0) 
+        : (playerState.resources[resKey] || 0);
+
+      const hasEnough = curQty >= reqQty;
+      if (!hasEnough) isFullyCraftable = false;
+
+      recipeStatusList += `
+        <div class="flex items-center justify-between text-[10px] sm:text-xs py-0.5 border-b border-white/5">
+          <span class="flex items-center gap-1.5" style="color: ${resDef.color || '#f59e0b'};">
+            <span class="w-1.5 h-1.5 rounded-full" style="background: ${resDef.color || '#f59e0b'};"></span>
+            ${resDef.name}
+          </span>
+          <span class="font-mono font-bold ${hasEnough ? 'text-emerald-400' : 'text-rose-400'}">
+            ${curQty} / ${reqQty} ${hasEnough ? '✓' : '✗'}
+          </span>
+        </div>
+      `;
+    }
+
+    card.innerHTML = `
+      <div class="flex items-start justify-between gap-2">
+        <div class="flex items-center gap-2.5">
+          <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border shadow-inner" style="background: rgba(15,23,42,0.9); border-color: ${conf.color || '#f59e0b'}; color: ${conf.color || '#fbbf24'};">
+            ${SVG_ICONS[conf.itemIconKey] || SVG_ICONS.cannons}
+          </div>
+          <div>
+            <div class="flex items-center gap-1.5">
+              <h3 class="font-cinzel text-xs sm:text-sm font-bold text-white">${conf.name}</h3>
+              <span class="text-[8.5px] px-2 py-0.2 rounded font-bold uppercase bg-amber-950 text-amber-300 border border-amber-500/30">${conf.factionName || 'Faksi'}</span>
+            </div>
+            <div class="text-[10px] text-amber-300/80 mt-0.5">${conf.subtitle}</div>
+          </div>
+        </div>
+        <span class="text-[9px] font-mono px-2 py-0.5 rounded font-bold uppercase ${isFullyCraftable ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/40' : 'bg-slate-900 text-slate-400 border border-white/10'}">
+          ${isFullyCraftable ? 'BAHAN LENGKAP ✓' : 'BAHAN KURANG'}
+        </span>
+      </div>
+
+      <p class="text-[10px] sm:text-xs text-slate-300 leading-relaxed">${conf.desc}</p>
+
+      <div class="bg-black/40 p-2.5 rounded-xl border border-white/5 space-y-1">
+        <div class="text-[9.5px] font-cinzel font-bold text-amber-200/90 mb-1">FORMULA BAHAN BAKU:</div>
+        ${recipeStatusList}
+      </div>
+
+      <div class="grid grid-cols-2 gap-2 text-[9.5px] font-mono bg-slate-950/60 p-2 rounded-xl border border-white/5">
+        <div><span class="text-slate-400">Daya Hancur:</span> <strong class="text-amber-300">${conf.damage} DMG</strong></div>
+        <div><span class="text-slate-400">Durabilitas:</span> <strong class="text-sky-300">${conf.maxDurability} Tembakan</strong></div>
+      </div>
+
+      <div class="text-[9px] sm:text-[9.5px] p-2 rounded-lg ${conf.isOrbSpecial ? 'bg-cyan-950/40 text-cyan-200 border border-cyan-500/25' : 'bg-amber-950/30 text-amber-200 border border-amber-500/20'} leading-relaxed">
+        <strong>Aturan Laras:</strong> ${
+          conf.isOrbSpecial 
+            ? 'Meriam faksi mistis ini akan sirna dan lenyap seketika saat durabilitasnya mencapai 0!' 
+            : 'Meriam besi standar akan macet saat aus, dan dapat diservis kembali di dermaga pelabuhan (2 Besi + 1 Kayu).'
+        }
+      </div>
+    `;
+
+    recipeBookGrid.appendChild(card);
+  }
+}
+
+function openRecipeBookModal() {
+  sound.init();
+  renderRecipeBookUI();
+  if (recipeBookModal) {
+    recipeBookModal.classList.remove('modal-enter', 'hidden');
+    recipeBookModal.classList.add('modal-active');
+  }
+}
+
+function closeRecipeBookModal() {
+  if (!recipeBookModal) return;
+  recipeBookModal.classList.remove('modal-active');
+  recipeBookModal.classList.add('modal-enter', 'hidden');
+}
+
+if (btnOpenRecipeBook) btnOpenRecipeBook.addEventListener('click', openRecipeBookModal);
+if (btnCloseRecipeBook) btnCloseRecipeBook.addEventListener('click', closeRecipeBookModal);
+if (btnReturnToInventoryFromBook) btnReturnToInventoryFromBook.addEventListener('click', closeRecipeBookModal);
+
+// Modal open / close / toggle
+function openInventoryModal() {
+  sound.init();
+  closeLoreModal();
+  closeHelpModal();
+  closeMapModal();
+  closeUpgradeModal();
+  closeCannonPicker();
+  hideCargoTooltip();
+  setMobileInventoryTab('cargo');
+  renderInventoryUI();
+  if (inventoryModal) {
+    inventoryModal.classList.remove('modal-enter', 'hidden');
+    inventoryModal.classList.add('modal-active');
+  }
+  isGamePaused = true;
+}
+
+function closeInventoryModal() {
+  hideCargoTooltip();
+  closeCannonPicker();
+  if (!inventoryModal) return;
+  inventoryModal.classList.remove('modal-active');
+  inventoryModal.classList.add('modal-enter', 'hidden');
+  if (pauseReturnTarget === 'pause') {
+    pauseReturnTarget = null;
+    openPauseModal();
+    return;
+  }
+  if (isGameStarted) {
+    isGamePaused = false;
+    lastTime = performance.now();
+  }
+}
+
+function toggleInventoryModal() {
+  if (inventoryModal && inventoryModal.classList.contains('modal-active')) {
+    closeInventoryModal();
+  } else {
+    openInventoryModal();
+  }
+}
+
+if (btnOpenInventory) btnOpenInventory.addEventListener('click', openInventoryModal);
+if (btnCloseInventory) btnCloseInventory.addEventListener('click', closeInventoryModal);
+const hudCargoHoldWidget = document.getElementById('hudCargoHoldWidget');
+if (hudCargoHoldWidget) hudCargoHoldWidget.addEventListener('click', openInventoryModal);
+if (btnPauseInventory) {
+  btnPauseInventory.addEventListener('click', () => {
+    closePauseModal();
+    pauseReturnTarget = 'pause';
+    openInventoryModal();
+  });
+}
+if (btnQuickNavShipyard) {
+  btnQuickNavShipyard.addEventListener('click', () => {
+    closeInventoryModal();
+    openUpgradeModal();
+  });
+}
+if (inventoryModal) {
+  inventoryModal.addEventListener('click', (e) => {
+    if (e.target === inventoryModal) closeInventoryModal();
+  });
+}
+
 // Sea Chart / Oceanic Map Modal Elements
 const seaMapModal = document.getElementById('seaMapModal');
 const seaMapCanvas = document.getElementById('seaMapCanvas');
@@ -1833,6 +3099,34 @@ function drawMapConqueredFlagIcon(ctx, x, y, r = 8) {
   ctx.restore();
 }
 
+function drawMapUninhabitedIsletIcon(ctx, x, y, r = 6) {
+  ctx.save();
+  ctx.translate(x, y);
+
+  // Turquoise shallow atoll reef halo
+  ctx.fillStyle = 'rgba(20, 184, 166, 0.45)';
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 1.35, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Golden sandy islet
+  ctx.fillStyle = '#fef08a';
+  ctx.strokeStyle = '#ca8a04';
+  ctx.lineWidth = 1.0;
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Tiny emerald foliage dot
+  ctx.fillStyle = '#166534';
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.42, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
 function drawMapGoldClanIcon(ctx, x, y, r = 8) {
   ctx.save();
   ctx.translate(x, y);
@@ -1957,6 +3251,336 @@ function drawMapBloodClanIcon(ctx, x, y, r = 8) {
   ctx.beginPath();
   ctx.arc(0, r * 0.05, r * 0.16, 0, Math.PI * 2);
   ctx.fill();
+
+  ctx.restore();
+}
+
+function drawMapVikingClanIcon(ctx, x, y, r = 8) {
+  ctx.save();
+  ctx.translate(x, y);
+
+  // Background disc
+  ctx.fillStyle = 'rgba(14, 165, 233, 0.45)';
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#38bdf8';
+  ctx.lineWidth = 1.4;
+  ctx.stroke();
+
+  // Crossed Viking Battleaxes
+  ctx.strokeStyle = '#e0f2fe';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.38, -r * 0.38); ctx.lineTo(r * 0.38, r * 0.38);
+  ctx.moveTo(r * 0.38, -r * 0.38); ctx.lineTo(-r * 0.38, r * 0.38);
+  ctx.stroke();
+
+  // Crescent axe blades
+  ctx.fillStyle = '#bae6fd';
+  ctx.beginPath();
+  ctx.arc(-r * 0.28, -r * 0.28, r * 0.16, 0, Math.PI * 2);
+  ctx.arc(r * 0.28, -r * 0.28, r * 0.16, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Central Nordic boss
+  ctx.fillStyle = '#0284c7';
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.18, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#38bdf8';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawMapWokouClanIcon(ctx, x, y, r = 8) {
+  ctx.save();
+  ctx.translate(x, y);
+
+  // Background disc
+  ctx.fillStyle = 'rgba(225, 29, 72, 0.45)';
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#f43f5e';
+  ctx.lineWidth = 1.4;
+  ctx.stroke();
+
+  // Torii Arch / Dragon Gateway
+  ctx.strokeStyle = '#fde047';
+  ctx.lineWidth = 1.5;
+  ctx.lineCap = 'round';
+
+  // Curved top beam (kasagi)
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.45, -r * 0.28);
+  ctx.quadraticCurveTo(0, -r * 0.4, r * 0.45, -r * 0.28);
+  ctx.stroke();
+
+  // Straight tie beam (nuki)
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.35, -r * 0.12);
+  ctx.lineTo(r * 0.35, -r * 0.12);
+  ctx.stroke();
+
+  // Vertical pillars (hashira)
+  ctx.strokeStyle = '#fda4af';
+  ctx.lineWidth = 1.3;
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.24, -r * 0.28);
+  ctx.lineTo(-r * 0.24, r * 0.4);
+  ctx.moveTo(r * 0.24, -r * 0.28);
+  ctx.lineTo(r * 0.24, r * 0.4);
+  ctx.stroke();
+
+  // Central Crimson Sun
+  ctx.fillStyle = '#e11d48';
+  ctx.beginPath();
+  ctx.arc(0, r * 0.08, r * 0.16, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawMapEnemyUnitIcon(ctx, x, y, e) {
+  ctx.save();
+  ctx.translate(x, y);
+
+  const clan = (e.clan === 'batavia') ? 'gold' : (e.clan || 'gold');
+  const isMonster = Boolean(e.isMonster || clan === 'blood');
+  const heading = e.angle || 0;
+
+  // Pulsing alert aura if alerted
+  if (e.alertState === 'alerted') {
+    const pulse = (Date.now() * 0.005) % 1;
+    ctx.strokeStyle = `rgba(239, 68, 68, ${0.8 - pulse * 0.7})`;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.arc(0, 0, 8 + pulse * 10, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // Treasury Ship aura
+  if (e.isTreasuryShip) {
+    ctx.strokeStyle = 'rgba(251, 191, 36, 0.7)';
+    ctx.lineWidth = 1.2;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.arc(0, 0, 10, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  if (isMonster) {
+    // ----------------------------------------------------
+    // SEA MONSTERS & ABYSSAL CREATURES
+    // ----------------------------------------------------
+    ctx.rotate(heading);
+    if (e.monsterType === 'megalodon') {
+      // Megalodon: Shark Silhouette with Dorsal Fin & Razor Teeth
+      ctx.fillStyle = '#ef4444';
+      ctx.strokeStyle = '#fca5a5';
+      ctx.lineWidth = 0.9;
+      ctx.beginPath();
+      ctx.moveTo(7, 0);       // Snout
+      ctx.lineTo(2, -3.5);
+      ctx.lineTo(0, -6);      // Dorsal fin tip
+      ctx.lineTo(-1, -3.5);
+      ctx.lineTo(-5, -4);     // Tail upper lobe
+      ctx.lineTo(-4, 0);      // Tail fork
+      ctx.lineTo(-5, 4);      // Tail lower lobe
+      ctx.lineTo(1, 3.5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    } else if (e.monsterType === 'kraken') {
+      // Kraken: Central Eye & Writhing Tentacle Cluster
+      ctx.fillStyle = '#881337';
+      ctx.strokeStyle = '#f43f5e';
+      ctx.lineWidth = 0.9;
+      ctx.beginPath();
+      ctx.arc(0, 0, 3.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Radiating tentacles
+      ctx.strokeStyle = '#fb7185';
+      ctx.lineWidth = 1.1;
+      for (let t = 0; t < 4; t++) {
+        const ta = (t * Math.PI) / 2 + 0.3;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(ta) * 3, Math.sin(ta) * 3);
+        ctx.quadraticCurveTo(Math.cos(ta + 0.6) * 6, Math.sin(ta + 0.6) * 6, Math.cos(ta) * 7.5, Math.sin(ta) * 7.5);
+        ctx.stroke();
+      }
+    } else if (e.monsterType === 'leviathan') {
+      // Ancient Leviathan: Colossal Armored Skull & Serpentine Horns
+      ctx.fillStyle = '#450a0a';
+      ctx.strokeStyle = '#ef4444';
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.moveTo(8, 0);
+      ctx.lineTo(3, -4.5);
+      ctx.lineTo(-2, -6);     // Left Horn
+      ctx.lineTo(-1, -2.5);
+      ctx.lineTo(-6, -3);
+      ctx.lineTo(-4, 0);
+      ctx.lineTo(-6, 3);
+      ctx.lineTo(-1, 2.5);
+      ctx.lineTo(-2, 6);      // Right Horn
+      ctx.lineTo(3, 4.5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Glowing crimson eyes
+      ctx.fillStyle = '#f87171';
+      ctx.fillRect(2, -2, 1.5, 1.5);
+      ctx.fillRect(2, 0.5, 1.5, 1.5);
+    } else {
+      // Larva / Deep Parasite: Spiky Abyssal Crawl
+      ctx.fillStyle = '#991b1b';
+      ctx.strokeStyle = '#f87171';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 5, 3.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+  } else {
+    // ----------------------------------------------------
+    // HUMAN CLAN ENEMY VESSELS
+    // ----------------------------------------------------
+    ctx.rotate(heading);
+
+    if (clan === 'viking') {
+      // Viking Longship: Dragon Head Prow, Crossed Axes motif, Sky Blue sails
+      ctx.fillStyle = '#0284c7';
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 0.9;
+
+      // Long narrow drakkar hull
+      ctx.beginPath();
+      ctx.moveTo(8, 0);         // Dragon Prow
+      ctx.lineTo(5, -1.8);
+      ctx.lineTo(-5, -2.5);
+      ctx.lineTo(-7, 0);        // Curly Stern
+      ctx.lineTo(-5, 2.5);
+      ctx.lineTo(5, 1.8);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Square Viking Sail
+      ctx.fillStyle = '#bae6fd';
+      ctx.fillRect(-2, -3.2, 3.2, 6.4);
+      ctx.strokeStyle = '#0369a1';
+      ctx.lineWidth = 0.6;
+      ctx.strokeRect(-2, -3.2, 3.2, 6.4);
+
+    } else if (clan === 'wokou') {
+      // Wokou Junk: High stern deck, fan-ribbed junk sail, red pennant
+      ctx.fillStyle = '#9f1239';
+      ctx.strokeStyle = '#f43f5e';
+      ctx.lineWidth = 0.9;
+
+      // Junk Hull (broad flat bow, high stern)
+      ctx.beginPath();
+      ctx.moveTo(6.5, -1.5);
+      ctx.lineTo(6.5, 1.5);
+      ctx.lineTo(-4.5, 3.2);
+      ctx.lineTo(-6.5, 2.2);
+      ctx.lineTo(-6.5, -2.2);
+      ctx.lineTo(-4.5, -3.2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Batten Junk Sail (Fan Ribbed)
+      ctx.fillStyle = '#fde047';
+      ctx.beginPath();
+      ctx.moveTo(-1, -4.5);
+      ctx.lineTo(2.5, -3);
+      ctx.lineTo(2.5, 3);
+      ctx.lineTo(-1, 4.5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#b45309';
+      ctx.lineWidth = 0.6;
+      ctx.stroke();
+
+    } else if (clan === 'iron') {
+      // Ironclad Ram: Heavy armored wedge, smoking smokestack, dark slate
+      ctx.fillStyle = '#334155';
+      ctx.strokeStyle = '#ea580c';
+      ctx.lineWidth = 1.0;
+
+      // Wedge Hull with Iron Ram
+      ctx.beginPath();
+      ctx.moveTo(8, 0);         // Steam Ram beak
+      ctx.lineTo(4, -3.5);
+      ctx.lineTo(-6, -3.5);
+      ctx.lineTo(-6, 3.5);
+      ctx.lineTo(4, 3.5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Twin Iron Smokestacks
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(-1.5, -2, 2.8, 1.8);
+      ctx.fillRect(-1.5, 0.5, 2.8, 1.8);
+
+    } else if (clan === 'mist') {
+      // Mist Phantom: Slender ghostly hull with occult soul glow
+      ctx.fillStyle = '#3b0764';
+      ctx.strokeStyle = '#c084fc';
+      ctx.lineWidth = 0.9;
+
+      ctx.beginPath();
+      ctx.moveTo(7, 0);
+      ctx.lineTo(2, -2.8);
+      ctx.lineTo(-6, -2.2);
+      ctx.lineTo(-7, 0);
+      ctx.lineTo(-6, 2.2);
+      ctx.lineTo(2, 2.8);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Soul Lantern Prow
+      ctx.fillStyle = '#22d3ee';
+      ctx.beginPath();
+      ctx.arc(3.5, 0, 1.6, 0, Math.PI * 2);
+      ctx.fill();
+
+    } else {
+      // Batavia Galleon: High aftcastle, gold royal lion heraldry
+      ctx.fillStyle = '#78350f';
+      ctx.strokeStyle = '#fbbf24';
+      ctx.lineWidth = 0.9;
+
+      ctx.beginPath();
+      ctx.moveTo(7.5, 0);
+      ctx.lineTo(2.5, -3.2);
+      ctx.lineTo(-5.5, -3.8);
+      ctx.lineTo(-7, -2.5);
+      ctx.lineTo(-7, 2.5);
+      ctx.lineTo(-5.5, 3.8);
+      ctx.lineTo(2.5, 3.2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Triple Mast Sails
+      ctx.fillStyle = '#fef08a';
+      ctx.fillRect(-2, -3.2, 3, 6.4);
+      ctx.fillStyle = '#d97706';
+      ctx.fillRect(-6, -2.2, 2.5, 4.4);
+    }
+  }
 
   ctx.restore();
 }
@@ -2097,6 +3721,8 @@ function renderSeaMapCanvas() {
       drawMapAnchorIcon(mctx, mapX, mapY, dotRadius);
     } else if (isl.isShopIsland) {
       drawMapScalesIcon(mctx, mapX, mapY, dotRadius);
+    } else if (isl.isUninhabited) {
+      drawMapUninhabitedIsletIcon(mctx, mapX, mapY, dotRadius);
     } else if (isl.isConquered) {
       drawMapConqueredFlagIcon(mctx, mapX, mapY, dotRadius);
     } else if (isl.clan === 'blood' || isl.isFlesh) {
@@ -2105,6 +3731,10 @@ function renderSeaMapCanvas() {
       drawMapMistClanIcon(mctx, mapX, mapY, dotRadius);
     } else if (isl.clan === 'iron') {
       drawMapIronClanIcon(mctx, mapX, mapY, dotRadius);
+    } else if (isl.clan === 'viking') {
+      drawMapVikingClanIcon(mctx, mapX, mapY, dotRadius);
+    } else if (isl.clan === 'wokou') {
+      drawMapWokouClanIcon(mctx, mapX, mapY, dotRadius);
     } else {
       drawMapGoldClanIcon(mctx, mapX, mapY, dotRadius);
     }
@@ -2112,12 +3742,12 @@ function renderSeaMapCanvas() {
     // Island Name (dynamically scaled font)
     const fontPx = Math.max(7, Math.min(11, 7.5 * Math.sqrt(seaMapState.zoom || 1.0)));
     mctx.font = `bold ${fontPx}px "Cinzel", sans-serif`;
-    mctx.fillStyle = '#f8fafc';
+    mctx.fillStyle = isl.isUninhabited ? '#94a3b8' : '#f8fafc';
     mctx.textAlign = 'center';
     mctx.fillText(isl.name, mapX, mapY - dotRadius - 3);
 
     // Conquered Tag
-    if (isl.isConquered && !isl.isHomePort) {
+    if (isl.isConquered && !isl.isHomePort && !isl.isUninhabited) {
       mctx.font = `bold ${Math.max(6, fontPx - 1)}px "Cinzel", sans-serif`;
       mctx.fillStyle = '#facc15';
       mctx.fillText("Takluk", mapX, mapY + dotRadius + 8);
@@ -2132,6 +3762,27 @@ function renderSeaMapCanvas() {
       if (mx >= -20 && mx <= w + 20 && my >= -20 && my <= h + 20) {
         drawMapMerchantShipIcon(mctx, mx, my, m.angle || 0);
       }
+    });
+  }
+
+  // 5.5 Hostile Enemy Vessels, Patrols & Sea Monsters on Map
+  if (entities.enemies && entities.enemies.length > 0) {
+    entities.enemies.forEach(e => {
+      const ex = cx + e.x * scale;
+      const ey = cy + e.y * scale;
+      if (ex < -25 || ex > w + 25 || ey < -25 || ey > h + 25) return;
+
+      const secKey = `${Math.round(e.x / sectorSize)},${Math.round(e.y / sectorSize)}`;
+      const isExplored = Boolean(playerState.exploredSectors && playerState.exploredSectors[secKey]);
+      const distToPlayer = Math.hypot(e.x - playerState.x, e.y - playerState.y);
+      const isVisibleOnRadar = (curLevel >= 2 && distToPlayer <= (cfg.fogClearanceRadius || 3600) * 1.5)
+                            || e.alertState === 'alerted'
+                            || isExplored
+                            || (typeof devTestingState !== 'undefined' && devTestingState.revealFullMap);
+
+      if (!isVisibleOnRadar) return;
+
+      drawMapEnemyUnitIcon(mctx, ex, ey, e);
     });
   }
 
@@ -2457,30 +4108,92 @@ if (seaMapModal) {
 // Initialize Interactive Sea Map Listeners
 initSeaMapInteractions();
 
-// Quick Repair Ship (Shared by button & keyboard hotkey [R])
-function quickRepairShip() {
-  const maxHp = getStatValue('hull', playerState.upgrades.hull);
-  if (playerState.hp >= maxHp) {
-    showToast("Lambung kapal dalam kondisi prima 100%!", "check");
+// Primary Survival Repair using collected wood & rope at port
+function repairShipWithResources() {
+  if (!playerState.isDockedAtPort) {
+    showToast("Reparasi lambung hanya dapat dilakukan saat berlabuh di pelabuhan/dermaga!", "alert");
     return;
   }
-  if (playerState.gold >= 15) {
-    playerState.gold -= 15;
+  const maxHp = getStatValue('hull', playerState.upgrades.hull);
+  if (playerState.hp >= maxHp) {
+    showToast("Lambung kapal sudah dalam kondisi prima 100%!", "check");
+    return;
+  }
+  const curWood = (playerState.resources && playerState.resources.wood) || 0;
+  const curRope = (playerState.resources && playerState.resources.rope) || 0;
+  if (curWood >= 4 && curRope >= 2) {
+    playerState.resources.wood -= 4;
+    playerState.resources.rope -= 2;
     playerState.hp = maxHp;
     if (typeof sound !== 'undefined' && typeof sound.playRepair === 'function') {
       sound.playRepair();
     } else {
       sound.playSplash();
     }
-    showToast("Kapal diperbaiki sepenuhnya! (-15 Koin)", "anchor");
+    showToast("Lambung diperbaiki menggunakan 4 Kayu & 2 Tali!", "anchor");
     updateHUD();
     updateShipyardRepairButton();
     saveGame();
   } else {
-    showToast("Emas tidak cukup untuk reparasi (Butuh 15 Koin).", "alert");
+    showToast(`Bahan baku tidak cukup! Butuh 4 Kayu & 2 Tali (Miliki: ${curWood} Kayu, ${curRope} Tali).`, "alert");
   }
 }
 
+// Secondary Gold Service Repair at dockyard
+function repairShipWithGold() {
+  if (!playerState.isDockedAtPort) {
+    showToast("Jasa galangan kapal hanya tersedia di dermaga pelabuhan!", "alert");
+    return;
+  }
+  const maxHp = getStatValue('hull', playerState.upgrades.hull);
+  if (playerState.hp >= maxHp) {
+    showToast("Lambung kapal sudah dalam kondisi prima 100%!", "check");
+    return;
+  }
+  if ((playerState.gold || 0) >= 25) {
+    playerState.gold -= 25;
+    playerState.hp = maxHp;
+    if (typeof sound !== 'undefined' && typeof sound.playRepair === 'function') {
+      sound.playRepair();
+    } else {
+      sound.playSplash();
+    }
+    showToast("Jasa galangan telah memperbaiki kapal! (-25 Koin)", "anchor");
+    updateHUD();
+    updateShipyardRepairButton();
+    saveGame();
+  } else {
+    showToast("Koin emas tidak mencukupi untuk jasa galangan (Butuh 25 Koin).", "alert");
+  }
+}
+
+// Quick Repair Ship (Shared by button & keyboard hotkey [R])
+// Strictly requires docking at port; prioritizes resource repair with gold fallback.
+function quickRepairShip() {
+  if (!playerState.isDockedAtPort) {
+    showToast("Perbaikan kapal hanya dapat dilakukan saat berlabuh di pelabuhan/dermaga!", "alert");
+    return;
+  }
+  const maxHp = getStatValue('hull', playerState.upgrades.hull);
+  if (playerState.hp >= maxHp) {
+    showToast("Lambung kapal dalam kondisi prima 100%!", "check");
+    return;
+  }
+  const curWood = (playerState.resources && playerState.resources.wood) || 0;
+  const curRope = (playerState.resources && playerState.resources.rope) || 0;
+  if (curWood >= 4 && curRope >= 2) {
+    repairShipWithResources();
+  } else if ((playerState.gold || 0) >= 25) {
+    repairShipWithGold();
+  } else {
+    showToast("Sumber daya tidak cukup! Butuh 4 Kayu + 2 Tali, atau 25 Koin Emas.", "alert");
+  }
+}
+
+const btnRepairShipResource = document.getElementById('btnRepairShipResource');
+const btnRepairShipGold = document.getElementById('btnRepairShipGold');
+if (btnRepairShipResource) btnRepairShipResource.addEventListener('click', repairShipWithResources);
+if (btnRepairShipGold) btnRepairShipGold.addEventListener('click', repairShipWithGold);
 if (btnRepairShip) btnRepairShip.addEventListener('click', quickRepairShip);
 
 // Fullscreen Management API
@@ -2911,6 +4624,21 @@ function closeAllModals() {
     closeMapModal();
     closedAny = true;
   }
+  if (typeof inventoryModal !== 'undefined' && inventoryModal && inventoryModal.classList.contains('modal-active')) {
+    closeInventoryModal();
+    closedAny = true;
+  }
+  if (typeof recipeBookModal !== 'undefined' && recipeBookModal && recipeBookModal.classList.contains('modal-active')) {
+    closeRecipeBookModal();
+    closedAny = true;
+  }
+  if (typeof cannonPickerModal !== 'undefined' && cannonPickerModal && !cannonPickerModal.classList.contains('hidden')) {
+    closeCannonPicker();
+    closedAny = true;
+  }
+  if (typeof hideCargoTooltip === 'function') {
+    hideCargoTooltip();
+  }
   return closedAny;
 }
 
@@ -2982,4 +4710,207 @@ function showCoordinates() {
 }
 
 if (btnCenterCamera) btnCenterCamera.addEventListener('click', showCoordinates);
+
+/* ==========================================================================
+   STARTUP LOADING SCREEN CAROUSEL & ENGINE PRE-WARMING (60 FPS OPTIMIZATION)
+   ========================================================================== */
+
+const loadingScreenModal = document.getElementById('loadingScreenModal');
+const btnEnterPort = document.getElementById('btnEnterPort');
+const loadingProgressBar = document.getElementById('loadingProgressBar');
+const loadingPercentText = document.getElementById('loadingPercentText');
+const loadingStatusText = document.getElementById('loadingStatusText');
+const loadingTipTitle = document.getElementById('loadingTipTitle');
+const loadingTipDesc = document.getElementById('loadingTipDesc');
+
+const LOADING_SLIDES = [
+  document.getElementById('loadSlide0'),
+  document.getElementById('loadSlide1'),
+  document.getElementById('loadSlide2'),
+  document.getElementById('loadSlide3')
+];
+
+const CAROUSEL_DOTS = [
+  document.getElementById('carouselDot0'),
+  document.getElementById('carouselDot1'),
+  document.getElementById('carouselDot2'),
+  document.getElementById('carouselDot3')
+];
+
+const NAUTICAL_TIPS = [
+  {
+    title: "Catatan Pelaut: Aliran Angin Samudra",
+    desc: "Angin samudra yang bertiup kencang mempengaruhi arah gerak kapal. Perhatikan wimpel di tiang utama kapal."
+  },
+  {
+    title: "Catatan Pelaut: Pertahanan Wilayah",
+    desc: "Saat menaklukkan pulau klan musuh, waspadai konvoi bala bantuan yang berdatangan melindungi pertahanan mereka."
+  },
+  {
+    title: "Catatan Pelaut: Satwa & Burung Camar",
+    desc: "Burung camar akan bertengger santai di dek kapal dan bebatuan karang saat cuaca cerah, dan berlindung saat badai tiba."
+  },
+  {
+    title: "Catatan Pelaut: Karang Alami Tak Berpenghuni",
+    desc: "Pulau atol dan karang tak berpenghuni tersebar di samudra luas sebagai tempat peristirahatan satwa laut dan burung camar."
+  }
+];
+
+let currentLoadingSlide = 0;
+let loadingCarouselTimer = null;
+let isPrewarmingComplete = false;
+
+function showLoadingSlide(idx) {
+  currentLoadingSlide = idx;
+  LOADING_SLIDES.forEach((slide, i) => {
+    if (!slide) return;
+    if (i === idx) {
+      slide.classList.remove('opacity-0');
+      slide.classList.add('opacity-100');
+    } else {
+      slide.classList.remove('opacity-100');
+      slide.classList.add('opacity-0');
+    }
+  });
+
+  CAROUSEL_DOTS.forEach((dot, i) => {
+    if (!dot) return;
+    if (i === idx) {
+      dot.className = "w-8 sm:w-12 h-1 rounded-full bg-amber-400 shadow transition-all duration-500";
+    } else {
+      dot.className = "w-8 sm:w-12 h-1 rounded-full bg-slate-700/80 shadow transition-all duration-500";
+    }
+  });
+
+  if (loadingTipTitle && loadingTipDesc && NAUTICAL_TIPS[idx]) {
+    loadingTipTitle.innerText = NAUTICAL_TIPS[idx].title;
+    loadingTipDesc.innerText = NAUTICAL_TIPS[idx].desc;
+  }
+}
+
+function startLoadingCarousel() {
+  if (loadingCarouselTimer) clearInterval(loadingCarouselTimer);
+  // Cycle image every 7 seconds (7000ms) as requested
+  loadingCarouselTimer = setInterval(() => {
+    const nextIdx = (currentLoadingSlide + 1) % LOADING_SLIDES.length;
+    showLoadingSlide(nextIdx);
+  }, 7000);
+}
+
+function updateLoadingProgress(percent, statusMsg) {
+  if (loadingProgressBar) {
+    loadingProgressBar.style.width = `${Math.min(100, Math.max(0, percent))}%`;
+  }
+  if (loadingPercentText) {
+    loadingPercentText.innerText = `${Math.round(percent)}%`;
+  }
+  if (loadingStatusText && statusMsg) {
+    loadingStatusText.innerText = statusMsg;
+  }
+}
+
+function enterPortFromLoading() {
+  if (!isPrewarmingComplete && loadingScreenModal) return;
+  if (loadingCarouselTimer) {
+    clearInterval(loadingCarouselTimer);
+    loadingCarouselTimer = null;
+  }
+
+  if (loadingScreenModal) {
+    loadingScreenModal.classList.add('opacity-0', 'pointer-events-none');
+    setTimeout(() => {
+      loadingScreenModal.style.display = 'none';
+    }, 700);
+  }
+
+  // Ensure Main Menu is cleanly visible
+  if (mainMenuModal) {
+    mainMenuModal.classList.remove('opacity-0', 'pointer-events-none');
+    mainMenuModal.classList.add('opacity-100', 'pointer-events-auto');
+  }
+}
+
+if (btnEnterPort) {
+  btnEnterPort.addEventListener('click', enterPortFromLoading);
+}
+
+// Support Space / Enter keyboard shortcuts or tap on loading screen once loaded
+window.addEventListener('keydown', (e) => {
+  if (!isGameStarted && isPrewarmingComplete && loadingScreenModal && loadingScreenModal.style.display !== 'none') {
+    if (e.code === 'Space' || e.code === 'Enter') {
+      enterPortFromLoading();
+    }
+  }
+});
+
+// Run engine asset pre-warming & cache initialization
+async function runEnginePrewarming() {
+  startLoadingCarousel();
+  updateLoadingProgress(8, "Memuat Asset Grafis...");
+
+  // 1. Preload and decode the 4 loading screen carousel images
+  const imgSrcs = ['loadingscreen1.jpeg', 'loadingscreen2.jpeg', 'loadingscreen3.jpeg', 'loadingscreen4.jpeg'];
+  try {
+    await Promise.all(imgSrcs.map(src => {
+      return new Promise(resolve => {
+        const img = new Image();
+        img.src = src;
+        if (img.decode) {
+          img.decode().then(resolve).catch(resolve);
+        } else {
+          img.onload = resolve;
+          img.onerror = resolve;
+        }
+      });
+    }));
+  } catch (err) {
+    // Proceed even if an image fails
+  }
+
+  updateLoadingProgress(32, "Mengomputasi Spline Kepulauan Organik...");
+  await new Promise(r => setTimeout(r, 120));
+
+  // 2. Pre-compute geometry cache for all islands in memory
+  if (typeof WORLD_ISLANDS !== 'undefined' && typeof getIslandCachedData === 'function') {
+    for (let i = 0; i < WORLD_ISLANDS.length; i++) {
+      getIslandCachedData(WORLD_ISLANDS[i]);
+    }
+  }
+
+  updateLoadingProgress(62, "Menghangatkan Cache Kabut & Awan...");
+  await new Promise(r => setTimeout(r, 120));
+
+  // 3. Warm up procedural off-screen canvas sprites (Mist & Rolling Cloud Shadows)
+  if (typeof getMistSprite === 'function') {
+    getMistSprite(false);
+    getMistSprite(true);
+  }
+  if (typeof getCloudShadowSprite === 'function') {
+    getCloudShadowSprite(false);
+    getCloudShadowSprite(true);
+  }
+
+  updateLoadingProgress(86, "Menginisialisasi Akustik Laut Darah...");
+  await new Promise(r => setTimeout(r, 120));
+
+  // 4. Pre-warm sound synthesizer structures
+  if (typeof sound !== 'undefined') {
+    sound.init();
+  }
+
+  updateLoadingProgress(100, "Semua Sistem Siap! Selamat Datang di Laut Darah.");
+  isPrewarmingComplete = true;
+
+  // Reveal the Enter Port button
+  if (btnEnterPort) {
+    btnEnterPort.classList.remove('hidden');
+  }
+}
+
+// Bootstrap loading screen on DOM ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', runEnginePrewarming);
+} else {
+  runEnginePrewarming();
+}
 

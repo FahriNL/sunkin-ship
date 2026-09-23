@@ -329,8 +329,8 @@ function spawnWorldEntities() {
       }
     }
 
-    // Keep ships that are currently fighting the player
-    if (distSq >= recycleDist * recycleDist && e.alertState !== 'alerted') {
+    // Keep ships that are currently fighting the player or active monsters
+    if (distSq >= recycleDist * recycleDist && e.alertState !== 'alerted' && !e.isMonster) {
       entities.enemies.splice(i, 1);
       continue;
     }
@@ -714,15 +714,21 @@ function triggerIslandProvocation(islandOrId) {
   const tier = isl.tier || 4;
   const cfg = (typeof CONQUEST_REINFORCEMENT_CONFIG !== 'undefined')
     ? (CONQUEST_REINFORCEMENT_CONFIG[tier] || CONQUEST_REINFORCEMENT_CONFIG[4])
-    : { totalWaves: 1, waveInterval: 14.0, shipsPerWave: [2], tiers: [4], arrivalNotice: "Pasukan perlindungan pulau datang!" };
+    : { totalWaves: 1, waves: 1, waveInterval: 14.0, interval: 14.0, shipsPerWave: [2], countPerWave: 2, tiers: [0], title: "Patroli Pesisir", arrivalNotice: "Pasukan perlindungan pulau datang!" };
 
-  isl.reinforcementWavesLeft = cfg.totalWaves;
+  const totalWaves = cfg.totalWaves || cfg.waves || 1;
+  isl.reinforcementWavesLeft = totalWaves;
   isl.reinforcementWaveCurrent = 0;
   isl.reinforcementTimer = 5.0; // Gelombang pertama tiba 5 detik setelah terprovokasi
 
+  const targetClan = (isl.clan === 'batavia') ? 'gold' : (isl.clan || 'gold');
   if (typeof sound !== 'undefined') {
-    if (isl.clan === 'viking' && typeof sound.playHorn === 'function') {
+    if (targetClan === 'viking' && typeof sound.playHorn === 'function') {
       sound.playHorn();
+    } else if (targetClan === 'iron' && typeof sound.playIronHorn === 'function') {
+      sound.playIronHorn();
+    } else if (targetClan === 'blood' && typeof sound.playMonsterRoar === 'function') {
+      sound.playMonsterRoar();
     } else if (typeof sound.playAlertHorn === 'function') {
       sound.playAlertHorn();
     }
@@ -761,26 +767,28 @@ function updateIslandConquestReinforcements(dt) {
       const tier = isl.tier || 4;
       const cfg = (typeof CONQUEST_REINFORCEMENT_CONFIG !== 'undefined')
         ? (CONQUEST_REINFORCEMENT_CONFIG[tier] || CONQUEST_REINFORCEMENT_CONFIG[4])
-        : { totalWaves: 1, waveInterval: 14.0, shipsPerWave: [2], tiers: [4], arrivalNotice: "Pasukan bala bantuan merapat!" };
+        : { totalWaves: 1, waves: 1, waveInterval: 14.0, interval: 14.0, shipsPerWave: [2], countPerWave: 2, tiers: [0], title: "Patroli Pesisir", arrivalNotice: "Pasukan bala bantuan merapat!" };
 
-      isl.reinforcementTimer = cfg.waveInterval || 14.0;
+      isl.reinforcementTimer = cfg.waveInterval || cfg.interval || 14.0;
 
       const waveIndex = isl.reinforcementWaveCurrent - 1;
-      const count = (cfg.shipsPerWave && cfg.shipsPerWave[waveIndex]) ? cfg.shipsPerWave[waveIndex] : 2;
-      const availableTiers = cfg.tiers || [tier];
+      const count = (cfg.shipsPerWave && cfg.shipsPerWave[waveIndex]) ? cfg.shipsPerWave[waveIndex] : (cfg.countPerWave || 2);
+      const availableTiers = cfg.tiers || [Math.min(2, Math.max(0, 4 - tier))];
 
       // Kapal bantuan berlayar dari perairan luar pulau
       const spawnBaseAngle = Math.atan2(playerState.y - isl.y, playerState.x - isl.x) + Math.PI;
       const spawnDist = (isl.radius || 250) + 400;
 
+      const targetClan = (isl.clan === 'batavia') ? 'gold' : (isl.clan || 'gold');
+
       for (let s = 0; s < count; s++) {
         const ang = spawnBaseAngle + (s - (count - 1) / 2) * 0.45;
         const sx = isl.x + Math.cos(ang) * spawnDist;
         const sy = isl.y + Math.sin(ang) * spawnDist;
-        const sTier = availableTiers[s % availableTiers.length] || tier;
+        const sTier = availableTiers[s % availableTiers.length];
 
         const headingToPlayer = Math.atan2(playerState.y - sy, playerState.x - sx);
-        const reinforceShip = createEnemyEntity(isl.clan || 'batavia', sTier, sx, sy, headingToPlayer, {
+        const reinforceShip = createEnemyEntity(targetClan, sTier, sx, sy, headingToPlayer, {
           formationType: 'solitary',
           formationRole: 'guard',
           homeIslandId: isl.id
@@ -790,11 +798,12 @@ function updateIslandConquestReinforcements(dt) {
         reinforceShip.targetEntity = playerState;
         reinforceShip.detectionMeter = 100;
         reinforceShip.isReinforcement = true;
+        reinforceShip.name = `Bala Bantuan ${reinforceShip.name}`;
 
-        if (isl.clan === 'viking') reinforceShip.hasWarHorn = true;
-        if (isl.clan === 'wokou') reinforceShip.hasSmokeScreen = true;
-        if (isl.clan === 'iron') reinforceShip.hasSteamRam = true;
-        if (isl.clan === 'batavia' && s === 0) reinforceShip.isTreasuryShip = true;
+        if (targetClan === 'viking') reinforceShip.hasWarHorn = true;
+        if (targetClan === 'wokou') reinforceShip.hasSmokeScreen = true;
+        if (targetClan === 'iron') reinforceShip.hasSteamRam = true;
+        if (targetClan === 'gold' && s === 0) reinforceShip.isTreasuryShip = true;
 
         entities.enemies.push(reinforceShip);
 
@@ -810,11 +819,15 @@ function updateIslandConquestReinforcements(dt) {
       }
 
       if (typeof sound !== 'undefined') {
-        if (isl.clan === 'viking' && typeof sound.playHorn === 'function') sound.playHorn();
+        if (targetClan === 'viking' && typeof sound.playHorn === 'function') sound.playHorn();
+        else if (targetClan === 'iron' && typeof sound.playIronHorn === 'function') sound.playIronHorn();
+        else if (targetClan === 'blood' && typeof sound.playMonsterRoar === 'function') sound.playMonsterRoar();
         else if (typeof sound.playAlertHorn === 'function') sound.playAlertHorn();
       }
 
-      showToast(`${cfg.arrivalNotice} (Gelombang ${isl.reinforcementWaveCurrent}/${cfg.totalWaves})`, "alert");
+      const totalWaves = cfg.totalWaves || cfg.waves || 1;
+      const notice = cfg.arrivalNotice || cfg.title || "Pasukan bala bantuan merapat!";
+      showToast(`${notice} (Gelombang ${isl.reinforcementWaveCurrent}/${totalWaves})`, "alert");
       addFloatingText(`BANTUAN GELOMBANG ${isl.reinforcementWaveCurrent}!`, isl.x, isl.y - 45, '#ef4444', true);
     }
   }
@@ -877,7 +890,40 @@ function destroyTowerAndCheckConquer(tw, tIndex) {
   playerState.gold += bountyGold;
   if (bountyBlood > 0) playerState.bloodEssence += bountyBlood;
 
-  if (bountyBlood > 0) {
+  // Survival Resources & Faction Orbs from Tower
+  if (!playerState.resources) playerState.resources = {};
+  playerState.resources.stone = (playerState.resources.stone || 0) + (tw.isPeranakan ? 2 : 5);
+  playerState.resources.wood = (playerState.resources.wood || 0) + (tw.isPeranakan ? 2 : 4);
+
+  let towerSpecial = null;
+  if (tw.defenseType === 'mist_spire' || tw.defenseType === 'skull_pylon') {
+    if (Math.random() < (tw.isPeranakan ? 0.45 : 0.85)) {
+      playerState.resources.mistOrb = (playerState.resources.mistOrb || 0) + 1;
+      towerSpecial = "Orb Kabut Gaib";
+    }
+  } else if (tw.defenseType === 'viking_ballista' || tw.defenseType === 'viking_watchtower') {
+    if (Math.random() < (tw.isPeranakan ? 0.45 : 0.85)) {
+      playerState.resources.snowOrb = (playerState.resources.snowOrb || 0) + 1;
+      towerSpecial = "Orb Salju Fjord";
+    }
+  } else if (tw.defenseType === 'wokou_pagoda' || tw.defenseType === 'wokou_rocket_nest') {
+    playerState.resources.bamboo = (playerState.resources.bamboo || 0) + (tw.isPeranakan ? 3 : 6);
+    if (Math.random() < (tw.isPeranakan ? 0.45 : 0.80)) {
+      playerState.resources.firePowder = (playerState.resources.firePowder || 0) + 1;
+      towerSpecial = "Bubuk Mesiu Api";
+    }
+  } else if (tw.defenseType === 'steam_harpoon' || tw.defenseType === 'steam_vent') {
+    playerState.resources.iron = (playerState.resources.iron || 0) + (tw.isPeranakan ? 3 : 6);
+  } else if (tw.defenseType === 'tentacle' || tw.defenseType === 'flesh_spitter') {
+    const chitinGain = tw.isPeranakan ? 3 : 6;
+    playerState.resources.chitin = (playerState.resources.chitin || 0) + chitinGain;
+    addFloatingText(`+${chitinGain} Kitin`, tw.x, tw.y - 40, '#e11d48');
+  }
+
+  if (towerSpecial) {
+    showToast(`Hancur! +${bountyGold} Koin & Rampasan Langka: ${towerSpecial}!`, "check");
+    addFloatingText(`+1 ${towerSpecial}!`, tw.x, tw.y - 45, '#38bdf8', true);
+  } else if (bountyBlood > 0) {
     showToast(`Hancur! +${bountyGold} Koin +${bountyBlood} Darah: ${tw.name}`, "blood");
   } else {
     showToast(`Hancur! +${bountyGold} Koin: ${tw.name}`, "gold");
@@ -965,6 +1011,7 @@ function checkPlayerPortDocking(pState) {
   let nearPort = null;
   for (let i = 0; i < WORLD_ISLANDS.length; i++) {
     const isl = WORLD_ISLANDS[i];
+    if (isl.isUninhabited) continue;
     if (!isl.isHomePort && !isl.isShopIsland && !isl.isConquered) continue;
 
     const dx = pState.x - isl.x;
@@ -1002,6 +1049,38 @@ function checkPlayerPortDocking(pState) {
       pState.dockedPort = null;
       if (typeof sound !== 'undefined' && typeof sound.playWeighAnchor === 'function') {
         sound.playWeighAnchor();
+      }
+    }
+
+    // Pesisir Pulau Liar: Peluang memungut kayu hanyut & batu cadas saat berlayar dekat pulau hiasan
+    if (!pState._isletForageTimer) pState._isletForageTimer = 0;
+    pState._isletForageTimer += 0.016;
+    if (pState._isletForageTimer >= 4.0) {
+      pState._isletForageTimer = 0;
+      for (let i = 0; i < WORLD_ISLANDS.length; i++) {
+        const isl = WORLD_ISLANDS[i];
+        if (!isl.isUninhabited) continue;
+        const dx = pState.x - isl.x;
+        const dy = pState.y - isl.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const nearEdge = (isl.radius || 150) + 120;
+        if (dist < nearEdge) {
+          if (!pState.resources) pState.resources = {};
+          if (isl.isSandOnly) {
+            const fw = Math.floor(2 + Math.random() * 2);
+            pState.resources.wood = (pState.resources.wood || 0) + fw;
+            addFloatingText(`+${fw} Kayu Pesisir`, pState.x, pState.y - 25, '#b45309');
+            showToast(`Memungut Kayu Gelondong Terdampar di ${isl.name} (+${fw} Kayu)`, "wood");
+            if (typeof sound !== 'undefined' && sound.playSplash) sound.playSplash();
+          } else if (isl.isRockOnly) {
+            const fs = Math.floor(2 + Math.random() * 2);
+            pState.resources.stone = (pState.resources.stone || 0) + fs;
+            addFloatingText(`+${fs} Batu Cadas`, pState.x, pState.y - 25, '#94a3b8');
+            showToast(`Mengambil Batu Cadas Karang di ${isl.name} (+${fs} Batu)`, "stone");
+            if (typeof sound !== 'undefined' && sound.playSplash) sound.playSplash();
+          }
+          break;
+        }
       }
     }
   }
@@ -1229,28 +1308,25 @@ function updateWeatherSystem(dt) {
   const isCurrentAllowed = weatherState.type === 'clear' || availableWeathers.includes(weatherState.type);
 
   // Weather Event Lifecycle State Machine
-  if (weatherState.targetType !== weatherState.type) {
-    // Transitioning between weathers
-    if (weatherState.targetType === 'clear') {
-      weatherState.intensity = Math.max(0, weatherState.intensity - dt * 0.22); // ~4.5s fade out
-      if (weatherState.intensity <= 0) {
-        weatherState.type = 'clear';
-        weatherState.cooldown = 32 + Math.random() * 22; // 32-54s calm period
-      }
-    } else {
+  if (weatherState.type === 'clear') {
+    // When in clear state, check if we are transitioning to a new weather
+    if (weatherState.targetType !== 'clear') {
       weatherState.type = weatherState.targetType;
-      weatherState.intensity = Math.min(1.0, weatherState.intensity + dt * 0.22); // ~4.5s fade in
-    }
-  } else {
-    // Stable state
-    if (weatherState.type === 'clear') {
+      weatherState.intensity = 0.08;
+    } else {
+      weatherState.intensity = Math.max(0, weatherState.intensity - dt * 0.25);
       weatherState.cooldown -= dt;
       if (weatherState.cooldown <= 0) {
         // Pick a random weather from available weathers in player's current zone
         const nextWeather = availableWeathers[Math.floor(Math.random() * availableWeathers.length)];
         weatherState.targetType = nextWeather;
-        weatherState.timer = 45 + Math.random() * 25; // 45-70s duration
-        weatherState.intensity = 0.05;
+        weatherState.type = nextWeather;
+
+        const wCfg = (typeof WEATHER_CONFIGS !== 'undefined') ? (WEATHER_CONFIGS[nextWeather] || WEATHER_CONFIGS.clear) : {};
+        const dMin = wCfg.durationMin || 45;
+        const dMax = wCfg.durationMax || 60;
+        weatherState.timer = dMin + Math.random() * (dMax - dMin);
+        weatherState.intensity = 0.08;
         
         // Trigger banner announcement
         const cfg = (typeof WEATHER_CONFIGS !== 'undefined') ? (WEATHER_CONFIGS[nextWeather] || WEATHER_CONFIGS.clear) : { name: nextWeather, subtext: '' };
@@ -1265,17 +1341,34 @@ function updateWeatherSystem(dt) {
           sound.playWindGust();
         }
       }
+    }
+  } else {
+    // Active weather event!
+    if (weatherState.targetType === 'clear') {
+      // Fading out to clear
+      weatherState.intensity = Math.max(0, weatherState.intensity - dt * 0.22); // ~4.5s fade out
+      if (weatherState.intensity <= 0) {
+        weatherState.type = 'clear';
+        weatherState.isDevOverride = false;
+        const clearCfg = (typeof WEATHER_CONFIGS !== 'undefined') ? (WEATHER_CONFIGS.clear || {}) : {};
+        const cMin = clearCfg.calmCooldownMin || 30;
+        const cMax = clearCfg.calmCooldownMax || 45;
+        weatherState.cooldown = cMin + Math.random() * (cMax - cMin);
+      }
     } else {
-      // Weather event active!
-      // If player sailed into a zone where current weather is disallowed, force end early
-      if (!isCurrentAllowed) {
-        weatherState.timer = Math.min(weatherState.timer, 2.0);
+      // Smoothly ramp up to peak storm intensity (1.0) over ~3.5 seconds
+      weatherState.intensity = Math.min(1.0, weatherState.intensity + dt * 0.28);
+
+      // If player sailed into a zone where current weather is disallowed, force end early (unless explicitly set via dev override)
+      if (!isCurrentAllowed && !weatherState.isDevOverride) {
+        weatherState.timer = Math.min(weatherState.timer, 2.5);
       }
 
       weatherState.timer -= dt;
       if (weatherState.timer <= 0) {
         // Weather ending, return to clear
         weatherState.targetType = 'clear';
+        weatherState.isDevOverride = false;
       }
     }
   }
@@ -1303,9 +1396,9 @@ function updateWeatherSystem(dt) {
   const windRate = (activeCfg.hasWindDrift ? 0.0035 : 0.0012) * (1 + weatherState.intensity * 0.8);
   windAngle += windRate * dt;
 
-  // Calculate Wind Drift Vector
-  if (activeCfg.hasWindDrift && weatherState.intensity > 0.1) {
-    const driftSpeed = 38 * (activeCfg.windDriftMultiplier || 1.0) * weatherState.intensity;
+  // Calculate Wind Drift Vector & Dynamic Marine Current
+  if (activeCfg.hasWindDrift && weatherState.intensity > 0.08) {
+    const driftSpeed = 22 * (activeCfg.windDriftMultiplier || 1.0) * weatherState.intensity;
     weatherState.windDrift.x = Math.cos(windAngle) * driftSpeed;
     weatherState.windDrift.y = Math.sin(windAngle) * driftSpeed;
   } else {
@@ -1468,7 +1561,17 @@ function updateGame(dt) {
   updateWeatherSystem(dt);
   updateIslandConquestReinforcements(dt);
   const currentMaxHp = getStatValue('hull', playerState.upgrades.hull);
-  const moveSpeed = getStatValue('speed', playerState.upgrades.speed);
+  let moveSpeed = getStatValue('speed', playerState.upgrades.speed);
+
+  // Dev Testing Hooks: God Mode & Super Speed
+  if (typeof window !== 'undefined' && window.devTestingState) {
+    if (window.devTestingState.godMode) {
+      playerState.hp = currentMaxHp;
+    }
+    if (window.devTestingState.superSpeed) {
+      moveSpeed *= 3.0;
+    }
+  }
 
   const activeWeatherCfg = (typeof WEATHER_CONFIGS !== 'undefined' && typeof weatherState !== 'undefined')
     ? (WEATHER_CONFIGS[weatherState.type] || WEATHER_CONFIGS.clear)
@@ -1485,6 +1588,18 @@ function updateGame(dt) {
     }
   } else {
     tailwindBonus = 1 + Math.max(0, windAlignment) * 0.15;
+  }
+
+  // Dynamic Wind Helm Disruption & Yaw Torque (Angin Mengacaukan Kemudi Kapal)
+  let windHelmTorque = 0;
+  let windGustJitter = 0;
+  if (activeWeatherCfg && activeWeatherCfg.hasWindDrift && weatherState.intensity > 0.05) {
+    const crosswind = Math.sin(windAngle - playerState.angle);
+    const windMult = activeWeatherCfg.windDriftMultiplier || 1.0;
+    // Aerodynamic yaw leeway force pushing the vessel off course
+    windHelmTorque = crosswind * 0.48 * windMult * weatherState.intensity * dt;
+    // Turbulent wind gust jitter that shakes the helm during storms and gales
+    windGustJitter = Math.sin((Date.now() || 0) * 0.0035 + playerState.x * 0.015) * 0.22 * windMult * weatherState.intensity * dt;
   }
 
   // Iron Harpoon Snare Debuff
@@ -1509,9 +1624,11 @@ function updateGame(dt) {
     // Rudder Rotation with Wind Steering Resistance
     const headingDiffFromWind = normAngle(playerState.angle - windAngle);
     const turningAgainstWind = (pcNavalState.rudder > 0 && headingDiffFromWind > 0) || (pcNavalState.rudder < 0 && headingDiffFromWind < 0);
-    const windSteerPenalty = (activeWeatherCfg && activeWeatherCfg.hasWindDrift && turningAgainstWind) ? (1 - 0.28 * weatherState.intensity) : 1.0;
+    const windSteerPenalty = (activeWeatherCfg && activeWeatherCfg.hasWindDrift && turningAgainstWind) 
+      ? Math.max(0.48, 1 - 0.40 * weatherState.intensity) 
+      : 1.0;
     const navalTurnSpeed = 2.4 * dt * windSteerPenalty;
-    playerState.angle += pcNavalState.rudder * navalTurnSpeed;
+    playerState.angle += pcNavalState.rudder * navalTurnSpeed + windHelmTorque + windGustJitter;
 
     // Speed modifiers (Shift Boost / Ctrl Stealth)
     let speedMult = 0.9;
@@ -1552,9 +1669,11 @@ function updateGame(dt) {
     // Turning Resistance against Gale Wind
     const headingDiffFromWind = normAngle(playerState.angle - windAngle);
     const turningAgainstWind = (Math.sign(diff) > 0 && headingDiffFromWind > 0) || (Math.sign(diff) < 0 && headingDiffFromWind < 0);
-    const windSteerPenalty = (activeWeatherCfg && activeWeatherCfg.hasWindDrift && turningAgainstWind) ? (1 - 0.28 * weatherState.intensity) : 1.0;
+    const windSteerPenalty = (activeWeatherCfg && activeWeatherCfg.hasWindDrift && turningAgainstWind) 
+      ? Math.max(0.50, 1 - 0.36 * weatherState.intensity) 
+      : 1.0;
     const turnSpeed = 3.2 * dt * windSteerPenalty;
-    playerState.angle += Math.sign(diff) * Math.min(Math.abs(diff), turnSpeed);
+    playerState.angle += Math.sign(diff) * Math.min(Math.abs(diff), turnSpeed) + windHelmTorque + windGustJitter;
 
     const currentSpeed = moveSpeed * joystickState.magnitude * tailwindBonus * snareMultiplier * inkMultiplier;
     playerState.x += Math.cos(playerState.angle) * currentSpeed;
@@ -1580,10 +1699,13 @@ function updateGame(dt) {
       });
     }
   } else {
-    // Idle drifting with wind force when undocked
+    // Idle drifting with wind force and yaw rotation when undocked
     if (weatherState && (weatherState.windDrift.x !== 0 || weatherState.windDrift.y !== 0) && !playerState.isDockedAtPort) {
-      playerState.x += weatherState.windDrift.x * 0.7 * dt;
-      playerState.y += weatherState.windDrift.y * 0.7 * dt;
+      playerState.x += weatherState.windDrift.x * 0.8 * dt;
+      playerState.y += weatherState.windDrift.y * 0.8 * dt;
+      if (activeWeatherCfg && activeWeatherCfg.hasWindDrift) {
+        playerState.angle += (windHelmTorque * 0.85 + windGustJitter * 0.85);
+      }
     }
   }
 
@@ -2465,6 +2587,12 @@ function updateGame(dt) {
           } else if (tw.defenseType === 'cannon_bastion' || tw.defenseType === 'swivel_outpost') {
             hitColor = '#f59e0b';
             sound.playIronHit(tw.x, tw.y);
+          } else if (tw.defenseType === 'viking_ballista' || tw.defenseType === 'viking_watchtower') {
+            hitColor = '#38bdf8';
+            sound.playHit(tw.x, tw.y);
+          } else if (tw.defenseType === 'wokou_pagoda' || tw.defenseType === 'wokou_rocket_nest') {
+            hitColor = '#f43f5e';
+            sound.playHit(tw.x, tw.y);
           } else {
             sound.playMistCast(tw.x, tw.y);
           }
@@ -2585,6 +2713,18 @@ function updateGame(dt) {
         if (dx * dx + dy * dy < e.radius * e.radius) {
           e.hp -= p.damage;
           p.life = 0;
+
+          // Special player weapon hit debuffs
+          if (p.type === 'frost_axe') {
+            e.speedSnareTimer = 2.5;
+            e.speed = (e.baseSpeed || e.speed || 80) * 0.6;
+            addFloatingText("BEKU (SLOW 40%)!", e.x, e.y - 16, '#38bdf8', true);
+            if (typeof sound !== 'undefined' && typeof sound.playFrostThrow === 'function') sound.playFrostThrow(e.x, e.y);
+          } else if (p.type === 'spike') {
+            e.hp -= 4;
+            addFloatingText("BISA KITIN!", e.x, e.y - 16, '#f43f5e', true);
+          }
+
           if (e.isMonster || e.clan === 'blood') {
             sound.playMonsterHit(e.x, e.y);
           } else if (e.clan === 'iron') {
@@ -2675,7 +2815,49 @@ function updateGame(dt) {
             playerState.gold += goldGained;
             if (bloodGained > 0) playerState.bloodEssence += bloodGained;
 
-            if (bloodGained > 0) {
+            // Faction Crafting Drops & Survival Materials
+            if (!playerState.resources) playerState.resources = {};
+            let fWood = 0, fRope = 0, fIron = 0, fBamboo = 0;
+            let fSpecial = null;
+
+            if (e.clan === 'batavia' || e.clan === 'gold') {
+              fWood = Math.floor(2 + Math.random() * 3);
+              fRope = Math.random() < 0.4 ? 1 : 0;
+            } else if (e.clan === 'iron') {
+              fIron = Math.floor(2 + Math.random() * 3);
+              fWood = 1;
+            } else if (e.clan === 'wokou') {
+              fBamboo = Math.floor(2 + Math.random() * 3);
+              if (Math.random() < (e.tier >= 3 ? 0.65 : 0.35)) {
+                fSpecial = { key: 'firePowder', name: 'Bubuk Mesiu Api', icon: 'firePowder' };
+              }
+            } else if (e.clan === 'mist') {
+              fWood = 1;
+              if (Math.random() < (e.tier >= 3 ? 0.60 : 0.30)) {
+                fSpecial = { key: 'mistOrb', name: 'Orb Kabut Gaib', icon: 'mistOrb' };
+              }
+            } else if (e.clan === 'viking') {
+              fWood = 2;
+              fIron = 1;
+              if (Math.random() < (e.tier >= 3 ? 0.60 : 0.30)) {
+                fSpecial = { key: 'snowOrb', name: 'Orb Salju Fjord', icon: 'snowOrb' };
+              }
+            } else if (e.isMonster || e.clan === 'blood') {
+              const chitinGained = Math.floor(2 + Math.random() * 3 * (e.tier || 1));
+              playerState.resources.chitin = (playerState.resources.chitin || 0) + chitinGained;
+              addFloatingText(`+${chitinGained} Kitin`, e.x, e.y - 20, '#e11d48');
+            }
+
+            if (fWood > 0) playerState.resources.wood = (playerState.resources.wood || 0) + fWood;
+            if (fRope > 0) playerState.resources.rope = (playerState.resources.rope || 0) + fRope;
+            if (fIron > 0) playerState.resources.iron = (playerState.resources.iron || 0) + fIron;
+            if (fBamboo > 0) playerState.resources.bamboo = (playerState.resources.bamboo || 0) + fBamboo;
+
+            if (fSpecial) {
+              playerState.resources[fSpecial.key] = (playerState.resources[fSpecial.key] || 0) + 1;
+              showToast(`Rampasan Faksi: +1 ${fSpecial.name}!`, fSpecial.icon);
+              addFloatingText(`+1 ${fSpecial.name}!`, e.x, e.y - 36, '#38bdf8', true);
+            } else if (bloodGained > 0) {
               showToast(`+${goldGained} Koin +${bloodGained} Darah: Menumpas ${e.name}!`, "blood");
             } else {
               showToast(`+${goldGained} Koin: Menenggelamkan ${e.name}!`, "gold");
@@ -2719,6 +2901,11 @@ function updateGame(dt) {
       // Enemy projectile hitting player OR rival clan ship
       const dx = p.x - playerState.x, dy = p.y - playerState.y;
       if (dx * dx + dy * dy < 22 * 22) {
+        if (typeof window !== 'undefined' && window.devTestingState && window.devTestingState.godMode) {
+          p.life = 0;
+          addFloatingText("KEBAL!", playerState.x, playerState.y - 20, '#fbbf24', true);
+          return;
+        }
         const diffCfg = (typeof getDifficultyConfig === 'function') ? getDifficultyConfig() : { playerDamageReceivedMult: 1.0 };
         const pDmg = Math.round(p.damage * (diffCfg.playerDamageReceivedMult || 1.0));
         playerState.hp -= pDmg;
@@ -3889,13 +4076,27 @@ function updateGame(dt) {
       const gReward = Math.round(nearWreck.goldReward * rMult);
       const bReward = Math.round(nearWreck.bloodReward * rMult);
       playerState.gold += gReward;
+
+      // Rich survival materials from ancient sunken cargo hold
+      if (!playerState.resources) playerState.resources = {};
+      const sWood = Math.floor(6 + Math.random() * 6);
+      const sIron = Math.floor(3 + Math.random() * 4);
+      const sRope = Math.floor(2 + Math.random() * 3);
+      const sStone = Math.floor(2 + Math.random() * 3);
+      playerState.resources.wood = (playerState.resources.wood || 0) + sWood;
+      playerState.resources.iron = (playerState.resources.iron || 0) + sIron;
+      playerState.resources.rope = (playerState.resources.rope || 0) + sRope;
+      playerState.resources.stone = (playerState.resources.stone || 0) + sStone;
+
       addFloatingText(`+${gReward} Koin`, playerState.x, playerState.y - 20, '#fbbf24', true);
+      addFloatingText(`+${sWood} Kayu, +${sIron} Besi, +${sRope} Tali`, playerState.x, playerState.y - 50, '#34d399');
+
       if (bReward > 0) {
         playerState.bloodEssence += bReward;
         addFloatingText(`+${bReward} Darah`, playerState.x, playerState.y - 35, '#ef4444', true);
-        showToast(`Relik Kuno: +${gReward} Koin +${bReward} Darah!`, "anchor");
+        showToast(`Relik Kuno: +${gReward} Koin +${bReward} Darah & Bahan Melimpah!`, "anchor");
       } else {
-        showToast(`Harta Karam Diangkat: +${gReward} Koin!`, "gold");
+        showToast(`Harta Karam Diangkat: +${gReward} Koin, +${sWood} Kayu, +${sIron} Besi!`, "gold");
       }
       sound.playCoin();
       sound.playLoot();
@@ -3915,10 +4116,20 @@ function updateGame(dt) {
   for (let i = entities.floatingLoots.length - 1; i >= 0; i--) {
     const loot = entities.floatingLoots[i];
     if (((playerState.x - loot.x) * (playerState.x - loot.x) + (playerState.y - loot.y) * (playerState.y - loot.y) < 36 * 36)) {
-      if (loot.type === 'repair') {
-        playerState.hp = Math.min(currentMaxHp, playerState.hp + 25);
-        addFloatingText("+25 HP", playerState.x, playerState.y, '#34d399');
-        showToast("Memungut Kayu Apung (+25 Lambung)", "check");
+      if (loot.type === 'repair' || loot.type === 'crate') {
+        if (!playerState.resources) playerState.resources = {};
+        const gainedW = Math.floor(3 + Math.random() * 3);
+        const gainedR = Math.floor(1 + Math.random() * 2);
+        playerState.resources.wood = (playerState.resources.wood || 0) + gainedW;
+        playerState.resources.rope = (playerState.resources.rope || 0) + gainedR;
+        if (Math.random() < 0.35) {
+          playerState.resources.iron = (playerState.resources.iron || 0) + 1;
+          addFloatingText(`+${gainedW} Kayu, +${gainedR} Tali, +1 Besi`, playerState.x, playerState.y, '#34d399');
+          showToast(`Puing Terapung: +${gainedW} Kayu, +${gainedR} Tali, +1 Besi!`, "wood");
+        } else {
+          addFloatingText(`+${gainedW} Kayu, +${gainedR} Tali`, playerState.x, playerState.y, '#34d399');
+          showToast(`Puing Terapung: +${gainedW} Kayu, +${gainedR} Tali!`, "wood");
+        }
         sound.playSplash();
       } else if (loot.type === 'bottle') {
         playerState.gold += loot.value;
@@ -3961,18 +4172,39 @@ function updateGame(dt) {
     }
   });
 
-  // Oceanic Seagulls & Carrion Crows flight, banking & sounds
+  // Oceanic Seagulls & Carrion Crows flight, banking, perching & weather sensitivity
+  const isBadBirdWeather = (typeof weatherState !== 'undefined' && weatherState.intensity > 0.15 && 
+    ['rain', 'storm', 'thunderstorm', 'gale', 'blood_tempest', 'dense_fog'].includes(weatherState.type));
+  
   const skullIslandRef = WORLD_ISLANDS.find(i => i.isSkullIsland || i.id === 'skull_island');
   if (entities.seagulls) {
-    entities.seagulls.forEach(s => {
-      s.heading += s.turnRate;
-      s.x += Math.cos(s.heading) * s.speed;
-      s.y += Math.sin(s.heading) * s.speed;
-      s.wingPhase += dt * s.wingSpeed;
+    let perchedOnPlayer = 0;
+    entities.seagulls.forEach(sb => {
+      if (sb.state === 'perched' && sb.perchTarget && sb.perchTarget.type === 'player') perchedOnPlayer++;
+    });
 
-      // Natural gentle steering adjustment
-      if (Math.random() < 0.02) {
-        s.turnRate = (Math.random() - 0.5) * 0.025;
+    entities.seagulls.forEach(s => {
+      if (!s.state) s.state = 'soaring';
+      if (s.alpha === undefined) s.alpha = 1.0;
+      if (s.targetAlt === undefined) s.targetAlt = s.altitude || 26;
+      if (s.perchCooldown === undefined) s.perchCooldown = 10.0 + Math.random() * 25.0;
+
+      // Weather flight suppression: birds shelter/fade away during storms & rain
+      if (isBadBirdWeather) {
+        s.alpha = Math.max(0, s.alpha - dt * 0.75);
+        if (s.state === 'perched' || s.state === 'descending') {
+          s.state = 'takeoff';
+          s.takeoffTimer = 2.5;
+          s.perchTarget = null;
+        }
+        s.chirpCooldown = 8.0;
+      } else {
+        s.alpha = Math.min(1.0, s.alpha + dt * 0.45);
+      }
+
+      // If fully sheltered, skip positional updates to save CPU
+      if (s.alpha <= 0 && isBadBirdWeather) {
+        return;
       }
 
       // Identify if bird is in the Blood Sea or circling Skull Island
@@ -3980,24 +4212,248 @@ function updateGame(dt) {
       const isNearSkull = skullIslandRef && Math.hypot(s.x - skullIslandRef.x, s.y - skullIslandRef.y) < (skullIslandRef.radius + 500);
       s.isCarrion = sDistFromCenter >= 75000 || isNearSkull;
 
-      // Orbit Skull Island if near it
-      if (isNearSkull) {
-        const angToSkull = Math.atan2(s.y - skullIslandRef.y, s.x - skullIslandRef.x);
-        s.heading = angToSkull + Math.PI / 2 + 0.05;
+      const distToPlayer = Math.hypot(s.x - playerState.x, s.y - playerState.y);
+
+      // -------------------------------------------------------------
+      // STATE 1: PERCHED (Mampir di kapal atau pulau)
+      // -------------------------------------------------------------
+      if (s.state === 'perched') {
+        const pt = s.perchTarget;
+        let shouldTakeoff = false;
+
+        if (!pt || isBadBirdWeather) {
+          shouldTakeoff = true;
+        } else if (pt.type === 'player') {
+          const cos = Math.cos(playerState.angle);
+          const sin = Math.sin(playerState.angle);
+          s.x = playerState.x + (s.perchOffsetX * cos - s.perchOffsetY * sin);
+          s.y = playerState.y + (s.perchOffsetX * sin + s.perchOffsetY * cos);
+          s.heading = playerState.angle + s.perchAngle + (s.headAngle || 0);
+          s.altitude = 0;
+
+          if ((typeof lastFireTime !== 'undefined' && performance.now() - lastFireTime < 600) ||
+              (playerState.speed && Math.abs(playerState.speed) > 3.8)) {
+            shouldTakeoff = true;
+          }
+        } else if (pt.type === 'enemy') {
+          const e = pt.ref;
+          if (!e || e.hp <= 0 || !entities.enemies.includes(e)) {
+            shouldTakeoff = true;
+          } else {
+            const cos = Math.cos(e.angle || 0);
+            const sin = Math.sin(e.angle || 0);
+            s.x = e.x + (s.perchOffsetX * cos - s.perchOffsetY * sin);
+            s.y = e.y + (s.perchOffsetX * sin + s.perchOffsetY * cos);
+            s.heading = (e.angle || 0) + s.perchAngle + (s.headAngle || 0);
+            s.altitude = 0;
+
+            if (e.alertState === 'alerted' || distToPlayer < 120) {
+              shouldTakeoff = true;
+            }
+          }
+        } else if (pt.type === 'island') {
+          s.x = pt.wx;
+          s.y = pt.wy;
+          s.heading = s.perchAngle + (s.headAngle || 0);
+          s.altitude = 0;
+
+          if (distToPlayer < 75) {
+            shouldTakeoff = true;
+          }
+        }
+
+        s.headTimer = (s.headTimer || 2.0) - dt;
+        if (s.headTimer <= 0) {
+          s.headAngle = (Math.random() - 0.5) * 0.9;
+          s.headTimer = 1.5 + Math.random() * 2.5;
+        }
+
+        s.perchDuration = (s.perchDuration || 10.0) - dt;
+        if (s.perchDuration <= 0) {
+          shouldTakeoff = true;
+        }
+
+        if (shouldTakeoff) {
+          s.state = 'takeoff';
+          s.takeoffTimer = 2.5;
+          s.perchCooldown = 22.0 + Math.random() * 25.0;
+          s.perchTarget = null;
+        }
       }
 
-      // Reposition seagulls if they drift too far from the player
-      const distToPlayer = Math.sqrt((s.x - playerState.x) * (s.x - playerState.x) + (s.y - playerState.y) * (s.y - playerState.y));
-      if (distToPlayer > 1500) {
-        const wrapAng = Math.random() * Math.PI * 2;
-        s.x = playerState.x + Math.cos(wrapAng) * 950;
-        s.y = playerState.y + Math.sin(wrapAng) * 950;
-        s.heading = wrapAng + Math.PI + (Math.random() - 0.5) * 0.8;
+      // -------------------------------------------------------------
+      // STATE 2: DESCENDING (Meluncur turun menuju tempat singgah)
+      // -------------------------------------------------------------
+      else if (s.state === 'descending') {
+        const pt = s.perchTarget;
+        let tx = s.x;
+        let ty = s.y;
+        let abortLanding = isBadBirdWeather || !pt;
+
+        if (pt) {
+          if (pt.type === 'player') {
+            const cos = Math.cos(playerState.angle);
+            const sin = Math.sin(playerState.angle);
+            tx = playerState.x + (s.perchOffsetX * cos - s.perchOffsetY * sin);
+            ty = playerState.y + (s.perchOffsetX * sin + s.perchOffsetY * cos);
+          } else if (pt.type === 'enemy') {
+            const e = pt.ref;
+            if (!e || e.hp <= 0 || !entities.enemies.includes(e) || e.alertState === 'alerted') {
+              abortLanding = true;
+            } else {
+              const cos = Math.cos(e.angle || 0);
+              const sin = Math.sin(e.angle || 0);
+              tx = e.x + (s.perchOffsetX * cos - s.perchOffsetY * sin);
+              ty = e.y + (s.perchOffsetX * sin + s.perchOffsetY * cos);
+            }
+          } else if (pt.type === 'island') {
+            tx = pt.wx;
+            ty = pt.wy;
+          }
+        }
+
+        if (abortLanding) {
+          s.state = 'takeoff';
+          s.takeoffTimer = 2.0;
+          s.perchTarget = null;
+          s.perchCooldown = 15.0;
+        } else {
+          const dx = tx - s.x;
+          const dy = ty - s.y;
+          const targetHeading = Math.atan2(dy, dx);
+          const headingDiff = Math.atan2(Math.sin(targetHeading - s.heading), Math.cos(targetHeading - s.heading));
+          s.heading += Math.max(-0.09, Math.min(0.09, headingDiff));
+          s.x += Math.cos(s.heading) * (s.speed * 0.9);
+          s.y += Math.sin(s.heading) * (s.speed * 0.9);
+          s.wingPhase += dt * (s.wingSpeed * 1.35);
+          s.altitude = Math.max(0, s.altitude - dt * 12.0);
+
+          if (Math.hypot(dx, dy) < 18 && s.altitude <= 4) {
+            s.state = 'perched';
+            s.altitude = 0;
+            s.headAngle = 0;
+            s.headTimer = 1.0 + Math.random() * 2.0;
+          }
+        }
       }
 
-      // Play seagull sound (cheerful seagull or dark carrion caw) when passing near player
+      // -------------------------------------------------------------
+      // STATE 3: TAKEOFF (Mengepak sayap kuat & mendaki ke angkasa)
+      // -------------------------------------------------------------
+      else if (s.state === 'takeoff') {
+        s.heading += (Math.random() - 0.5) * 0.04;
+        s.x += Math.cos(s.heading) * (s.speed * 1.35);
+        s.y += Math.sin(s.heading) * (s.speed * 1.35);
+        s.wingPhase += dt * (s.wingSpeed * 1.75);
+        s.altitude = Math.min(s.targetAlt, s.altitude + dt * 15.0);
+        s.takeoffTimer = (s.takeoffTimer || 2.5) - dt;
+        if (s.takeoffTimer <= 0 && s.altitude >= s.targetAlt * 0.85) {
+          s.state = 'soaring';
+        }
+      }
+
+      // -------------------------------------------------------------
+      // STATE 4: SOARING (Terbang bebas melayang di atas laut)
+      // -------------------------------------------------------------
+      else {
+        s.heading += s.turnRate;
+        s.x += Math.cos(s.heading) * s.speed;
+        s.y += Math.sin(s.heading) * s.speed;
+        s.wingPhase += dt * s.wingSpeed;
+        s.altitude += (s.targetAlt - s.altitude) * 0.04;
+
+        if (Math.random() < 0.02) {
+          s.turnRate = (Math.random() - 0.5) * 0.025;
+        }
+
+        // Orbit Skull Island if near it
+        if (isNearSkull) {
+          const angToSkull = Math.atan2(s.y - skullIslandRef.y, s.x - skullIslandRef.x);
+          s.heading = angToSkull + Math.PI / 2 + 0.05;
+        }
+
+        // Reposition seagulls if they drift too far from the player
+        if (distToPlayer > 1500) {
+          const wrapAng = Math.random() * Math.PI * 2;
+          s.x = playerState.x + Math.cos(wrapAng) * 950;
+          s.y = playerState.y + Math.sin(wrapAng) * 950;
+          s.heading = wrapAng + Math.PI + (Math.random() - 0.5) * 0.8;
+          s.state = 'soaring';
+          s.altitude = s.targetAlt;
+        }
+
+        // Perch Decision Logic: Look for landing opportunities
+        if (!isBadBirdWeather && s.alpha >= 0.85) {
+          s.perchCooldown = (s.perchCooldown || 15.0) - dt;
+          if (s.perchCooldown <= 0) {
+            let foundPerch = false;
+
+            // 1. Check Player Ship perch
+            if (distToPlayer < 380 && perchedOnPlayer < 2 && Math.random() < 0.35) {
+              const shipOffsets = [
+                { x: 0, y: -16 }, { x: 0, y: 16 }, { x: -6, y: -4 }, { x: 6, y: -4 }, { x: 0, y: 4 }
+              ];
+              const off = shipOffsets[Math.floor(Math.random() * shipOffsets.length)];
+              s.perchTarget = { type: 'player', ref: playerState };
+              s.perchOffsetX = off.x;
+              s.perchOffsetY = off.y;
+              s.perchAngle = (Math.random() - 0.5) * 1.5;
+              s.perchDuration = 7.0 + Math.random() * 14.0;
+              s.state = 'descending';
+              foundPerch = true;
+              perchedOnPlayer++;
+            }
+
+            // 2. Check Nearby Island perch (including uninhabited islets!)
+            if (!foundPerch) {
+              const nearIsland = WORLD_ISLANDS.find(isl => {
+                const idist = Math.hypot(s.x - isl.x, s.y - isl.y);
+                return idist < (isl.radius + 320);
+              });
+              if (nearIsland && Math.random() < 0.45) {
+                const landAngle = Math.random() * Math.PI * 2;
+                const landDist = nearIsland.radius * (0.2 + Math.random() * 0.55);
+                s.perchTarget = {
+                  type: 'island',
+                  ref: nearIsland,
+                  wx: nearIsland.x + Math.cos(landAngle) * landDist,
+                  wy: nearIsland.y + Math.sin(landAngle) * landDist
+                };
+                s.perchOffsetX = 0;
+                s.perchOffsetY = 0;
+                s.perchAngle = Math.random() * Math.PI * 2;
+                s.perchDuration = 8.0 + Math.random() * 16.0;
+                s.state = 'descending';
+                foundPerch = true;
+              }
+            }
+
+            // 3. Check Nearby Enemy Ship perch
+            if (!foundPerch && entities.enemies && entities.enemies.length > 0 && Math.random() < 0.35) {
+              const nearEnemy = entities.enemies.find(e => {
+                return e.hp > 0 && e.alertState !== 'alerted' && Math.hypot(s.x - e.x, s.y - e.y) < 400;
+              });
+              if (nearEnemy) {
+                s.perchTarget = { type: 'enemy', ref: nearEnemy };
+                s.perchOffsetX = (Math.random() - 0.5) * 10;
+                s.perchOffsetY = (Math.random() - 0.5) * 14;
+                s.perchAngle = (Math.random() - 0.5) * 1.5;
+                s.perchDuration = 6.0 + Math.random() * 12.0;
+                s.state = 'descending';
+                foundPerch = true;
+              }
+            }
+
+            if (!foundPerch) {
+              s.perchCooldown = 12.0 + Math.random() * 18.0;
+            }
+          }
+        }
+      }
+
+      // Play seagull sound when passing near player (only in calm/good weather)
       s.chirpCooldown -= dt;
-      if (distToPlayer < 380 && s.chirpCooldown <= 0) {
+      if (distToPlayer < 380 && s.chirpCooldown <= 0 && !isBadBirdWeather && s.alpha >= 0.7) {
         if (s.isCarrion) {
           sound.playCrowCaw(s.x, s.y);
           s.chirpCooldown = 14.0 + Math.random() * 18.0;
@@ -4009,14 +4465,16 @@ function updateGame(dt) {
     });
   }
 
-  // Rare ambient bird away calls in the background (Crows in Blood Sea, Seagulls in normal seas)
+  // Rare ambient bird away calls in the background (only during calm weather)
   seagullAwayTimer -= dt;
   if (seagullAwayTimer <= 0) {
-    const currentBiome = getBiomeInfo(distFromStart);
-    if (currentBiome.isBloodSea) {
-      sound.playCrowAway();
-    } else {
-      sound.playSeagullAway();
+    if (!isBadBirdWeather) {
+      const currentBiome = getBiomeInfo(distFromStart);
+      if (currentBiome.isBloodSea) {
+        sound.playCrowAway();
+      } else {
+        sound.playSeagullAway();
+      }
     }
     seagullAwayTimer = 20.0 + Math.random() * 25.0;
   }

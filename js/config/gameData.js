@@ -47,7 +47,7 @@ const DIFFICULTY_SETTINGS = {
   }
 };
 
-// Clean SVG Icon paths for Upgrades & UI elements
+// Clean SVG Icon paths for Upgrades, Items, Cannons & UI elements (100% Vector - Zero Emojis)
 const SVG_ICONS = {
   hull: `<svg class="w-5 h-5 text-amber-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`,
   speed: `<svg class="w-5 h-5 text-sky-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20a2.4 2.4 0 0 0 2 1 2.4 2.4 0 0 0 2-1 2.4 2.4 0 0 1 2-1 2.4 2.4 0 0 1 2 1 2.4 2.4 0 0 0 2 1 2.4 2.4 0 0 0 2-1 2.4 2.4 0 0 1 2-1 2.4 2.4 0 0 1 2 1 2.4 2.4 0 0 0 2 1 2.4 2.4 0 0 0 2-1"/><path d="M4 18L12 3l8 15"/><path d="M12 3v15"/></svg>`,
@@ -65,7 +65,228 @@ const SVG_ICONS = {
   info: `<svg class="w-4 h-4 text-sky-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`,
   alert: `<svg class="w-4 h-4 text-rose-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
   check: `<svg class="w-4 h-4 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`,
-  skull: `<svg class="w-12 h-12 text-rose-500 mx-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><path d="M8 20v2h8v-2"/><path d="m12.5 17-.5-1-.5 1h1z"/><path d="M16 20a2 2 0 0 0 1.56-3.25 8 8 0 1 0-11.12 0A2 2 0 0 0 8 20"/></svg>`
+  skull: `<svg class="w-12 h-12 text-rose-500 mx-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><path d="M8 20v2h8v-2"/><path d="m12.5 17-.5-1-.5 1h1z"/><path d="M16 20a2 2 0 0 0 1.56-3.25 8 8 0 1 0-11.12 0A2 2 0 0 0 8 20"/></svg>`,
+  
+  // Survival Resources Icons (Thematic & Distinct)
+  wood: `<svg class="w-6 h-6 text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="4" cy="6" r="2" fill="currentColor"/><circle cx="4" cy="12" r="2" fill="currentColor"/><circle cx="4" cy="18" r="2" fill="currentColor"/><path d="M20 6c0 1.1-.9 2-2 2H6M20 12c0 1.1-.9 2-2 2H6M20 18c0 1.1-.9 2-2 2H6"/></svg>`,
+  rope: `<svg class="w-6 h-6 text-amber-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c3-4 6-4 9 0s6 4 9 0"/><path d="M4.5 11.5c3-4 6-4 9 0s6 4 9 0"/><path d="M4.5 6.5c3-4 6-4 9 0s6 4 9 0"/><circle cx="3" cy="12" r="1.5" fill="currentColor"/></svg>`,
+  iron: `<svg class="w-6 h-6 text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="3,16 6,7 18,7 21,16" fill="rgba(148,163,184,0.25)"/><line x1="3" y1="16" x2="21" y2="16"/><line x1="3" y1="16" x2="3" y2="19"/><line x1="21" y1="16" x2="21" y2="19"/><line x1="3" y1="19" x2="21" y2="19"/><line x1="7.5" y1="7" x2="5.5" y2="16"/><line x1="16.5" y1="7" x2="18.5" y2="16"/></svg>`,
+  stone: `<svg class="w-6 h-6 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="5,18 2,12 7,5 16,3 21,9 19,19 12,21" fill="rgba(100,116,139,0.25)"/><line x1="7" y1="5" x2="12" y2="13"/><line x1="12" y1="13" x2="19" y2="19"/><line x1="12" y1="13" x2="5" y2="18"/></svg>`,
+  bamboo: `<svg class="w-6 h-6 text-lime-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="2" x2="8" y2="22"/><line x1="16" y1="2" x2="16" y2="22"/><rect x="6" y="7" width="4" height="2" rx="1" fill="currentColor"/><rect x="6" y="15" width="4" height="2" rx="1" fill="currentColor"/><rect x="14" y="5" width="4" height="2" rx="1" fill="currentColor"/><rect x="14" y="13" width="4" height="2" rx="1" fill="currentColor"/><path d="M10 7c2-2 4-2 6-4M10 15c2-2 4-2 6-4"/></svg>`,
+  mistOrb: `<svg class="w-6 h-6 text-cyan-400 animate-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8" fill="rgba(6,182,212,0.2)"/><circle cx="12" cy="12" r="3.5" fill="currentColor"/><path d="M8 8a5.5 5.5 0 0 1 8 0M8 16a5.5 5.5 0 0 0 8 0"/><path d="M5 12h2M17 12h2"/></svg>`,
+  snowOrb: `<svg class="w-6 h-6 text-sky-300 animate-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" fill="rgba(56,189,248,0.2)"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/></svg>`,
+  firePowder: `<svg class="w-6 h-6 text-rose-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h8l-1 5H9L8 3z" fill="rgba(244,63,94,0.3)"/><path d="M7 8h10c2 4 2 9-1 12H8C5 17 5 12 7 8z" fill="rgba(244,63,94,0.2)"/><polygon points="12,12 13.5,15 11,15.5 12.5,18 10,18" fill="currentColor"/></svg>`,
+  chitin: `<svg class="w-6 h-6 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C9 7 4 12 4 18a8 8 0 0 0 16 0c0-6-5-11-8-16z" fill="rgba(225,29,72,0.2)"/><path d="M12 6v14M8 11l4 3 4-3M7 16l5 3 5-3"/></svg>`,
+
+  // Faction Cannon Inventory Items Icons (Distinct Weapon Gear)
+  cannon_standard: `<svg class="w-7 h-7 text-amber-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 14 13-4 2 5-13 4z" fill="rgba(148,163,184,0.3)"/><circle cx="6" cy="18" r="3" fill="#78350f" stroke="#f59e0b"/><circle cx="15" cy="18" r="2.5" fill="#78350f" stroke="#f59e0b"/><line x1="16" y1="10" x2="22" y2="8"/><line x1="18" y1="15" x2="22" y2="13.5"/></svg>`,
+  cannon_mist: `<svg class="w-7 h-7 text-cyan-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m4 13 12-4 2 5-12 4z" fill="rgba(6,182,212,0.35)"/><circle cx="6" cy="18" r="3" fill="#083344" stroke="#22d3ee"/><circle cx="17" cy="8" r="3" fill="#06b6d4" class="animate-pulse"/><path d="M18 5c2-2 4 0 3 3"/></svg>`,
+  cannon_frost: `<svg class="w-7 h-7 text-sky-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m4 13 12-4 2 5-12 4z" fill="rgba(56,189,248,0.3)"/><path d="M16 4l5 5-3 3-5-5z" fill="#0284c7" stroke="#7dd3fc"/><circle cx="6" cy="18" r="3" fill="#0c4a6e" stroke="#38bdf8"/><path d="M18 10l3-3M19 13l2-2"/></svg>`,
+  cannon_wokou: `<svg class="w-7 h-7 text-rose-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m4 15 12-5 2 4-12 5z" fill="rgba(244,63,94,0.3)"/><line x1="8" y1="6" x2="21" y2="3" stroke="#facc15" stroke-width="2"/><line x1="9" y1="9" x2="22" y2="6" stroke="#facc15" stroke-width="2"/><circle cx="6" cy="18" r="3" fill="#881337" stroke="#f43f5e"/><line x1="19" y1="4" x2="22" y2="5"/></svg>`,
+  cannon_chitin: `<svg class="w-7 h-7 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 14 13-5 2 6-13 4z" fill="rgba(190,18,60,0.4)"/><circle cx="6" cy="18" r="3" fill="#4c0519" stroke="#e11d48"/><path d="M14 6l7 3-2 3M16 11l4 2" stroke="#fda4af"/><circle cx="18" cy="8" r="1.5" fill="#f43f5e"/></svg>`,
+
+  // UI Action & Thematic Icons
+  inventory: `<svg class="w-4 h-4 text-amber-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/><path d="M3 11h18M12 11v3"/></svg>`,
+  recipeBook: `<svg class="w-4 h-4 text-amber-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><line x1="9" y1="6" x2="16" y2="6"/><line x1="9" y1="10" x2="14" y2="10"/></svg>`,
+  workshop: `<svg class="w-4 h-4 text-orange-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>`,
+  repair: `<svg class="w-4 h-4 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 12-8.5 8.5c-.83.83-2.17.83-3 0 0 0 0 0 0 0a2.12 2.12 0 0 1 0-3L12 9"/><path d="M17.64 15 22 10.64"/><path d="m20.91 3.26-6.36 6.36"/><path d="m11 5 4 4"/></svg>`,
+  trash: `<svg class="w-3.5 h-3.5 text-rose-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>`,
+  equip: `<svg class="w-3.5 h-3.5 text-emerald-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>`,
+  unequip: `<svg class="w-3.5 h-3.5 text-amber-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`
+};
+
+// Maximum cargo slots capacity for the ship's hold
+const MAX_CARGO_SLOTS = 16;
+
+// Survival Resource Items Configuration (Strict Vector & Semantic Categories)
+const RESOURCE_TYPES = {
+  wood: {
+    id: 'wood',
+    name: 'Kayu Gelondong',
+    category: 'Bahan Baku',
+    rarity: 'Umum',
+    desc: 'Kayu jati gelondong kuat. Bahan primer reparasi lambung dan struktur dudukan meriam.',
+    color: '#b45309',
+    icon: 'wood',
+    iconKey: 'wood',
+    baseCost: 3,
+    dropSource: 'Peti Apung & Kapal Karam'
+  },
+  rope: {
+    id: 'rope',
+    name: 'Tali Rami',
+    category: 'Bahan Baku',
+    rarity: 'Umum',
+    desc: 'Pintalan serat rami laut. Pengikat tambatan layar, lashing meriam, dan reparasi cepat.',
+    color: '#d97706',
+    icon: 'rope',
+    iconKey: 'rope',
+    baseCost: 4,
+    dropSource: 'Peti Terapung Samudra'
+  },
+  iron: {
+    id: 'iron',
+    name: 'Pelat Besi Baja',
+    category: 'Bahan Baku',
+    rarity: 'Biasa',
+    desc: 'Logam tempa balok baja. Komponen utama selongsong meriam berat dan penguat struktur.',
+    color: '#94a3b8',
+    icon: 'iron',
+    iconKey: 'iron',
+    baseCost: 7,
+    dropSource: 'Bangkai Kapal Dagang & Menara'
+  },
+  stone: {
+    id: 'stone',
+    name: 'Bongkahan Batu',
+    category: 'Bahan Baku',
+    rarity: 'Umum',
+    desc: 'Batu granit padat dari tebing pulau. Pemberat balast kapal dan fondasi pertahanan cadas.',
+    color: '#64748b',
+    icon: 'stone',
+    iconKey: 'stone',
+    baseCost: 2,
+    dropSource: 'Tebing Pulau Karang & Reruntuhan'
+  },
+  bamboo: {
+    id: 'bamboo',
+    name: 'Batang Bambu',
+    category: 'Bahan Baku',
+    rarity: 'Khusus',
+    desc: 'Bambu oriental lentur dan tahan api. Selongsong baterai roket salvo armada Wokou.',
+    color: '#84cc16',
+    icon: 'bamboo',
+    iconKey: 'bamboo',
+    baseCost: 5,
+    dropSource: 'Kapal Bajak Laut Wokou'
+  },
+  mistOrb: {
+    id: 'mistOrb',
+    name: 'Orb Kabut Gaib',
+    category: 'Artefak Faksi',
+    rarity: 'Mistik',
+    desc: 'Esensi roh berdenyut gaib. Menghidupkan meriam berpelacak roh otomatis (Homing).',
+    color: '#06b6d4',
+    icon: 'mistOrb',
+    iconKey: 'mistOrb',
+    baseCost: 45,
+    isSpecial: true,
+    dropSource: 'Kapal & Menara Sekte Kabut'
+  },
+  snowOrb: {
+    id: 'snowOrb',
+    name: 'Orb Salju Fjord',
+    category: 'Artefak Faksi',
+    rarity: 'Mistik',
+    desc: 'Kristal es abadi samudra utara. Membekukan dan melumpuhkan kecepatan kapal musuh.',
+    color: '#38bdf8',
+    icon: 'snowOrb',
+    iconKey: 'snowOrb',
+    baseCost: 45,
+    isSpecial: true,
+    dropSource: 'Drakkar & Ballista Viking'
+  },
+  firePowder: {
+    id: 'firePowder',
+    name: 'Bubuk Mesiu Api',
+    category: 'Artefak Faksi',
+    rarity: 'Eksotis',
+    desc: 'Bubuk mesiu mesiu merah peledak. Menghasilkan ledakan beruntun roket salvo.',
+    color: '#f43f5e',
+    icon: 'firePowder',
+    iconKey: 'firePowder',
+    baseCost: 30,
+    isSpecial: true,
+    dropSource: 'Jung Meriam Wokou'
+  },
+  chitin: {
+    id: 'chitin',
+    name: 'Cangkang Kitin',
+    category: 'Artefak Abisal',
+    rarity: 'Abisal',
+    desc: 'Duri pelindung keras beracun. Menembakkan duri asam korosif penembus baja lambung.',
+    color: '#e11d48',
+    icon: 'chitin',
+    iconKey: 'chitin',
+    baseCost: 25,
+    isSpecial: true,
+    dropSource: 'Monster Palung Laut Darah'
+  }
+};
+
+// Craftable Faction Cannons Configuration (Durability & Weapon Types)
+const CANNON_TYPES = {
+  standard: {
+    id: 'standard',
+    name: 'Meriam Besi Standar',
+    subtitle: 'Arsenil Angkatan Laut Klasik',
+    factionName: 'Angkatan Laut',
+    desc: 'Meriam peluru besi cor klasik. Handal, stabil, dan berdaya hancur fisik mantap.',
+    maxDurability: 90,
+    damage: 22,
+    projectileType: 'cannonball',
+    color: '#94a3b8',
+    itemIconKey: 'cannon_standard',
+    recipe: { wood: 8, iron: 5, rope: 3 },
+    isOrbSpecial: false // Jika aus (durability 0), bisa diperbaiki di pelabuhan
+  },
+  mist: {
+    id: 'mist',
+    name: 'Meriam Arwah Kabut',
+    subtitle: 'Senjata Gaib Sekte Kabut',
+    factionName: 'Sekte Kabut',
+    desc: 'Meriam mistis bermahkota lentera toska. Menembakkan proyektil roh berpelacak otomatis (Homing Wisps).',
+    maxDurability: 70,
+    damage: 24,
+    projectileType: 'spirit',
+    color: '#06b6d4',
+    itemIconKey: 'cannon_mist',
+    recipe: { wood: 8, iron: 4, mistOrb: 2 },
+    isOrbSpecial: true // Jika aus (durability 0), langsung pecah hancur & sirna!
+  },
+  frost: {
+    id: 'frost',
+    name: 'Pelontar Es Viking',
+    subtitle: 'Artileri Badai Salju Norse',
+    factionName: 'Klan Viking',
+    desc: 'Pelontar berukir runik samudra utara. Menembakkan kapak es berputar yang memperlambat musuh (Slow 40%).',
+    maxDurability: 75,
+    damage: 26,
+    projectileType: 'frost_axe',
+    color: '#38bdf8',
+    itemIconKey: 'cannon_frost',
+    recipe: { wood: 8, iron: 5, snowOrb: 2 },
+    isOrbSpecial: true // Sirna ketika durability habis
+  },
+  wokou: {
+    id: 'wokou',
+    name: 'Baterai Roket Bambu',
+    subtitle: 'Teknologi Api Timur Wokou',
+    factionName: 'Jung Wokou',
+    desc: 'Peluncur roket oriental berlapis bambu. Meluncurkan salvo 3 panah roket api beruntun dengan percikan membakar.',
+    maxDurability: 65,
+    damage: 20,
+    burstCount: 3,
+    projectileType: 'rocket_arrow',
+    color: '#f43f5e',
+    itemIconKey: 'cannon_wokou',
+    recipe: { bamboo: 10, iron: 4, firePowder: 2 },
+    isOrbSpecial: true // Sirna ketika durability habis
+  },
+  chitin: {
+    id: 'chitin',
+    name: 'Penyembur Duri Kitin',
+    subtitle: 'Organ Biologis Palung Darah',
+    factionName: 'Palung Abisal',
+    desc: 'Moncong organik berduri kitin tajam. Menembakkan duri beracun yang mengikis lambung musuh secara berkala.',
+    maxDurability: 80,
+    damage: 28,
+    projectileType: 'spike',
+    color: '#e11d48',
+    itemIconKey: 'cannon_chitin',
+    recipe: { wood: 6, chitin: 8, bloodEssence: 4 },
+    isOrbSpecial: true // Sirna ketika durability habis
+  }
 };
 
 // Device platform detection for adaptive draw distance and spawning density
@@ -95,13 +316,13 @@ const UPGRADE_CONFIG = {
     desc: "Menambah kelincahan putar kemudi dan laju kecepatan layar."
   },
   cannons: {
-    name: "Baterai Meriam Sisi (Daya Hancur)",
+    name: "Kapasitas Slot Meriam (Cannon Slots)",
     iconKey: "cannons",
     maxLevel: 6,
     baseCost: 45,
     costMult: 1.9,
     bloodCostStart: 2, // Lv.3+ requires Blood Essence!
-    desc: "Menambah jumlah meriam lambung samping dan daya hancur peluru."
+    desc: "Membuka slot tambahan untuk memasang meriam hasil kerajinan pada sisi kapal (Hingga 4 slot per sisi)."
   },
   rearDefense: {
     name: "Pertahanan Buritan & Ranjau (Blind Spot)",
@@ -278,13 +499,62 @@ const CLAN_LORE = {
     ]
   }
 };
+CLAN_LORE.batavia = CLAN_LORE.gold;
 
 // Island Conquest Reinforcement Parameters by Island Tier
 const CONQUEST_REINFORCEMENT_CONFIG = {
-  4: { waves: 1, interval: 14.0, countPerWave: 2, minTier: 0, maxTier: 1, title: "Patroli Pesisir" },
-  3: { waves: 2, interval: 12.0, countPerWave: 3, minTier: 0, maxTier: 1, title: "Armada Pengawal Niaga" },
-  2: { waves: 3, interval: 11.0, countPerWave: 3, minTier: 1, maxTier: 2, title: "Skuadron Kapal Tempur" },
-  1: { waves: 4, interval: 10.0, countPerWave: 4, minTier: 1, maxTier: 2, title: "Bala Bantuan Legiun Palung" }
+  4: {
+    waves: 1,
+    totalWaves: 1,
+    interval: 14.0,
+    waveInterval: 14.0,
+    countPerWave: 2,
+    shipsPerWave: [2],
+    minTier: 0,
+    maxTier: 0,
+    tiers: [0],
+    title: "Patroli Pesisir",
+    arrivalNotice: "Patroli Pesisir Merapat!"
+  },
+  3: {
+    waves: 2,
+    totalWaves: 2,
+    interval: 12.0,
+    waveInterval: 12.0,
+    countPerWave: 3,
+    shipsPerWave: [2, 3],
+    minTier: 0,
+    maxTier: 1,
+    tiers: [0, 1],
+    title: "Armada Pengawal Niaga",
+    arrivalNotice: "Armada Pengawal Niaga Merapat!"
+  },
+  2: {
+    waves: 3,
+    totalWaves: 3,
+    interval: 11.0,
+    waveInterval: 11.0,
+    countPerWave: 3,
+    shipsPerWave: [3, 3, 3],
+    minTier: 1,
+    maxTier: 2,
+    tiers: [1, 2],
+    title: "Skuadron Kapal Tempur",
+    arrivalNotice: "Skuadron Tempur Lapis Baja Merapat!"
+  },
+  1: {
+    waves: 4,
+    totalWaves: 4,
+    interval: 10.0,
+    waveInterval: 10.0,
+    countPerWave: 4,
+    shipsPerWave: [3, 4, 4, 4],
+    minTier: 1,
+    maxTier: 2,
+    tiers: [1, 2],
+    title: "Bala Bantuan Legiun Palung",
+    arrivalNotice: "Armada Induk Legiun Abisal Menyerbu!"
+  }
 };
 
 const WORLD_GEN_KEY = 'BLOOD_SEA_WORLD_GEN_v1';
@@ -488,6 +758,9 @@ function generateGenerationalWorld(seed, genNumber) {
       hasPagoda: Boolean(template.hasPagoda),
       isFlesh: Boolean(template.isFlesh),
       isSkullIsland: Boolean(template.isSkullIsland),
+      isUninhabited: Boolean(template.isUninhabited),
+      isSandOnly: Boolean(template.isSandOnly),
+      isRockOnly: Boolean(template.isRockOnly),
       dockAngle: dockAng,
       desc: template.desc || ""
     };
@@ -661,6 +934,62 @@ function generateGenerationalWorld(seed, genNumber) {
     desc: "Pangkalan persembunyian jung bajak laut Wokou di balik rumpun bambu lebat dan gerbang Torii merah."
   }, 15000, 20500, Math.PI * 0.65, Math.PI * 0.7);
 
+  // Iron Slag Watch (Iron Clan, Tier 4)
+  placeIsland({
+    id: 'iron_slag_watch',
+    name: "Pos Tinjau Jelaga Besi",
+    clan: 'iron',
+    tier: 4,
+    minRadius: 240,
+    maxRadius: 290,
+    color: '#334155',
+    sandColor: '#64748b',
+    hasSmokestack: true,
+    desc: "Pos peninjau klan besi terdepan dengan cerobong jelaga kecil dan dermaga taji."
+  }, 10500, 14500, rng() * Math.PI * 2, Math.PI * 0.8);
+
+  // Wokou Smuggler Cove (Wokou Clan, Tier 4)
+  placeIsland({
+    id: 'wokou_smuggler_cove',
+    name: "Teluk Selundup Jung Wokou",
+    clan: 'wokou',
+    tier: 4,
+    minRadius: 230,
+    maxRadius: 280,
+    color: '#15803d',
+    sandColor: '#fde047',
+    hasTorii: true,
+    desc: "Sarang penyelundup roket mesiu dan perbekalan bajak laut Wokou di tepi perairan senja."
+  }, 11500, 16000, rng() * Math.PI * 2, Math.PI * 0.8);
+
+  // Viking Raider Outpost (Viking Clan, Tier 4)
+  placeIsland({
+    id: 'viking_raider_outpost',
+    name: "Pos Pengintai Drakkar Viking",
+    clan: 'viking',
+    tier: 4,
+    minRadius: 240,
+    maxRadius: 290,
+    color: '#94a3b8',
+    sandColor: '#f1f5f9',
+    hasLonghouse: true,
+    desc: "Pangkalan kayu terluar prajurit Norse yang mengamati alur pelayaran kapal dagang."
+  }, 12500, 17500, rng() * Math.PI * 2, Math.PI * 0.85);
+
+  // Mist Whispering Shrine (Mist Clan, Tier 4)
+  placeIsland({
+    id: 'mist_whispering_shrine',
+    name: "Altar Bisikan Kabut",
+    clan: 'mist',
+    tier: 4,
+    minRadius: 230,
+    maxRadius: 280,
+    color: '#1e1b4b',
+    sandColor: '#475569',
+    hasOccultCircle: true,
+    desc: "Altar terpencil tempat para pengikut kabut melantunkan mantra penyesat kompas."
+  }, 13500, 19000, rng() * Math.PI * 2, Math.PI * 0.8);
+
   // 3. RING 2: Selat Badai Karang Besi (22000 - 42000m)
   // Shop Island 2: Bandar Dagang Karang Tengah (Trading Outpost Ring 2)
   placeIsland({
@@ -720,12 +1049,12 @@ function generateGenerationalWorld(seed, genNumber) {
     desc: "Kubu pertahanan utama Karang Besi dengan meriam baterai berat."
   }, 29000, 37000, Math.PI * 0.8, Math.PI * 0.8);
 
-  // Viking Snowy Fjord Isle (Viking Clan, Tier 2)
+  // Viking Snowy Fjord Isle (Viking Clan, Tier 3)
   placeIsland({
     id: 'viking_fjord_isle',
     name: "Fjord Salju Jarl Viking",
     clan: 'viking',
-    tier: 2,
+    tier: 3,
     minRadius: 320,
     maxRadius: 380,
     color: '#cbd5e1',
@@ -748,6 +1077,48 @@ function generateGenerationalWorld(seed, genNumber) {
     hasPagoda: true,
     desc: "Kuil terapung para nakhoda bajak laut Wokou bersenjatakan baterai roket mesiu dan lentera merah."
   }, 31000, 39000, -Math.PI * 0.8, Math.PI * 0.8);
+
+  // Batavia Grand Citadel (Gold Clan, Tier 2)
+  placeIsland({
+    id: 'batavia_grand_citadel',
+    name: "Citadel Emas Batavia",
+    clan: 'gold',
+    tier: 2,
+    minRadius: 330,
+    maxRadius: 390,
+    color: '#1e3a1e',
+    sandColor: '#d97706',
+    hasFortress: true,
+    desc: "Benteng pertahanan kelas berat Sindikat Emas yang mengawal jalur niaga selat badai."
+  }, 28000, 36000, Math.PI * 1.1, Math.PI * 0.8);
+
+  // Mist Crypt Atoll (Mist Clan, Tier 3)
+  placeIsland({
+    id: 'mist_crypt_atoll',
+    name: "Atol Makam Kabut Gelap",
+    clan: 'mist',
+    tier: 3,
+    minRadius: 290,
+    maxRadius: 350,
+    color: '#0f172a',
+    sandColor: '#334155',
+    hasOccultCircle: true,
+    desc: "Makam keramat tempat kapal-kapal karam masa lampau dipuja oleh kultus kabut."
+  }, 25000, 33000, -Math.PI * 0.05, Math.PI * 0.8);
+
+  // Blood Coral Shallows (Blood Clan, Tier 3)
+  placeIsland({
+    id: 'blood_coral_shallows',
+    name: "Dangkal Karang Berdarah",
+    clan: 'blood',
+    tier: 3,
+    minRadius: 290,
+    maxRadius: 350,
+    color: '#4c0519',
+    sandColor: '#f43f5e',
+    isFlesh: true,
+    desc: "Gugusan karang berduri berdenyut merah di ambang selat dalam."
+  }, 34000, 41000, rng() * Math.PI * 2, Math.PI * 0.85);
 
   // 4. RING 3: Perairan Kutukan Sekte Kabut (42000 - 62000m)
   // Shop Island 3: Pos Niaga Ambang Kabut (Trading Outpost Ring 3)
@@ -821,6 +1192,79 @@ function generateGenerationalWorld(seed, genNumber) {
     desc: "Kuil keramat persembunyian tetua Sekte Kabut dengan lentera jiwa ungu."
   }, 43000, 53000, -Math.PI * 0.45, Math.PI * 0.85);
 
+  // Batavia Galleon Redoubt (Gold Clan, Tier 1)
+  placeIsland({
+    id: 'batavia_galleon_redoubt',
+    name: "Kubu Armada Megah Batavia",
+    clan: 'gold',
+    tier: 1,
+    minRadius: 360,
+    maxRadius: 420,
+    color: '#142a14',
+    sandColor: '#f59e0b',
+    hasFortress: true,
+    desc: "Kubu pertahanan pamungkas kongsi dagang Batavia dengan baterai meriam kuningan kaisar."
+  }, 50000, 59000, Math.PI * 0.45, Math.PI * 0.8);
+
+  // Iron Dreadnought Foundry (Iron Clan, Tier 1)
+  placeIsland({
+    id: 'iron_dreadnought_foundry',
+    name: "Pabrik Jagal Karang Besi",
+    clan: 'iron',
+    tier: 1,
+    minRadius: 360,
+    maxRadius: 420,
+    color: '#1c1917',
+    sandColor: '#475569',
+    hasFortress: true,
+    hasSmokestack: true,
+    desc: "Pabrik pembakar raksasa tempat kapal perang besi terkuat ditempa dengan ketel uap kembar."
+  }, 48000, 58000, -Math.PI * 0.7, Math.PI * 0.8);
+
+  // Wokou Dragon Fortress (Wokou Clan, Tier 1)
+  placeIsland({
+    id: 'wokou_dragon_fortress',
+    name: "Benteng Armada Kaisar Naga Wokou",
+    clan: 'wokou',
+    tier: 1,
+    minRadius: 360,
+    maxRadius: 430,
+    color: '#14532d',
+    sandColor: '#fde047',
+    hasTorii: true,
+    hasPagoda: true,
+    desc: "Benteng pulau keramat Kaisar Naga Wokou yang terlindung oleh salvo roket naga tanpa henti."
+  }, 46000, 56000, Math.PI * 1.2, Math.PI * 0.8);
+
+  // Viking Valhalla Crag (Viking Clan, Tier 1)
+  placeIsland({
+    id: 'viking_valhalla_crag',
+    name: "Karang Tanduk Valhalla Viking",
+    clan: 'viking',
+    tier: 1,
+    minRadius: 360,
+    maxRadius: 420,
+    color: '#64748b',
+    sandColor: '#f8fafc',
+    hasLonghouse: true,
+    hasFortress: true,
+    desc: "Karang es suci tempat para berserker Viking bertarung hingga tetes darah penghabisan."
+  }, 53000, 61000, -Math.PI * 0.6, Math.PI * 0.8);
+
+  // Mist Cathedral Crag (Mist Clan, Tier 1)
+  placeIsland({
+    id: 'mist_cathedral_crag',
+    name: "Kuil Katedral Arwah Kabut",
+    clan: 'mist',
+    tier: 1,
+    minRadius: 370,
+    maxRadius: 430,
+    color: '#090514',
+    sandColor: '#334155',
+    hasOccultCircle: true,
+    desc: "Katedral terapung tertinggi para pendeta Sekte Kabut yang memanggil orba arwah abisal."
+  }, 54000, 62000, Math.PI * 0.95, Math.PI * 0.8);
+
   // 5. RING 4 & 5: Gerbang Palung Neraka & LAUT MERAH (62000 - 86000m - ~7 Menit Pelayaran Penuh)
   // Shop Island 4: Dermaga Ambang Laut Merah
   placeIsland({
@@ -837,12 +1281,12 @@ function generateGenerationalWorld(seed, genNumber) {
     desc: "Pelabuhan terisolasi di bibir palung merah tempat para pemburu monster abisal mempersiapkan peluru."
   }, 64000, 70000, Math.PI * 0.35, Math.PI * 0.7);
 
-  // Bone Reef (Tier 1)
+  // Bone Reef (Tier 2)
   placeIsland({
     id: 'bone_reef',
     name: "Gugusan Karang Belulang",
     clan: 'blood',
-    tier: 1,
+    tier: 2,
     minRadius: 310,
     maxRadius: 370,
     color: '#1c1917',
@@ -893,6 +1337,66 @@ function generateGenerationalWorld(seed, genNumber) {
     isFlesh: true,
     desc: "Jantung terdalam Laut Darah tempat bertenggernya para raksasa abisal purba."
   }, 80000, 86000, rng() * Math.PI * 2, Math.PI * 0.8);
+
+  // 6. GUGUSAN PULAU & ATOL TAK BERPENGHUNI (Scenic Uninhabited Islets, Sandbars & Sea Crags)
+  const uninhabitedTemplates = [
+    // Ring 1 (2,000m - 10,000m)
+    { id: 'islet_kelapa_sunyi', name: "Atol Kelapa Sunyi", minDist: 2200, maxDist: 4800, minR: 50, maxR: 75, color: '#15803d', sand: '#fef08a', desc: "Atol alami berpasir dengan nyiur kelapa yang melambai ditiup angin laut." },
+    { id: 'islet_pasir_putih',  name: "Gosong Pasir Putih", minDist: 3500, maxDist: 7200, minR: 45, maxR: 70, isSandOnly: true, sand: '#fef9c3', desc: "Gundukan gosong pasir putih murni tanpa pepohonan yang tersapu riak buih ombak." },
+    { id: 'islet_penyu_damai',  name: "Karang Penyu Damai", minDist: 5000, maxDist: 9500, minR: 55, maxR: 85, color: '#14532d', sand: '#fef08a', desc: "Atol karang bundar tempat bersarangnya penyu samudra." },
+    { id: 'islet_laguna_biru',  name: "Atol Laguna Biru",   minDist: 6500, maxDist: 10500, minR: 50, maxR: 80, color: '#15803d', sand: '#fef08a', desc: "Atol melingkar dengan laguna tenang di tengahnya." },
+    { id: 'islet_camar_timur',  name: "Batu Camar Timur",   minDist: 4200, maxDist: 8800, minR: 40, maxR: 65, isRockOnly: true, color: '#334155', desc: "Batu cadas karang terjal tempat burung camar bertengger mengeringkan sayap." },
+    { id: 'islet_pasir_sepi',   name: "Pulau Pasir Sepi",   minDist: 7500, maxDist: 11000, minR: 48, maxR: 78, isSandOnly: true, sand: '#fef08a', desc: "Gundukan pasir kuning landai yang hanya ditumbuhi rumput angin pantai." },
+
+    // Ring 2 (11,000m - 26,000m)
+    { id: 'islet_tapak_hiu',    name: "Karang Tapak Hiu",    minDist: 11500, maxDist: 16500, minR: 52, maxR: 82, isRockOnly: true, color: '#1e293b', desc: "Gugusan cadas karang hitam bergerigi tajam memecah ombak selat badai." },
+    { id: 'islet_karang_lumut', name: "Atol Karang Lumut",   minDist: 14000, maxDist: 19500, minR: 50, maxR: 75, color: '#166534', sand: '#ca8a04', desc: "Atol berbatu licin berlumut hijau di tepi jalur pelayaran selat." },
+    { id: 'islet_cadas_kelabu', name: "Batu Cadas Kelabu",   minDist: 17500, maxDist: 23500, minR: 45, maxR: 70, isRockOnly: true, color: '#475569', desc: "Formasi batu cadas kelabu purba yang menjulang kokoh tanpa pasir." },
+    { id: 'islet_karang_layang',name: "Gugusan Karang Layang",minDist: 19500, maxDist: 25500, minR: 55, maxR: 85, color: '#15803d', sand: '#eab308', desc: "Karang dangkal berpasir keemasan tempat berteduh satwa laut." },
+    { id: 'islet_karang_karat', name: "Pulau Karang Karat",  minDist: 21500, maxDist: 27500, minR: 48, maxR: 76, isRockOnly: true, color: '#78350f', desc: "Formasi batu cadas berkandungan bijih besi berkarat merah." },
+    { id: 'islet_camar_liar',   name: "Atol Camar Liar",     minDist: 13500, maxDist: 22500, minR: 50, maxR: 80, color: '#14532d', sand: '#fef08a', desc: "Atol hijau terpencil yang menjadi koloni kawanan burung camar." },
+
+    // Ring 3 (27,000m - 48,000m)
+    { id: 'islet_makam_karang', name: "Atol Makam Karang",   minDist: 28000, maxDist: 34500, minR: 52, maxR: 80, color: '#312e81', sand: '#c7d2fe', desc: "Atol berpasir ungu kelam di perairan kutukan kabut." },
+    { id: 'islet_arwah_kelana', name: "Batu Arwah Kelana",   minDist: 32000, maxDist: 39500, minR: 45, maxR: 70, isRockOnly: true, color: '#1e1b4b', desc: "Batu cadas hitam pekat yang menjulang di tengah kepungan kabut arwah." },
+    { id: 'islet_halimun_ungu', name: "Gosong Halimun Ungu", minDist: 36000, maxDist: 43500, minR: 50, maxR: 78, isSandOnly: true, sand: '#e9d5ff', desc: "Gosong pasir tipis berpendar ungu di balik tirai halimun samudra." },
+    { id: 'islet_tulang_camar', name: "Karang Tulang Camar", minDist: 40000, maxDist: 47500, minR: 48, maxR: 75, isRockOnly: true, color: '#1f2937', desc: "Cadas karang terjal kelabu pucat yang dipenuhi sarang burung camar liar." },
+    { id: 'islet_cadas_hantu',  name: "Atol Cadas Hantu",    minDist: 43500, maxDist: 49500, minR: 54, maxR: 84, color: '#111827', sand: '#9ca3af', desc: "Gugusan atol sunyi tempat bersemayamnya sisa-sisa karang mati." },
+
+    // Ring 4 (50,000m - 68,000m)
+    { id: 'islet_karang_abisal', name: "Gugusan Karang Abisal", minDist: 51000, maxDist: 57500, minR: 50, maxR: 80, isRockOnly: true, color: '#1c1917', desc: "Taji karang monolitik hitam di ambang palung dalam." },
+    { id: 'islet_kitin_merah',   name: "Batu Kitin Merah",      minDist: 55000, maxDist: 62500, minR: 46, maxR: 74, isRockOnly: true, color: '#881337', desc: "Batu karang merah pekat dengan formasi tonjolan seperti lapisan kitin." },
+    { id: 'islet_belulang_hiu',  name: "Gosong Belulang Hiu",   minDist: 59000, maxDist: 66500, minR: 52, maxR: 82, isSandOnly: true, sand: '#f1f5f9', desc: "Gosong pasir pucat keperakan seperti serbuk tulang belulang purba." },
+    { id: 'islet_fosil_purba',   name: "Atol Fosil Purba",      minDist: 62000, maxDist: 68500, minR: 55, maxR: 85, color: '#450a0a', sand: '#fecdd3', desc: "Atol karang mengeras dengan formasi batuan purbakala." },
+
+    // Ring 5 (69,000m - 82,000m - Laut Darah)
+    { id: 'islet_duri_merah',    name: "Atol Duri Merah Purba",  minDist: 70000, maxDist: 76500, minR: 48, maxR: 78, color: '#4c0519', sand: '#fb7185', isFlesh: true, desc: "Atol karang berduri berdenyut merah di dasar samudra darah." },
+    { id: 'islet_tulang_raksasa',name: "Karang Tulang Raksasa",  minDist: 74000, maxDist: 79500, minR: 54, maxR: 86, isRockOnly: true, color: '#1c1917', isFlesh: true, desc: "Tanduk karang hitam kelam menjulang di tengah ombak merah pekat." },
+    { id: 'islet_palung_purba',  name: "Batu Palung Purba",      minDist: 78000, maxDist: 83500, minR: 50, maxR: 80, isRockOnly: true, color: '#3f0713', isFlesh: true, desc: "Batu cadas palung abisal tempat teror laut darah mengintai." }
+  ];
+
+  uninhabitedTemplates.forEach(t => {
+    placeIsland({
+      id: t.id,
+      name: t.name,
+      clan: 'uninhabited',
+      tier: 0,
+      isUninhabited: true,
+      isConquered: false,
+      isShopIsland: false,
+      isHomePort: false,
+      isSandOnly: Boolean(t.isSandOnly),
+      isRockOnly: Boolean(t.isRockOnly),
+      hasFortress: false,
+      hasLighthouse: false,
+      minRadius: t.minR,
+      maxRadius: t.maxR,
+      color: t.color || '#166534',
+      sandColor: t.sand || '#ca8a04',
+      isFlesh: Boolean(t.isFlesh),
+      desc: t.desc || "Pulau karang alami tak berpenghuni yang menjadi tempat singgah burung camar dan satwa samudra."
+    }, t.minDist, t.maxDist, rng() * Math.PI * 2, Math.PI * 0.9);
+  });
 
   return WORLD_ISLANDS;
 }
@@ -1003,7 +1507,9 @@ const WEATHER_CONFIGS = {
     windDriftMultiplier: 0,
     hasLightning: false,
     hasBloodCorrosion: false,
-    denseFog: false
+    denseFog: false,
+    calmCooldownMin: 30,
+    calmCooldownMax: 45
   },
   overcast: {
     id: 'overcast',
@@ -1016,7 +1522,9 @@ const WEATHER_CONFIGS = {
     windDriftMultiplier: 0,
     hasLightning: false,
     hasBloodCorrosion: false,
-    denseFog: false
+    denseFog: false,
+    durationMin: 45,
+    durationMax: 60
   },
   rain: {
     id: 'rain',
@@ -1029,7 +1537,9 @@ const WEATHER_CONFIGS = {
     windDriftMultiplier: 0,
     hasLightning: false,
     hasBloodCorrosion: false,
-    denseFog: false
+    denseFog: false,
+    durationMin: 45,
+    durationMax: 60
   },
   gale: {
     id: 'gale',
@@ -1042,7 +1552,9 @@ const WEATHER_CONFIGS = {
     windDriftMultiplier: 1.0,
     hasLightning: false,
     hasBloodCorrosion: false,
-    denseFog: false
+    denseFog: false,
+    durationMin: 45,
+    durationMax: 60
   },
   storm: {
     id: 'storm',
@@ -1055,7 +1567,9 @@ const WEATHER_CONFIGS = {
     windDriftMultiplier: 1.3,
     hasLightning: false,
     hasBloodCorrosion: false,
-    denseFog: false
+    denseFog: false,
+    durationMin: 50,
+    durationMax: 65
   },
   thunderstorm: {
     id: 'thunderstorm',
@@ -1068,7 +1582,9 @@ const WEATHER_CONFIGS = {
     windDriftMultiplier: 1.5,
     hasLightning: true,
     hasBloodCorrosion: false,
-    denseFog: false
+    denseFog: false,
+    durationMin: 60,
+    durationMax: 75
   },
   mist: {
     id: 'mist',
@@ -1081,7 +1597,9 @@ const WEATHER_CONFIGS = {
     windDriftMultiplier: 0,
     hasLightning: false,
     hasBloodCorrosion: false,
-    denseFog: false
+    denseFog: false,
+    durationMin: 50,
+    durationMax: 65
   },
   dense_fog: {
     id: 'dense_fog',
@@ -1094,7 +1612,9 @@ const WEATHER_CONFIGS = {
     windDriftMultiplier: 0,
     hasLightning: false,
     hasBloodCorrosion: false,
-    denseFog: true
+    denseFog: true,
+    durationMin: 60,
+    durationMax: 75
   },
   blood_tempest: {
     id: 'blood_tempest',
@@ -1108,7 +1628,9 @@ const WEATHER_CONFIGS = {
     windDriftMultiplier: 1.8,
     hasLightning: true,
     hasBloodCorrosion: true,
-    denseFog: true
+    denseFog: true,
+    durationMin: 75,
+    durationMax: 90
   }
 };
 

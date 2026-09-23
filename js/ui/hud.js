@@ -66,6 +66,7 @@ let lastShipRank = -1;
 let lastStealthPercent = -1;
 let lastStealthState = '';
 let lastDockedState = false;
+let lastCargoSignature = '';
 
 const STEALTH_ICONS = {
   detected: `<svg class="w-3.5 h-3.5 text-rose-500 animate-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/><line x1="1" y1="1" x2="23" y2="23" stroke="#ef4444" stroke-width="2.5"/></svg>`,
@@ -91,6 +92,15 @@ function initHUDElements() {
   elMobileHpText = document.getElementById('mobileHpText');
   elDockShopAction = document.getElementById('dockShopAction');
   elDockShopSubtitle = document.getElementById('dockShopSubtitle');
+  elCargoWidget = document.getElementById('hudCargoHoldWidget');
+  elCargoCountText = document.getElementById('hudCargoCountText');
+  elCargoFillBar = document.getElementById('hudCargoFillBar');
+  elCargoMiniPips = document.getElementById('hudCargoMiniPips');
+  if (elCargoWidget) {
+    elCargoWidget.addEventListener('click', () => {
+      if (typeof toggleInventoryModal === 'function') toggleInventoryModal();
+    });
+  }
 }
 
 /* ==========================================================================
@@ -202,7 +212,12 @@ function drawVectorChest(ctx, x, y, size = 11, color = '#fbbf24') {
   ctx.restore();
 }
 
-function drawVectorShip(ctx, x, y, size = 11, color = '#38bdf8') {
+let cachedCompassWidth = 0;
+let cachedCompassHeight = 0;
+let compassRectDirty = true;
+window.addEventListener('resize', () => { compassRectDirty = true; });
+
+function drawCompassShipIcon(ctx, x, y, size = 11, color = '#38bdf8') {
   ctx.save();
   ctx.translate(x, y);
   ctx.fillStyle = color;
@@ -248,9 +263,14 @@ function renderCompassBar() {
   if (!elCompassCanvas) elCompassCanvas = document.getElementById('compassCanvas');
   if (!elCompassCanvas) return;
 
-  const rect = elCompassCanvas.getBoundingClientRect();
-  const w = rect.width || 340;
-  const h = rect.height || 36;
+  if (compassRectDirty || cachedCompassWidth <= 0 || cachedCompassHeight <= 0) {
+    const rect = elCompassCanvas.getBoundingClientRect();
+    cachedCompassWidth = rect.width || 340;
+    cachedCompassHeight = rect.height || 36;
+    compassRectDirty = false;
+  }
+  const w = cachedCompassWidth;
+  const h = cachedCompassHeight;
   if (w <= 0 || h <= 0) return;
 
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -512,7 +532,7 @@ function renderCompassBar() {
       if (Math.abs(angleDiff) < FOV_RAD) {
         const px = cx + (angleDiff / FOV_RAD) * (w * 0.46);
         if (px >= 18 && px <= w - 18) {
-          drawVectorShip(ctx, px, 14, 9, '#38bdf8');
+          drawCompassShipIcon(ctx, px, 14, 9, '#38bdf8');
           ctx.font = 'bold 7.5px "Plus Jakarta Sans", monospace';
           ctx.fillStyle = '#38bdf8';
           ctx.fillText(`${Math.round(nearMDist)}`, px, 6);
@@ -608,6 +628,51 @@ function updateHUD() {
   if (playerState.bloodEssence !== lastBloodDisplay) {
     lastBloodDisplay = playerState.bloodEssence;
     if (elBloodText) elBloodText.innerText = playerState.bloodEssence.toLocaleString('id-ID');
+  }
+
+  // Update exterior nautical cargo hold widget
+  if (playerState.resources) {
+    const resCount = Object.keys(playerState.resources).filter(k => (playerState.resources[k] || 0) > 0).length;
+    const cannonCount = (playerState.cannonInventory || []).length;
+    const occupied = resCount + cannonCount;
+    const maxSlots = typeof MAX_CARGO_SLOTS !== 'undefined' ? MAX_CARGO_SLOTS : 16;
+
+    const activeKeys = Object.keys(playerState.resources)
+      .filter(k => (playerState.resources[k] || 0) > 0)
+      .sort((a, b) => (playerState.resources[b] || 0) - (playerState.resources[a] || 0))
+      .slice(0, 3);
+    const cargoSignature = `${occupied}/${maxSlots}|` + activeKeys.map(k => `${k}:${playerState.resources[k]}`).join(',');
+
+    if (cargoSignature !== lastCargoSignature) {
+      lastCargoSignature = cargoSignature;
+      if (elCargoCountText) elCargoCountText.innerText = `${occupied}/${maxSlots}`;
+      if (elCargoFillBar) {
+        const pct = Math.min(100, Math.round((occupied / maxSlots) * 100));
+        elCargoFillBar.style.width = `${pct}%`;
+        if (occupied >= maxSlots) {
+          elCargoFillBar.className = "bg-gradient-to-r from-red-600 via-rose-500 to-red-400 h-full transition-[width] duration-200";
+        } else {
+          elCargoFillBar.className = "bg-gradient-to-r from-amber-600 via-amber-400 to-amber-300 h-full transition-[width] duration-200";
+        }
+      }
+
+      if (elCargoMiniPips) {
+        let pipsHtml = '';
+        for (const k of activeKeys) {
+          const resDef = typeof RESOURCE_TYPES !== 'undefined' && RESOURCE_TYPES[k];
+          const iconSvg = resDef && SVG_ICONS && SVG_ICONS[resDef.iconKey || k] ? SVG_ICONS[resDef.iconKey || k] : '';
+          const count = playerState.resources[k];
+          pipsHtml += `<div class="flex items-center gap-0.5 text-[8.5px] font-mono font-bold text-amber-200/90" title="${resDef ? resDef.name : k}: ${count}"><span class="w-3.5 h-3.5 flex items-center justify-center shrink-0">${iconSvg}</span><span>${count}</span></div>`;
+        }
+        elCargoMiniPips.innerHTML = pipsHtml;
+      }
+
+      // If inventory modal happens to be open when cargo changes (e.g. looted something), update it once
+      const invModal = document.getElementById('inventoryModal');
+      if (invModal && invModal.classList.contains('modal-active') && typeof renderInventoryUI === 'function') {
+        renderInventoryUI();
+      }
+    }
   }
 
   const dist = Math.floor(Math.hypot(playerState.x, playerState.y));
