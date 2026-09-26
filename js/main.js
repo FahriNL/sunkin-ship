@@ -3,7 +3,7 @@
    Game Loop, Time Management, Periodic Auto-Save, & Bootstrap
    ========================================================================== */
 
-let lastTime = performance.now();
+lastTime = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
 let lastFrameTime = 0;
 const TARGET_FPS = 60;
 const TARGET_INTERVAL = 1000 / TARGET_FPS;
@@ -18,13 +18,19 @@ function gameLoop(time) {
   const dt = Math.min(0.1, (time - lastTime) / 1000);
   lastTime = time;
 
+  // Poll Gamepad inputs every frame (handles voyage steering, action triggers, pause, modals)
+  if (typeof updateGamepadInput === 'function') {
+    updateGamepadInput(dt);
+  }
+
   if (isGameStarted && !isGamePaused) {
     updateGame(dt);
     if (typeof flushJoystickVisual === 'function') flushJoystickVisual();
     render();
     updateHUD();
   } else if (!isGameStarted) {
-    // Render animated scenic sea behind main menu
+    // Render animated scenic sea behind main menu with day/night lighting
+    if (typeof updateDayNightCycle === 'function') updateDayNightCycle(dt * 0.5);
     render();
   }
 }

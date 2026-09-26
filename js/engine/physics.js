@@ -276,17 +276,163 @@ function updateHumanVoyage(e, dt) {
 let encounterSpawnCooldown = 2.0;
 let sunkenShipCooldown = 0;
 
-// Spawn floating combat spoils when ships sink in battle
-function createCombatDebris(x, y, tier) {
-  if (entities.floatingLoots.length < 4 && Math.random() < 0.75) {
-    entities.floatingLoots.push({
+// Radial Ejection & Outward Dispersal of Cargo Crates & Combat Spoils
+function spawnScatteredShipLoot(x, y, ship = {}) {
+  if (!entities.floatingLoots) entities.floatingLoots = [];
+  const tier = ship.tier || 1;
+  const isMonster = Boolean(ship.isMonster);
+  const clan = ship.clan || 'pirate';
+  const isTreasury = Boolean(ship.isTreasuryShip || (clan === 'batavia' && tier >= 3));
+
+  const itemsToDrop = [];
+
+  // 1. Modest Gold Dropped in Water (Gold is scarce; survival commodities are primary!)
+  if (isTreasury) {
+    itemsToDrop.push({ type: 'chest', value: Math.floor(35 + Math.random() * 25) });
+    itemsToDrop.push({ type: 'gold', value: Math.floor(15 + Math.random() * 15) });
+  } else if (isMonster) {
+    if (Math.random() < 0.4) {
+      itemsToDrop.push({ type: 'gold', value: Math.floor(5 + Math.random() * 8) });
+    }
+  } else {
+    itemsToDrop.push({ type: 'gold', value: Math.floor((4 + Math.random() * 5) * tier) });
+  }
+
+  // 2. Resource Cargo Crates (Crucial Survival & Naval Upgrade Commodities!)
+  if (isMonster || clan === 'blood') {
+    itemsToDrop.push({ type: 'chitin', amount: Math.floor(3 + Math.random() * 4 * tier) });
+    if (tier >= 3 || Math.random() < 0.40) {
+      itemsToDrop.push({ type: 'krakenInk', amount: 1 });
+    }
+    if (tier >= 4 || Math.random() < 0.25) {
+      itemsToDrop.push({ type: 'leviathanBone', amount: 1 });
+    }
+    if (Math.random() < 0.55) itemsToDrop.push({ type: 'repair', value: 30 });
+  } else if (clan === 'pirate') {
+    // Pirates drop abundant survival plunder stolen from merchant shipping
+    itemsToDrop.push({ type: 'wood', amount: Math.floor(3 + Math.random() * 4) });
+    itemsToDrop.push({ type: 'rope', amount: Math.floor(2 + Math.random() * 2) });
+    itemsToDrop.push({ type: 'iron', amount: Math.floor(1 + Math.random() * 3) });
+    if (Math.random() < 0.40) itemsToDrop.push({ type: 'sailCloth', amount: Math.floor(1 + Math.random() * 2) });
+    if (Math.random() < 0.30) itemsToDrop.push({ type: 'bronze', amount: 1 });
+    if (Math.random() < 0.45) itemsToDrop.push({ type: 'firePowder', amount: 1 });
+    if (Math.random() < 0.35) itemsToDrop.push({ type: 'repair', value: 25 });
+  } else if (clan === 'batavia' || clan === 'gold') {
+    itemsToDrop.push({ type: 'wood', amount: Math.floor(3 + Math.random() * 4) });
+    itemsToDrop.push({ type: 'rope', amount: Math.floor(2 + Math.random() * 3) });
+    itemsToDrop.push({ type: 'sailCloth', amount: Math.floor(2 + Math.random() * 3) });
+    if (tier >= 2 || Math.random() < 0.6) itemsToDrop.push({ type: 'iron', amount: Math.floor(2 + Math.random() * 2) });
+    if (tier >= 3 || Math.random() < 0.45) itemsToDrop.push({ type: 'bronze', amount: Math.floor(1 + Math.random() * 2) });
+  } else if (clan === 'iron') {
+    itemsToDrop.push({ type: 'iron', amount: Math.floor(3 + Math.random() * 4) });
+    itemsToDrop.push({ type: 'bronze', amount: Math.floor(2 + Math.random() * 3) });
+    itemsToDrop.push({ type: 'wood', amount: Math.floor(2 + Math.random() * 3) });
+    itemsToDrop.push({ type: 'rope', amount: Math.floor(1 + Math.random() * 2) });
+  } else if (clan === 'wokou') {
+    itemsToDrop.push({ type: 'bamboo', amount: Math.floor(4 + Math.random() * 5) });
+    if (Math.random() < 0.50) itemsToDrop.push({ type: 'sailCloth', amount: Math.floor(1 + Math.random() * 2) });
+    if (Math.random() < 0.65) itemsToDrop.push({ type: 'firePowder', amount: 1 });
+    itemsToDrop.push({ type: 'rope', amount: Math.floor(1 + Math.random() * 2) });
+  } else if (clan === 'mist') {
+    itemsToDrop.push({ type: 'wood', amount: Math.floor(3 + Math.random() * 3) });
+    itemsToDrop.push({ type: 'rope', amount: 1 });
+    if (Math.random() < (tier >= 3 ? 0.75 : 0.50)) {
+      itemsToDrop.push({ type: 'mistOrb', amount: 1 });
+    }
+  } else if (clan === 'viking') {
+    itemsToDrop.push({ type: 'wood', amount: Math.floor(3 + Math.random() * 3) });
+    itemsToDrop.push({ type: 'iron', amount: Math.floor(2 + Math.random() * 2) });
+    if (Math.random() < (tier >= 3 ? 0.75 : 0.50)) {
+      itemsToDrop.push({ type: 'snowOrb', amount: 1 });
+    }
+  } else {
+    itemsToDrop.push({ type: 'wood', amount: Math.floor(3 + Math.random() * 3) });
+    itemsToDrop.push({ type: 'rope', amount: Math.floor(1 + Math.random() * 2) });
+    itemsToDrop.push({ type: 'iron', amount: 1 });
+    if (Math.random() < 0.35) itemsToDrop.push({ type: 'sailCloth', amount: 1 });
+    if (Math.random() < 0.4) itemsToDrop.push({ type: 'repair', value: 25 });
+  }
+
+  // 3. Message in a Bottle Chance (Ancient Map)
+  if (Math.random() < 0.12 && !entities.floatingLoots.some(l => l.type === 'bottle')) {
+    itemsToDrop.push({ type: 'bottle', value: 50 });
+  }
+
+  // Prevent world loot buildup
+  const maxWorldLoots = isMobileDevice() ? 28 : 40;
+  while (entities.floatingLoots.length + itemsToDrop.length > maxWorldLoots) {
+    entities.floatingLoots.shift();
+  }
+
+  // 4. Disperse items radially outward across sea surface (Terhambur tidak terpusat!)
+  const totalCount = itemsToDrop.length;
+  itemsToDrop.forEach((drop, idx) => {
+    const baseAngle = (idx / totalCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.6;
+    const ejectSpeed = 40 + Math.random() * 75; // Outward burst velocity
+    const spawnDist = 12 + Math.random() * 16;
+
+    const lootObj = {
       id: Math.random(),
-      x: x + (Math.random() - 0.5) * 26,
-      y: y + (Math.random() - 0.5) * 26,
-      type: Math.random() > 0.4 ? 'gold' : 'repair',
-      value: Math.floor(16 + Math.random() * 24 * (tier || 1)),
-      bobOffset: Math.random() * 10
-    });
+      x: x + Math.cos(baseAngle) * spawnDist,
+      y: y + Math.sin(baseAngle) * spawnDist,
+      vx: Math.cos(baseAngle) * ejectSpeed,
+      vy: Math.sin(baseAngle) * ejectSpeed,
+      type: drop.type,
+      value: drop.value || (drop.amount ? drop.amount * 15 : 25),
+      amount: drop.amount || 1,
+      bobOffset: Math.random() * 10,
+      rot: Math.random() * Math.PI * 2,
+      vrot: (Math.random() - 0.5) * 2.5,
+      life: 85, // 85-second lifespan floating in sea
+      maxLife: 85
+    };
+
+    entities.floatingLoots.push(lootObj);
+
+    if (entities.seaRipples) {
+      entities.seaRipples.push({
+        x: lootObj.x,
+        y: lootObj.y,
+        radius: 6,
+        maxRadius: 26,
+        alpha: 0.65,
+        growth: 24,
+        color: 'rgba(255, 255, 255, '
+      });
+    }
+  });
+
+  if (typeof sound !== 'undefined' && typeof sound.playSplash === 'function') {
+    sound.playSplash();
+  }
+}
+
+// Backwards compatibility alias
+function createCombatDebris(x, y, tier) {
+  spawnScatteredShipLoot(x, y, { tier });
+}
+
+// Island Pirate Elimination Tracker (Khusus bajak laut pulau tidak akan hidup kembali setelah dihabisi)
+function recordEnemyShipDefeat(e) {
+  if (!e || !e.homeIslandId) return;
+  const homeIsl = WORLD_ISLANDS.find(i => i.id === e.homeIslandId);
+  if (homeIsl && homeIsl.isUninhabited) {
+    if (!playerState.piratesKilledAtIsland) playerState.piratesKilledAtIsland = {};
+    playerState.piratesKilledAtIsland[homeIsl.id] = (playerState.piratesKilledAtIsland[homeIsl.id] || 0) + 1;
+
+    const initialGuards = homeIsl._pirateGuards || 1;
+    const totalDefeated = playerState.piratesKilledAtIsland[homeIsl.id];
+    if (totalDefeated >= initialGuards) {
+      if (!playerState.clearedPirateIslands) playerState.clearedPirateIslands = [];
+      if (!playerState.clearedPirateIslands.includes(homeIsl.id)) {
+        playerState.clearedPirateIslands.push(homeIsl.id);
+      }
+      homeIsl.isPirateCleared = true;
+      showToast(`Sarang Bajak Laut di ${homeIsl.name} Berhasil Dibersihkan! (Pulau Kini Aman)`, "gold");
+      if (typeof sound !== 'undefined' && typeof sound.playQuestComplete === 'function') {
+        sound.playQuestComplete();
+      }
+    }
   }
 }
 
@@ -301,8 +447,21 @@ function spawnWorldEntities() {
   const spawnDistMin = isMobile ? 750 : 980;
   const spawnDistMax = isMobile ? 1050 : 1350;
 
-  const playerDist = Math.sqrt((playerState.x) * (playerState.x) + (playerState.y) * (playerState.y));
-  const biome = getBiomeInfo(playerDist);
+  // Active Simulation Focal Anchor: Tracks camera/seagull during flight cutscenes so distant ocean is densely populated
+  const isCamOverride = !!(window.cameraState && window.cameraState.overrideActive);
+  const simFocusX = isCamOverride ? window.cameraState.x : playerState.x;
+  const simFocusY = isCamOverride ? window.cameraState.y : playerState.y;
+  const focalDist = Math.sqrt((simFocusX) * (simFocusX) + (simFocusY) * (simFocusY));
+  const biome = getBiomeInfo(focalDist);
+
+  function getEntityDistSq(x, y) {
+    const dxF = x - simFocusX, dyF = y - simFocusY;
+    const dF = dxF * dxF + dyF * dyF;
+    if (!isCamOverride) return dF;
+    const dxP = x - playerState.x, dyP = y - playerState.y;
+    const dP = dxP * dxP + dyP * dyP;
+    return Math.min(dF, dP); // Keep entity alive if near either camera focal center OR player ship!
+  }
 
   // Count active enemies by category
   let currentOceanEnemies = 0;
@@ -312,16 +471,15 @@ function spawnWorldEntities() {
   // 1. Distance-Based Entity Recycling: Only despawn unaware enemies when beyond recycleDist
   for (let i = entities.enemies.length - 1; i >= 0; i--) {
     const e = entities.enemies[i];
-    const dx = e.x - playerState.x, dy = e.y - playerState.y;
-    const distSq = dx * dx + dy * dy;
+    const distSq = getEntityDistSq(e.x, e.y);
 
     // Check if island guard's home island is still within active sector
     if (e.homeIslandId) {
       const homeIsl = WORLD_ISLANDS.find(isl => isl.id === e.homeIslandId);
       if (homeIsl) {
-        const dToIslSq = (playerState.x - homeIsl.x) * (playerState.x - homeIsl.x) + (playerState.y - homeIsl.y) * (playerState.y - homeIsl.y);
+        const dToIslSq = (simFocusX - homeIsl.x) * (simFocusX - homeIsl.x) + (simFocusY - homeIsl.y) * (simFocusY - homeIsl.y);
         if (dToIslSq < 3200 * 3200) {
-          // Keep island guard alive while player is in the island's territorial waters!
+          // Keep island guard alive while player or camera is in the island's territorial waters!
           currentIslandGuards++;
           if (distSq < localRadius * localRadius) localEnemiesCount++;
           continue;
@@ -340,26 +498,24 @@ function spawnWorldEntities() {
     if (distSq < localRadius * localRadius) localEnemiesCount++;
   }
 
-  // Despawn props when beyond maxPropDist
+  // Despawn props when beyond maxPropDist (Player death wreck and ancient intro wreck are strictly exempt!)
   const maxPropDist = isMobile ? 2000 : 2600;
   for (let i = entities.sunkenShips.length - 1; i >= 0; i--) {
     const s = entities.sunkenShips[i];
-    const dx = s.x - playerState.x, dy = s.y - playerState.y;
-    if (dx * dx + dy * dy >= maxPropDist * maxPropDist) {
+    if (s.isPlayerDeathWreck || s.id === 'ancient_intro_wreck') continue; // Permanent until 9-min timer expires or salvaged
+    if (getEntityDistSq(s.x, s.y) >= maxPropDist * maxPropDist) {
       entities.sunkenShips.splice(i, 1);
     }
   }
   for (let i = entities.floatingLoots.length - 1; i >= 0; i--) {
     const l = entities.floatingLoots[i];
-    const dx = l.x - playerState.x, dy = l.y - playerState.y;
-    if (dx * dx + dy * dy >= maxPropDist * maxPropDist) {
+    if (getEntityDistSq(l.x, l.y) >= maxPropDist * maxPropDist) {
       entities.floatingLoots.splice(i, 1);
     }
   }
   for (let i = entities.mines.length - 1; i >= 0; i--) {
     const m = entities.mines[i];
-    const dx = m.x - playerState.x, dy = m.y - playerState.y;
-    if (dx * dx + dy * dy >= maxPropDist * maxPropDist) {
+    if (getEntityDistSq(m.x, m.y) >= maxPropDist * maxPropDist) {
       entities.mines.splice(i, 1);
     }
   }
@@ -379,12 +535,43 @@ function spawnWorldEntities() {
     // Only hostile outposts (ignore neutral, merchant, home port, or already conquered islands)
     if (isl.clan === 'neutral' || isl.clan === 'merchant' || isl.isShopIsland || isl.isHomePort) return;
     if (playerState.conqueredIslands && playerState.conqueredIslands.includes(isl.id)) return;
+    if (isl.isUninhabited && playerState.clearedPirateIslands && playerState.clearedPirateIslands.includes(isl.id)) return;
 
     const distToPlayerSq = (isl.x - playerState.x) * (isl.x - playerState.x) + (isl.y - playerState.y) * (isl.y - playerState.y);
     if (distToPlayerSq < 2500 * 2500) {
       const existingGuards = entities.enemies.filter(e => e.homeIslandId === isl.id);
-      // Fortress or major clan bastions get 3 guards; smaller outposts get 2 guards
-      const targetGuards = (isl.hasFortress || (isl.tier !== undefined && isl.tier <= 2)) ? 3 : 2;
+      
+      // Determine garrison size:
+      // Uninhabited islands serve as pirate dens: either a lone wolf (~40%) or a wolfpack group of 2-3 vessels
+      let targetGuards = 2;
+      let guardClan = isl.clan;
+
+      // Strict Rule: Monster islands & monster guards ONLY appear in Laut Darah (distance >= 65,000m)
+      if ((guardClan === 'blood' || isl.isFlesh) && Math.hypot(isl.x, isl.y) < 65000) {
+        guardClan = 'iron';
+      }
+
+      if (isl.isUninhabited) {
+        guardClan = 'pirate';
+        if (isl._pirateGuards === undefined) {
+          const idHash = (isl.id || '').split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+          isl._pirateGuards = (idHash % 10 < 4) ? 1 : ((idHash % 10 < 8) ? 2 : 3);
+        }
+        
+        // Quota check: pirates at this island do NOT respawn when defeated!
+        const totalInitialGuards = isl._pirateGuards;
+        const killedCount = (playerState.piratesKilledAtIsland && playerState.piratesKilledAtIsland[isl.id]) || 0;
+        const remainingQuota = Math.max(0, totalInitialGuards - killedCount);
+        if (remainingQuota <= 0) {
+          if (!playerState.clearedPirateIslands) playerState.clearedPirateIslands = [];
+          if (!playerState.clearedPirateIslands.includes(isl.id)) playerState.clearedPirateIslands.push(isl.id);
+          isl.isPirateCleared = true;
+          return;
+        }
+        targetGuards = remainingQuota;
+      } else {
+        targetGuards = (isl.hasFortress || (isl.tier !== undefined && isl.tier <= 2)) ? 3 : 2;
+      }
 
       while (existingGuards.length < targetGuards && currentIslandGuards < maxIslandGuards) {
         const guardIndex = existingGuards.length;
@@ -396,15 +583,34 @@ function spawnWorldEntities() {
         const ex = isl.x + Math.cos(baseAngle) * spawnDist;
         const ey = isl.y + Math.sin(baseAngle) * spawnDist;
 
-        // Tier distribution: flagship guard is Tier 2/3, escort skiffs are Tier 1/2
-        const maxIslandTier = isl.tier !== undefined ? Math.max(1, 4 - isl.tier) : 1;
-        const tierIndex = guardIndex === 0 ? Math.min(2, Math.max(1, maxIslandTier)) : Math.min(1, Math.max(0, maxIslandTier - 1));
+        // Tier distribution
+        let tierIndex = 0;
+        if (isl.isUninhabited) {
+          const distFromHaven = Math.hypot(isl.x, isl.y);
+          if (distFromHaven > 55000) {
+            tierIndex = guardIndex === 0 ? 2 : 1;
+          } else if (distFromHaven > 25000) {
+            tierIndex = (guardIndex === 0 && Math.random() < 0.6) ? 1 : 0;
+          } else {
+            tierIndex = 0;
+          }
+        } else {
+          const maxIslandTier = isl.tier !== undefined ? Math.max(1, 4 - isl.tier) : 1;
+          tierIndex = guardIndex === 0 ? Math.min(2, Math.max(1, maxIslandTier)) : Math.min(1, Math.max(0, maxIslandTier - 1));
+        }
 
         const tangentHeading = baseAngle + (Math.PI / 2) * orbitDir;
-        const guardEntity = createEnemyEntity(isl.clan, tierIndex, ex, ey, tangentHeading, {
+        const pirateName = (guardClan === 'pirate' && typeof getRandomPirateShipName === 'function') 
+          ? getRandomPirateShipName() 
+          : undefined;
+
+        const guardEntity = createEnemyEntity(guardClan, tierIndex, ex, ey, tangentHeading, {
           homeIslandId: isl.id,
-          formationType: 'solitary',
-          formationRole: guardIndex === 0 ? 'guard_flagship' : 'guard_patrol',
+          name: pirateName,
+          formationType: targetGuards === 1 ? 'solitary' : 'wolfpack',
+          formationRole: targetGuards === 1 ? 'solitary' : (guardIndex === 0 ? 'guard_flagship' : 'guard_patrol'),
+          formationIndex: guardIndex,
+          formationTotal: targetGuards,
           patrolAngle: baseAngle,
           orbitDist: orbitDist,
           orbitDir: orbitDir
@@ -426,14 +632,23 @@ function spawnWorldEntities() {
       ? (1.8 + Math.random() * 1.5) 
       : (3.2 + Math.random() * 2.2);
 
-    // Forward Intercept Arc: Spawn ahead of the player's heading (+/- 45 to 65 degrees)
-    const isMoving = (typeof joystickState !== 'undefined' && joystickState.active) || 
-                     (typeof keys !== 'undefined' && (keys['KeyW'] || keys['ArrowUp'] || keys['KeyS'] || keys['ArrowDown']));
-    const playerHeading = isMoving ? playerState.angle : (Math.random() * Math.PI * 2);
-    const spawnAngle = playerHeading + (Math.random() - 0.5) * 1.5;
+    // Forward Intercept Arc: Spawn ahead of the player or camera's flight heading
+    let spawnHeading = playerState.angle;
+    if (isCamOverride) {
+      if (window.cinematicFlightState && window.cinematicFlightState.seagull) {
+        spawnHeading = window.cinematicFlightState.seagull.heading;
+      } else {
+        spawnHeading = Math.atan2(-simFocusY, -simFocusX);
+      }
+    } else {
+      const isMoving = (typeof joystickState !== 'undefined' && joystickState.active) || 
+                       (typeof keys !== 'undefined' && (keys['KeyW'] || keys['ArrowUp'] || keys['KeyS'] || keys['ArrowDown']));
+      spawnHeading = isMoving ? playerState.angle : (Math.random() * Math.PI * 2);
+    }
+    const spawnAngle = spawnHeading + (Math.random() - 0.5) * 1.5;
     const spawnDist = spawnDistMin + Math.random() * (spawnDistMax - spawnDistMin);
-    const ex = playerState.x + Math.cos(spawnAngle) * spawnDist;
-    const ey = playerState.y + Math.sin(spawnAngle) * spawnDist;
+    const ex = simFocusX + Math.cos(spawnAngle) * spawnDist;
+    const ey = simFocusY + Math.sin(spawnAngle) * spawnDist;
 
     let insideIsland = false;
     for (let i = 0; i < WORLD_ISLANDS.length; i++) {
@@ -565,7 +780,7 @@ function spawnWorldEntities() {
           } else if (roll < 0.85 && currentOceanEnemies <= maxOceanEnemies - 3) {
             spawnWokouWolfpack(ex, ey, encounterAngle);
           } else {
-            const clanPick = Math.random() < 0.4 ? 'viking' : (Math.random() < 0.7 ? 'iron' : (Math.random() < 0.85 ? 'wokou' : 'mist'));
+            const clanPick = Math.random() < 0.35 ? 'viking' : (Math.random() < 0.65 ? 'iron' : (Math.random() < 0.8 ? 'wokou' : (Math.random() < 0.9 ? 'mist' : 'pirate')));
             spawnSolitaryShip(ex, ey, encounterAngle, clanPick, distFromCenter);
           }
         } else if (distFromCenter >= 8000) {
@@ -579,7 +794,7 @@ function spawnWorldEntities() {
             spawnIronWedge(ex, ey, encounterAngle);
           } else {
             const clanRoll = Math.random();
-            const clanPick = clanRoll < 0.35 ? 'gold' : (clanRoll < 0.65 ? 'iron' : (clanRoll < 0.85 ? 'wokou' : 'viking'));
+            const clanPick = clanRoll < 0.30 ? 'gold' : (clanRoll < 0.55 ? 'iron' : (clanRoll < 0.75 ? 'wokou' : (clanRoll < 0.90 ? 'viking' : 'pirate')));
             spawnSolitaryShip(ex, ey, encounterAngle, clanPick, distFromCenter);
           }
         } else {
@@ -605,8 +820,8 @@ function spawnWorldEntities() {
     sunkenShipCooldown = 18.0 + Math.random() * 12.0; // 18-30s cooldown between spawns
     const sAngle = Math.random() * Math.PI * 2;
     const sDist = 650 + Math.random() * 650;
-    const sx = playerState.x + Math.cos(sAngle) * sDist;
-    const sy = playerState.y + Math.sin(sAngle) * sDist;
+    const sx = simFocusX + Math.cos(sAngle) * sDist;
+    const sy = simFocusY + Math.sin(sAngle) * sDist;
     const sDistCenter = Math.sqrt((sx) * (sx) + (sy) * (sy));
 
     let onLand = false;
@@ -634,7 +849,7 @@ function spawnWorldEntities() {
         salvaged: false,
         isAbyssal: isAbyssal,
         isGuarded: isGuarded,
-        goldReward: Math.floor(45 + (sDistCenter / 250)),
+        goldReward: Math.floor(12 + Math.min(22, sDistCenter / 2500)),
         bloodReward: isAbyssal ? Math.floor(5 + (sDistCenter - 75000) / 1000) : 0
       });
 
@@ -914,10 +1129,16 @@ function destroyTowerAndCheckConquer(tw, tIndex) {
     }
   } else if (tw.defenseType === 'steam_harpoon' || tw.defenseType === 'steam_vent') {
     playerState.resources.iron = (playerState.resources.iron || 0) + (tw.isPeranakan ? 3 : 6);
+    playerState.resources.bronze = (playerState.resources.bronze || 0) + (tw.isPeranakan ? 2 : 4);
+    addFloatingText(`+${tw.isPeranakan ? 2 : 4} Kuningan`, tw.x, tw.y - 40, '#ca8a04');
   } else if (tw.defenseType === 'tentacle' || tw.defenseType === 'flesh_spitter') {
     const chitinGain = tw.isPeranakan ? 3 : 6;
     playerState.resources.chitin = (playerState.resources.chitin || 0) + chitinGain;
     addFloatingText(`+${chitinGain} Kitin`, tw.x, tw.y - 40, '#e11d48');
+    if (Math.random() < 0.40) {
+      playerState.resources.krakenInk = (playerState.resources.krakenInk || 0) + 1;
+      towerSpecial = "Tinta Cumi Abisal";
+    }
   }
 
   if (towerSpecial) {
@@ -1029,7 +1250,7 @@ function checkPlayerPortDocking(pState) {
     if (!pState.isDockedAtPort) {
       pState.isDockedAtPort = true;
       pState.dockedPort = nearPort;
-      showToast(`Berlabuh di ${nearPort.name}: Galangan kapal siap melayani!`, "anchor");
+      showToast(typeof t === 'function' ? t('toastDockedReady', { port: nearPort.name }) : `Berlabuh di ${nearPort.name}: Galangan kapal siap melayani!`, "anchor");
       if (typeof sound !== 'undefined' && typeof sound.playPortDocking === 'function') {
         sound.playPortDocking();
       } else if (sound.playSplash) {
@@ -1123,19 +1344,9 @@ function updateMerchants(dt) {
     // 1. Sinking Check
     if (m.hp <= 0) {
       sound.playMineExplosion(m.x, m.y);
-      screenShake = Math.max(screenShake, 8);
-      for (let c = 0; c < 3; c++) {
-        entities.floatingLoots.push({
-          id: Math.random(),
-          x: m.x + (Math.random() - 0.5) * 40,
-          y: m.y + (Math.random() - 0.5) * 40,
-          type: 'gold',
-          value: Math.floor(35 + Math.random() * 30),
-          bobOffset: Math.random() * 10
-        });
-      }
+      spawnScatteredShipLoot(m.x, m.y, { clan: 'batavia', tier: 2, isTreasuryShip: true });
       addFloatingText("KAPAL NIAGA KARAM!", m.x, m.y - 25, '#fbbf24', true);
-      showToast("Kapal Niaga karam! Muatan kargo rempah & emas mengapung!", "gold");
+      showToast("Kapal Niaga karam! Muatan kargo rempah & emas berhamburan mengapung!", "gold");
 
       entities.sinkingShips.push({
         x: m.x,
@@ -1259,7 +1470,7 @@ function updateMerchants(dt) {
 
       if (!m.taxPaid && (playerState.conqueredIslands.includes(targetPort.id) || targetPort.id === 'haven')) {
         m.taxPaid = true;
-        const tax = m.type === 'cargo' ? Math.floor(18 + Math.random() * 16) : Math.floor(8 + Math.random() * 8);
+        const tax = m.type === 'cargo' ? Math.floor(4 + Math.random() * 4) : Math.floor(2 + Math.random() * 3);
         playerState.gold += tax;
         addFloatingText(`+${tax} Pajak Niaga!`, m.x, m.y - 25, '#fbbf24');
         showToast(`Saudagar berlabuh di ${targetPort.name}! Membayar pajak niaga +${tax} Koin`, "gold");
@@ -1317,6 +1528,16 @@ function updateWeatherSystem(dt) {
       weatherState.intensity = Math.max(0, weatherState.intensity - dt * 0.25);
       weatherState.cooldown -= dt;
       if (weatherState.cooldown <= 0) {
+        // Chance to keep the sea calm for an extended stretch (~45% chance)
+        // so weather events feel spaced out, rare, and atmospheric rather than non-stop
+        if (Math.random() < 0.45) {
+          const clearCfg = (typeof WEATHER_CONFIGS !== 'undefined') ? (WEATHER_CONFIGS.clear || {}) : {};
+          const cMin = clearCfg.calmCooldownMin || 100;
+          const cMax = clearCfg.calmCooldownMax || 200;
+          weatherState.cooldown = cMin * 0.75 + Math.random() * (cMax - cMin) * 0.75;
+          return;
+        }
+
         // Pick a random weather from available weathers in player's current zone
         const nextWeather = availableWeathers[Math.floor(Math.random() * availableWeathers.length)];
         weatherState.targetType = nextWeather;
@@ -1330,13 +1551,16 @@ function updateWeatherSystem(dt) {
         
         // Trigger banner announcement
         const cfg = (typeof WEATHER_CONFIGS !== 'undefined') ? (WEATHER_CONFIGS[nextWeather] || WEATHER_CONFIGS.clear) : { name: nextWeather, subtext: '' };
+        const isEn = (typeof currentLanguage !== 'undefined' && currentLanguage === 'en');
+        const wName = (isEn && cfg.nameEn) ? cfg.nameEn : (cfg.name || nextWeather);
+        const wSubtext = (isEn && cfg.subtextEn) ? cfg.subtextEn : (cfg.subtext || '');
         weatherState.banner = {
-          text: `CUACA BERUBAH: ${cfg.name.toUpperCase()}`,
-          subtext: cfg.subtext,
+          text: isEn ? `WEATHER CHANGE: ${wName.toUpperCase()}` : `CUACA BERUBAH: ${wName.toUpperCase()}`,
+          subtext: wSubtext,
           alpha: 1.0,
           timer: 5.5
         };
-        showToast(`Cuaca: ${cfg.name} - ${cfg.subtext}`, "compass");
+        showToast(isEn ? `Weather: ${wName} - ${wSubtext}` : `Cuaca: ${wName} - ${wSubtext}`, "compass");
         if (typeof sound !== 'undefined' && typeof sound.playWindGust === 'function') {
           sound.playWindGust();
         }
@@ -1556,10 +1780,447 @@ function updateWeatherSystem(dt) {
   }
 }
 
+function updateDayNightCycle(dt) {
+  if (typeof dayNightState === 'undefined' || typeof calculateCelestialLighting !== 'function') return;
+  
+  if (!dayNightState.isPaused) {
+    const cycleDuration = (typeof DAY_NIGHT_CONFIG !== 'undefined' && DAY_NIGHT_CONFIG.durationSec) ? DAY_NIGHT_CONFIG.durationSec : 1200;
+    const hoursPerSec = 24.0 / cycleDuration;
+    const timeDelta = dt * hoursPerSec * (dayNightState.timeScale || 1.0);
+    dayNightState.time = ((dayNightState.time + timeDelta) % 24.0 + 24.0) % 24.0;
+  }
+
+  // Calculate updated frame lighting
+  const celestial = calculateCelestialLighting(dayNightState.time);
+  
+  // Weather modulation on lighting:
+  // Overcast, storm, and dense fog diffuse directional shadows and attenuate direct sunlight
+  let weatherDim = 1.0;
+  let shadowDiffusion = 1.0;
+  if (typeof weatherState !== 'undefined' && weatherState.intensity > 0.05) {
+    const wType = weatherState.type;
+    const wInt = weatherState.intensity;
+    if (wType === 'storm' || wType === 'thunderstorm') {
+      weatherDim = Math.max(0.55, 1.0 - wInt * 0.40);
+      shadowDiffusion = Math.max(0.35, 1.0 - wInt * 0.55);
+    } else if (wType === 'overcast' || wType === 'rain') {
+      weatherDim = Math.max(0.70, 1.0 - wInt * 0.28);
+      shadowDiffusion = Math.max(0.50, 1.0 - wInt * 0.45);
+    } else if (wType === 'dense_fog') {
+      weatherDim = Math.max(0.65, 1.0 - wInt * 0.35);
+      shadowDiffusion = Math.max(0.20, 1.0 - wInt * 0.80);
+    } else if (wType === 'blood_tempest') {
+      weatherDim = Math.max(0.60, 1.0 - wInt * 0.35);
+    }
+  }
+
+  // Update dayNightState with modulated values
+  dayNightState.phaseId = celestial.phaseId;
+  dayNightState.phaseName = celestial.phaseName;
+  dayNightState.phaseNameEn = celestial.phaseNameEn;
+  dayNightState.isDay = celestial.isDay;
+  dayNightState.activeCelestial = celestial.activeCelestial;
+  dayNightState.celestialAngle = celestial.celestialAngle;
+  dayNightState.celestialAlt = celestial.celestialAlt;
+  dayNightState.lightDirX = celestial.lightDirX;
+  dayNightState.lightDirY = celestial.lightDirY;
+  dayNightState.shadowDirX = celestial.shadowDirX;
+  dayNightState.shadowDirY = celestial.shadowDirY;
+  dayNightState.shadowLen = celestial.shadowLen;
+  dayNightState.shadowVecX = celestial.shadowVecX;
+  dayNightState.shadowVecY = celestial.shadowVecY;
+  dayNightState.shadowOffsetX = celestial.shadowOffsetX;
+  dayNightState.shadowOffsetY = celestial.shadowOffsetY;
+  dayNightState.shadowAlpha = celestial.shadowAlpha * shadowDiffusion;
+  dayNightState.ambientMult = celestial.ambientMult * weatherDim;
+  dayNightState.ambientRGB = celestial.ambientRGB;
+  dayNightState.waterTint = celestial.waterTint;
+  dayNightState.glintColor = celestial.glintColor;
+  dayNightState.specularIntensity = celestial.specularIntensity * weatherDim;
+  dayNightState.bioLum = celestial.bioLum;
+
+  // Handle Cosmic Milky Way Mirror Sea Phenomenon (Laut Kaca Bimasakti)
+  const isNight = !celestial.isDay;
+  const isClearSky = (typeof weatherState === 'undefined' || weatherState.type === 'clear');
+  const inCosmicWindow = (celestial.time >= 21.5 || celestial.time <= 3.8);
+  const targetCosmic = (dayNightState.forcedCosmicMirror || (isNight && isClearSky && inCosmicWindow)) ? 1.0 : 0.0;
+  
+  if (typeof dayNightState.cosmicIntensity !== 'number') dayNightState.cosmicIntensity = 0.0;
+  dayNightState.cosmicIntensity += (targetCosmic - dayNightState.cosmicIntensity) * Math.min(1.0, dt * 0.45);
+  dayNightState.isCosmicMirror = dayNightState.cosmicIntensity > 0.08;
+
+  // Modulate lighting when cosmic mirror is active
+  if (dayNightState.cosmicIntensity > 0.01) {
+    const ci = dayNightState.cosmicIntensity;
+    dayNightState.ambientMult = dayNightState.ambientMult * (1 - ci * 0.2) + 0.38 * ci;
+    // Blend ambientRGB towards cosmic magenta/purple [88, 56, 120]
+    dayNightState.ambientRGB = [
+      Math.round(celestial.ambientRGB[0] * (1 - ci) + 88 * ci),
+      Math.round(celestial.ambientRGB[1] * (1 - ci) + 56 * ci),
+      Math.round(celestial.ambientRGB[2] * (1 - ci) + 120 * ci)
+    ];
+    // Blend waterTint towards deep cosmic starlight
+    dayNightState.waterTint = [
+      Math.round(celestial.waterTint[0] * (1 - ci) + 12 * ci),
+      Math.round(celestial.waterTint[1] * (1 - ci) - 4 * ci),
+      Math.round(celestial.waterTint[2] * (1 - ci) + 24 * ci)
+    ];
+    // Specular silver-lavender glint color
+    dayNightState.glintColor = [
+      Math.round(celestial.glintColor[0] * (1 - ci) + 224 * ci),
+      Math.round(celestial.glintColor[1] * (1 - ci) + 231 * ci),
+      Math.round(celestial.glintColor[2] * (1 - ci) + 255 * ci)
+    ];
+    dayNightState.specularIntensity = celestial.specularIntensity * (1 - ci) + 0.75 * ci;
+  }
+
+  // Update Shooting Stars (Meteors)
+  if (!dayNightState.cosmicMeteors) dayNightState.cosmicMeteors = [];
+  if (dayNightState.cosmicIntensity > 0.35) {
+    if (!dayNightState._meteorTimer) dayNightState._meteorTimer = 2.5 + Math.random() * 3.5;
+    dayNightState._meteorTimer -= dt;
+    if (dayNightState._meteorTimer <= 0) {
+      dayNightState._meteorTimer = 3.0 + Math.random() * 4.5;
+      const startAngle = -0.55 + (Math.random() - 0.5) * 0.4;
+      const speed = 420 + Math.random() * 260;
+      dayNightState.cosmicMeteors.push({
+        x: playerState.x + (Math.random() - 0.5) * 1200 - 300,
+        y: playerState.y - 600 + (Math.random() - 0.5) * 300,
+        vx: Math.cos(startAngle) * speed,
+        vy: Math.sin(startAngle) * speed,
+        len: 45 + Math.random() * 35,
+        life: 0.9 + Math.random() * 0.6,
+        maxLife: 0.9 + Math.random() * 0.6,
+        color: Math.random() > 0.4 ? 'rgba(192, 132, 252, ' : 'rgba(56, 189, 248, '
+      });
+    }
+  }
+
+  // Update active meteors
+  for (let m = dayNightState.cosmicMeteors.length - 1; m >= 0; m--) {
+    const met = dayNightState.cosmicMeteors[m];
+    met.x += met.vx * dt;
+    met.y += met.vy * dt;
+    met.life -= dt;
+    if (met.life <= 0) {
+      dayNightState.cosmicMeteors.splice(m, 1);
+    }
+  }
+}
+if (typeof window !== 'undefined') {
+  window.updateDayNightCycle = updateDayNightCycle;
+}
+
+// Seed cinematic naval battles along flight path for thrilling intro spectacle
+function seedCinematicNavalBattles(startPos, endPos) {
+  if (typeof entities === 'undefined' || !entities.enemies) return;
+  // Clear any previous intro warships
+  entities.enemies = entities.enemies.filter(e => !e._isIntroCinematicShip);
+
+  const dx = endPos.x - startPos.x;
+  const dy = endPos.y - startPos.y;
+  const mainAng = Math.atan2(dy, dx);
+  const perpAng = mainAng + Math.PI / 2;
+
+  // Battle 1: Viking Drakkar Raider vs Imperial Galleon (at ~30% of flight corridor)
+  const b1T = 0.30;
+  const b1CenterX = startPos.x + dx * b1T;
+  const b1CenterY = startPos.y + dy * b1T;
+
+  const shipA1 = createEnemyEntity('viking', 1, b1CenterX - Math.cos(perpAng) * 110, b1CenterY - Math.sin(perpAng) * 110, perpAng + 0.3, {
+    formationType: 'solitary',
+    formationRole: 'leader',
+    name: 'Viking Drakkar Pengepung'
+  });
+  const shipA2 = createEnemyEntity('imperial', 2, b1CenterX + Math.cos(perpAng) * 120, b1CenterY + Math.sin(perpAng) * 120, perpAng + Math.PI - 0.2, {
+    formationType: 'solitary',
+    formationRole: 'leader',
+    name: 'Galleon Armada Kerajaan'
+  });
+
+  // Battle 2: Wokou War Junk vs Iron Clan Gunboat (at ~65% of flight corridor)
+  const b2T = 0.65;
+  const b2CenterX = startPos.x + dx * b2T;
+  const b2CenterY = startPos.y + dy * b2T;
+
+  const shipB1 = createEnemyEntity('wokou', 1, b2CenterX - Math.cos(perpAng) * 125, b2CenterY - Math.sin(perpAng) * 125, perpAng + 0.2, {
+    formationType: 'solitary',
+    formationRole: 'leader',
+    name: 'Wokou War Junk'
+  });
+  const shipB2 = createEnemyEntity('iron', 1, b2CenterX + Math.cos(perpAng) * 125, b2CenterY + Math.sin(perpAng) * 125, perpAng + Math.PI - 0.2, {
+    formationType: 'solitary',
+    formationRole: 'leader',
+    name: 'Gunboat Besi Berat'
+  });
+
+  const allBattleShips = [shipA1, shipA2, shipB1, shipB2];
+  allBattleShips.forEach(s => {
+    s._isIntroCinematicShip = true;
+    s.speed = Math.max(3.4, s.speed * 1.35); // Fast dynamic sailing across waves
+    s.shootCooldown = 0.4 + Math.random() * 0.8; // Instant cannon broadside duels!
+  });
+
+  // Cross-target each other for active naval warfare!
+  shipA1.alertState = 'alerted';
+  shipA1.targetEntity = shipA2;
+  shipA1.detectionMeter = 100;
+
+  shipA2.alertState = 'alerted';
+  shipA2.targetEntity = shipA1;
+  shipA2.detectionMeter = 100;
+
+  shipB1.alertState = 'alerted';
+  shipB1.targetEntity = shipB2;
+  shipB1.detectionMeter = 100;
+
+  shipB2.alertState = 'alerted';
+  shipB2.targetEntity = shipB1;
+  shipB2.detectionMeter = 100;
+
+  entities.enemies.push(shipA1, shipA2, shipB1, shipB2);
+
+  // Sea ripples & spray between dueling warships
+  [b1CenterX, b2CenterX].forEach((cx, idx) => {
+    const cy = idx === 0 ? b1CenterY : b2CenterY;
+    if (entities.seaRipples) {
+      for (let r = 0; r < 4; r++) {
+        entities.seaRipples.push({
+          x: cx + (Math.random() - 0.5) * 80,
+          y: cy + (Math.random() - 0.5) * 80,
+          radius: 12 + Math.random() * 16,
+          maxRadius: 60,
+          alpha: 0.85,
+          color: 'rgba(255, 255, 255, '
+        });
+      }
+    }
+  });
+}
+if (typeof window !== 'undefined') {
+  window.seedCinematicNavalBattles = seedCinematicNavalBattles;
+}
+
+// Update Cinematic Seagull Flight Sequence
+function updateCinematicFlight(dt) {
+  const flight = window.cinematicFlightState;
+  if (!flight || !flight.active) return;
+
+  flight.elapsed += dt;
+  const elapsed = flight.elapsed;
+  const duration = flight.duration;
+  const startX = flight.startPos.x;
+  const startY = flight.startPos.y;
+  const endX = flight.endPos.x;
+  const endY = flight.endPos.y;
+
+  // Mid-point Control Vector with curved ocean deviation
+  const midX = (startX + endX) / 2;
+  const midY = (startY + endY) / 2;
+  const dx = endX - startX;
+  const dy = endY - startY;
+  const dist = Math.hypot(dx, dy);
+  const perpX = -dy / (dist || 1);
+  const perpY = dx / (dist || 1);
+  const curveMagnitude = Math.min(850, dist * 0.16);
+  const ctrlX = midX + perpX * curveMagnitude;
+  const ctrlY = midY + perpY * curveMagnitude;
+
+  if (!flight.seagull) {
+    flight.seagull = {
+      x: startX,
+      y: startY,
+      heading: Math.atan2(ctrlY - startY, ctrlX - startX),
+      state: 'perched',
+      altitude: 3.5,
+      wingPhase: 0,
+      alpha: 1.0,
+      isCarrion: false
+    };
+  }
+
+  const s = flight.seagull;
+  const perchStartDuration = (flight.type === 'new_game') ? 3.5 : 1.6;
+  const landingDuration = (flight.type === 'new_game') ? 3.5 : 1.6;
+  const flyingDuration = Math.max(1.0, duration - perchStartDuration - landingDuration);
+
+  if (elapsed < perchStartDuration) {
+    // 1. Initial Phase: Seagull perched on starting shipwreck
+    s.state = 'perched';
+    s.x = startX;
+    s.y = startY;
+    s.altitude = 3.5;
+    s.heading = Math.atan2(ctrlY - startY, ctrlX - startX);
+    flight.camX = startX;
+    flight.camY = startY;
+    if (window.cameraState) {
+      window.cameraState.x = startX;
+      window.cameraState.y = startY;
+      window.cameraState.overrideActive = true;
+      window.cameraState.zoomOverride = 0.84;
+    }
+  } else if (elapsed < perchStartDuration + flyingDuration) {
+    // 2. Flight Phase: Dynamic high-speed soaring across the ocean & naval battles
+    s.state = 'flying';
+    const rawProgress = (elapsed - perchStartDuration) / flyingDuration;
+    const progress = Math.min(1.0, Math.max(0, rawProgress));
+
+    // Smoothstep interpolation (3t^2 - 2t^3)
+    const t = progress * progress * (3 - 2 * progress);
+    const oneMinusT = 1 - t;
+
+    // Bezier position
+    const curX = oneMinusT * oneMinusT * startX + 2 * oneMinusT * t * ctrlX + t * t * endX;
+    const curY = oneMinusT * oneMinusT * startY + 2 * oneMinusT * t * ctrlY + t * t * endY;
+
+    // Velocity / Tangent vector for natural flight heading
+    const vx = 2 * oneMinusT * (ctrlX - startX) + 2 * t * (endX - ctrlX);
+    const vy = 2 * oneMinusT * (ctrlY - startY) + 2 * t * (endY - ctrlY);
+
+    const heading = Math.atan2(vy, vx);
+    s.x = curX;
+    s.y = curY;
+    s.heading = heading;
+
+    // Dynamic swooping altitude (ocean surface proximity over waves & naval skirmishes)
+    const swoopWave = Math.sin(progress * Math.PI * 4.0) * 8.5;
+    s.altitude = 7.0 + Math.sin(progress * Math.PI) * 24.0 + swoopWave;
+
+    // Dynamic wing flap & aerodynamic soaring cycle (rapid flap bursts alternating with locked-wing glide)
+    const flapCycle = ((elapsed - perchStartDuration) * 1.3) % 5.5;
+    if (flapCycle < 2.8) {
+      s.wingPhase = (s.wingPhase || 0) + dt * 14.5;
+    } else {
+      s.wingPhase = Math.sin(flapCycle * 1.2) * 0.15; // Gliding wings spread wide
+    }
+
+    // Dynamic Chase Camera with spring lag behind flight heading (creates intense sense of speed!)
+    const targetCamX = curX - Math.cos(heading) * 115;
+    const targetCamY = curY - Math.sin(heading) * 115;
+    if (flight.camX === undefined) {
+      flight.camX = targetCamX;
+      flight.camY = targetCamY;
+    } else {
+      const springRate = Math.min(1.0, dt * 6.5);
+      flight.camX += (targetCamX - flight.camX) * springRate;
+      flight.camY += (targetCamY - flight.camY) * springRate;
+    }
+
+    if (window.cameraState) {
+      window.cameraState.x = flight.camX;
+      window.cameraState.y = flight.camY;
+      window.cameraState.overrideActive = true;
+      window.cameraState.zoomOverride = 0.82; // Expansive field of view for high-speed ocean travel
+    }
+
+    // Wingtip aerodynamic wind vortex particles
+    if (Math.random() < 0.28 && entities.particles) {
+      const perp = heading + Math.PI / 2;
+      for (const side of [-1, 1]) {
+        entities.particles.push({
+          x: curX + Math.cos(perp) * (13 * side),
+          y: curY + Math.sin(perp) * (13 * side),
+          vx: -Math.cos(heading) * 1.5 + (Math.random() - 0.5) * 0.4,
+          vy: -Math.sin(heading) * 1.5 + (Math.random() - 0.5) * 0.4,
+          life: 0.32,
+          color: 'rgba(255, 255, 255, 0.4)',
+          size: 1.6
+        });
+      }
+    }
+
+    // Audio fadeout during final 7.5 seconds of New Game intro
+    if (flight.type === 'new_game' && elapsed >= duration - 8.0 && !flight._musicFadingOut) {
+      flight._musicFadingOut = true;
+      if (typeof sound !== 'undefined' && typeof sound.fadeIntroMusicOut === 'function') {
+        sound.fadeIntroMusicOut(7.5);
+      }
+    }
+
+    // Periodic gentle audio chirp while soaring over the ocean
+    if (!flight.hasChirped && elapsed >= perchStartDuration + 0.15) {
+      flight.hasChirped = true;
+      if (typeof sound !== 'undefined' && sound.playSeagullNear) {
+        sound.playSeagullNear(curX, curY);
+      }
+    } else if (elapsed > perchStartDuration + 4.0 && Math.floor(elapsed) % 18 === 0 && !flight._chirpedThisPeriod) {
+      flight._chirpedThisPeriod = true;
+      if (typeof sound !== 'undefined' && sound.playSeagullNear) {
+        sound.playSeagullNear(curX, curY);
+      }
+    } else if (Math.floor(elapsed) % 18 !== 0) {
+      flight._chirpedThisPeriod = false;
+    }
+  } else {
+    // 3. Landing & Perched Phase on player's ship at Port Nusa Damai
+    s.state = 'perched';
+    s.x = endX;
+    s.y = endY;
+    s.altitude = 3.5;
+    s.heading = (typeof playerState !== 'undefined' && playerState.angle) ? playerState.angle : 0;
+
+    if (flight.camX !== undefined) {
+      flight.camX += (endX - flight.camX) * Math.min(1.0, dt * 3.5);
+      flight.camY += (endY - flight.camY) * Math.min(1.0, dt * 3.5);
+    } else {
+      flight.camX = endX;
+      flight.camY = endY;
+    }
+
+    if (window.cameraState) {
+      window.cameraState.x = flight.camX;
+      window.cameraState.y = flight.camY;
+      window.cameraState.overrideActive = true;
+      if (window.cameraState.zoomOverride) {
+        window.cameraState.zoomOverride += (1.0 - window.cameraState.zoomOverride) * Math.min(1.0, dt * 2.5);
+      }
+    }
+
+    if (elapsed >= duration) {
+      if (typeof endCinematicFlight === 'function') {
+        endCinematicFlight();
+      } else if (typeof window.endCinematicFlight === 'function') {
+        window.endCinematicFlight();
+      }
+    }
+  }
+
+  // Update credits UI during New Game intro
+  if (flight.type === 'new_game' && typeof window.updateCinematicCreditsUI === 'function') {
+    window.updateCinematicCreditsUI(elapsed, duration);
+  }
+}
+if (typeof window !== 'undefined') {
+  window.updateCinematicFlight = updateCinematicFlight;
+}
+
 function updateGame(dt) {
   rebuildSpatialGrid();
+  updateDayNightCycle(dt);
   updateWeatherSystem(dt);
   updateIslandConquestReinforcements(dt);
+
+  // Cinematic Flight Sequence Handling (New Game Intro & Death Recovery)
+  const isCinematicFlight = !!(window.cinematicFlightState && window.cinematicFlightState.active);
+  if (isCinematicFlight) {
+    updateCinematicFlight(dt);
+  }
+
+  // Check 9-Minute Expiration for Player's Sunken Death Wreck
+  if (playerState.playerDeathWreck) {
+    if (Date.now() > playerState.playerDeathWreck.expiresAt) {
+      playerState.playerDeathWreck = null;
+      entities.sunkenShips = entities.sunkenShips.filter(s => !s.isPlayerDeathWreck);
+      const isEn = (typeof currentLanguage !== 'undefined' && currentLanguage === 'en');
+      if (typeof showToast === 'function') {
+        showToast(isEn 
+          ? "Your sunken ship was swallowed by the deep abyss and lost forever." 
+          : "Bangkai kapal Anda telah tenggelam ke palung abisal dan lenyap selamanya.", "alert");
+      }
+      if (typeof saveGame === 'function') saveGame();
+    }
+  }
+
   const currentMaxHp = getStatValue('hull', playerState.upgrades.hull);
   let moveSpeed = getStatValue('speed', playerState.upgrades.speed);
 
@@ -1614,11 +2275,69 @@ function updateGame(dt) {
   }
   const inkMultiplier = (playerState.inkedTimer > 0) ? 0.60 : 1.0;
 
-  // Player Naval Steering & Movement (Dedicated PC Rudder/Throttle OR Mobile Touch Joystick)
+  // Player Naval Steering & Movement (Gamepad 360° Joystick OR Dedicated PC WASD OR Mobile Touch Joystick)
   let isPlayerMoving = false;
+  const startPlayerX = playerState.x;
+  const startPlayerY = playerState.y;
 
-  if (typeof pcNavalState !== 'undefined' && pcNavalState.active) {
-    // 1. DEDICATED PC NAVAL CONTROLS (A/D Rudder, W/S Throttle)
+  if (isCinematicFlight) {
+    // Keep player ship safely moored at Haven during flight cutscenes
+    playerState.x = PLAYER_SPAWN.x;
+    playerState.y = PLAYER_SPAWN.y;
+    playerState.angle = PLAYER_SPAWN.angle;
+    playerState.speed = 0;
+    playerState.targetSpeed = 0;
+    playerState.vx = 0;
+    playerState.vy = 0;
+    playerState.hp = currentMaxHp;
+  } else if (typeof activeInputDevice !== 'undefined' && activeInputDevice.startsWith('gamepad') && typeof gamepadJoystickState !== 'undefined' && gamepadJoystickState.active) {
+    // 1. TRUE 360° OMNIDIRECTIONAL ANALOG JOYSTICK (Gamepad on PC / Laptop)
+    isPlayerMoving = true;
+    const targetAngle = gamepadJoystickState.angle;
+    let diff = normAngle(targetAngle - playerState.angle);
+
+    // Turning Resistance against Gale Wind
+    const headingDiffFromWind = normAngle(playerState.angle - windAngle);
+    const turningAgainstWind = (Math.sign(diff) > 0 && headingDiffFromWind > 0) || (Math.sign(diff) < 0 && headingDiffFromWind < 0);
+    const windSteerPenalty = (activeWeatherCfg && activeWeatherCfg.hasWindDrift && turningAgainstWind) 
+      ? Math.max(0.50, 1 - 0.36 * weatherState.intensity) 
+      : 1.0;
+    const turnSpeed = 3.8 * dt * windSteerPenalty;
+    playerState.angle += Math.sign(diff) * Math.min(Math.abs(diff), turnSpeed) + windHelmTorque + windGustJitter;
+
+    // Speed modifiers (LT Boost / L3 Stealth)
+    let speedMult = 0.95;
+    if (gamepadJoystickState.boost) speedMult = 1.30;
+    else if (gamepadJoystickState.stealth) speedMult = 0.38;
+
+    // Smooth speed throttling during hard turns (hull physics)
+    const turnAlignment = Math.max(0.25, (Math.cos(diff) + 1) * 0.375 + 0.25);
+    const currentSpeed = moveSpeed * gamepadJoystickState.magnitude * turnAlignment * speedMult * tailwindBonus * snareMultiplier * inkMultiplier;
+
+    playerState.x += Math.cos(playerState.angle) * currentSpeed;
+    playerState.y += Math.sin(playerState.angle) * currentSpeed;
+
+    // Wind Drift Vector Application
+    if (weatherState && (weatherState.windDrift.x !== 0 || weatherState.windDrift.y !== 0)) {
+      playerState.x += weatherState.windDrift.x * dt;
+      playerState.y += weatherState.windDrift.y * dt;
+    }
+
+    // Player Water Trail Wake (Only when moving forward!)
+    if (gamepadJoystickState.magnitude > 0.1 && Math.random() < 0.65) {
+      const sternX = playerState.x - Math.cos(playerState.angle) * 20;
+      const sternY = playerState.y - Math.sin(playerState.angle) * 20;
+      entities.seaRipples.push({
+        x: sternX,
+        y: sternY,
+        radius: 4,
+        maxRadius: 26,
+        alpha: 0.55,
+        color: 'rgba(255, 255, 255, '
+      });
+    }
+  } else if (typeof pcNavalState !== 'undefined' && pcNavalState.active) {
+    // 2. DEDICATED PC NAVAL CONTROLS (A/D Rudder, W/S Throttle)
     isPlayerMoving = true;
 
     // Rudder Rotation with Wind Steering Resistance
@@ -1659,7 +2378,7 @@ function updateGame(dt) {
       });
     }
   } else if (joystickState.active && joystickState.magnitude > 0.08) {
-    // 2. MOBILE TOUCH VIRTUAL HELM JOYSTICK
+    // 3. MOBILE TOUCH VIRTUAL HELM JOYSTICK
     isPlayerMoving = true;
     const targetAngle = joystickState.angle;
     let diff = targetAngle - playerState.angle;
@@ -1707,6 +2426,16 @@ function updateGame(dt) {
         playerState.angle += (windHelmTorque * 0.85 + windGustJitter * 0.85);
       }
     }
+  }
+
+  // Update actual velocity vector for speedometer & wake effects
+  const dtSafe = Math.max(0.001, dt);
+  if (isPlayerMoving) {
+    playerState.vx = (playerState.x - startPlayerX) / dtSafe;
+    playerState.vy = (playerState.y - startPlayerY) / dtSafe;
+  } else {
+    playerState.vx = (playerState.vx || 0) * 0.85;
+    playerState.vy = (playerState.vy || 0) * 0.85;
   }
 
   // Ocean Storm Heavy Wave Camera Sway
@@ -2799,83 +3528,33 @@ function updateGame(dt) {
             let bloodGained = 0;
 
             if (e.isMonster) {
-              goldGained = Math.floor((65 * e.tier + Math.random() * 45) * rMult);
+              goldGained = Math.floor((3 * e.tier + Math.random() * 4) * rMult);
               bloodGained = Math.floor((6 * e.tier + Math.random() * 6) * rMult);
             } else if (e.tier >= 3) {
-              goldGained = Math.floor((200 + Math.random() * 80) * rMult);
+              goldGained = Math.floor((8 + Math.random() * 8) * rMult);
               bloodGained = Math.floor((12 + Math.random() * 8) * rMult);
             } else if (e.tier === 2) {
-              goldGained = Math.floor((85 + Math.random() * 40) * rMult);
+              goldGained = Math.floor((4 + Math.random() * 5) * rMult);
               bloodGained = Math.floor((4 + Math.random() * 4) * rMult);
             } else {
-              goldGained = Math.floor((35 + Math.random() * 25) * rMult);
+              goldGained = Math.floor((2 + Math.random() * 3) * rMult);
               bloodGained = biome.isBloodSea ? Math.floor((2 + Math.random() * 3) * rMult) : 0;
             }
 
-            playerState.gold += goldGained;
+            // Sinking Spoils Dispersal: Spawn scattered floating cargo crates & gold in the sea!
+            spawnScatteredShipLoot(e.x, e.y, e);
+
+            // Immediate victory bounty for Captain's victory
+            const instantGold = goldGained;
+            playerState.gold += instantGold;
             if (bloodGained > 0) playerState.bloodEssence += bloodGained;
 
-            // Faction Crafting Drops & Survival Materials
-            if (!playerState.resources) playerState.resources = {};
-            let fWood = 0, fRope = 0, fIron = 0, fBamboo = 0;
-            let fSpecial = null;
-
-            if (e.clan === 'batavia' || e.clan === 'gold') {
-              fWood = Math.floor(2 + Math.random() * 3);
-              fRope = Math.random() < 0.4 ? 1 : 0;
-            } else if (e.clan === 'iron') {
-              fIron = Math.floor(2 + Math.random() * 3);
-              fWood = 1;
-            } else if (e.clan === 'wokou') {
-              fBamboo = Math.floor(2 + Math.random() * 3);
-              if (Math.random() < (e.tier >= 3 ? 0.65 : 0.35)) {
-                fSpecial = { key: 'firePowder', name: 'Bubuk Mesiu Api', icon: 'firePowder' };
-              }
-            } else if (e.clan === 'mist') {
-              fWood = 1;
-              if (Math.random() < (e.tier >= 3 ? 0.60 : 0.30)) {
-                fSpecial = { key: 'mistOrb', name: 'Orb Kabut Gaib', icon: 'mistOrb' };
-              }
-            } else if (e.clan === 'viking') {
-              fWood = 2;
-              fIron = 1;
-              if (Math.random() < (e.tier >= 3 ? 0.60 : 0.30)) {
-                fSpecial = { key: 'snowOrb', name: 'Orb Salju Fjord', icon: 'snowOrb' };
-              }
-            } else if (e.isMonster || e.clan === 'blood') {
-              const chitinGained = Math.floor(2 + Math.random() * 3 * (e.tier || 1));
-              playerState.resources.chitin = (playerState.resources.chitin || 0) + chitinGained;
-              addFloatingText(`+${chitinGained} Kitin`, e.x, e.y - 20, '#e11d48');
-            }
-
-            if (fWood > 0) playerState.resources.wood = (playerState.resources.wood || 0) + fWood;
-            if (fRope > 0) playerState.resources.rope = (playerState.resources.rope || 0) + fRope;
-            if (fIron > 0) playerState.resources.iron = (playerState.resources.iron || 0) + fIron;
-            if (fBamboo > 0) playerState.resources.bamboo = (playerState.resources.bamboo || 0) + fBamboo;
-
-            if (fSpecial) {
-              playerState.resources[fSpecial.key] = (playerState.resources[fSpecial.key] || 0) + 1;
-              showToast(`Rampasan Faksi: +1 ${fSpecial.name}!`, fSpecial.icon);
-              addFloatingText(`+1 ${fSpecial.name}!`, e.x, e.y - 36, '#38bdf8', true);
-            } else if (bloodGained > 0) {
-              showToast(`+${goldGained} Koin +${bloodGained} Darah: Menumpas ${e.name}!`, "blood");
+            if (bloodGained > 0) {
+              showToast(`+${instantGold} Koin +${bloodGained} Darah: Menumpas ${e.name}! Muatan kargo berhamburan ke laut!`, "blood");
             } else {
-              showToast(`+${goldGained} Koin: Menenggelamkan ${e.name}!`, "gold");
+              showToast(`+${instantGold} Koin: Menenggelamkan ${e.name}! Muatan kargo berhamburan ke laut!`, "gold");
             }
             sound.playCoin();
-            createCombatDebris(e.x, e.y, e.tier);
-
-            // Drop peti emas terapung khusus kapal kas kasir/treasury Batavia
-            if (e.isTreasuryShip || (e.clan === 'batavia' && (e.formationRole === 'treasury' || e.tier >= 3))) {
-              entities.floatingLoots.push({
-                x: e.x,
-                y: e.y,
-                type: 'chest',
-                value: Math.floor(180 + Math.random() * 120),
-                bobOffset: Math.random() * 10
-              });
-              showToast("Peti Emas Batavia terapung di laut!", "gold");
-            }
 
             // Transition to Sinking Sequence
             entities.sinkingShips.push({
@@ -2893,6 +3572,7 @@ function updateGame(dt) {
             });
 
             entities.enemies.splice(j, 1);
+            recordEnemyShipDefeat(e);
           }
           break;
         }
@@ -2904,6 +3584,10 @@ function updateGame(dt) {
         if (typeof window !== 'undefined' && window.devTestingState && window.devTestingState.godMode) {
           p.life = 0;
           addFloatingText("KEBAL!", playerState.x, playerState.y - 20, '#fbbf24', true);
+          return;
+        }
+        if (playerState.hp <= 0 || (window.cinematicFlightState && window.cinematicFlightState.active)) {
+          p.life = 0;
           return;
         }
         const diffCfg = (typeof getDifficultyConfig === 'function') ? getDifficultyConfig() : { playerDamageReceivedMult: 1.0 };
@@ -2981,6 +3665,7 @@ function updateGame(dt) {
                 life: 1.8
               });
               entities.enemies.splice(j, 1);
+              recordEnemyShipDefeat(rival);
               createCombatDebris(rival.x, rival.y, rival.tier);
             }
             break;
@@ -3085,11 +3770,16 @@ function updateGame(dt) {
 
   // 2. Process AI behavior, stealth vision, and inter-clan rival battles
   entities.enemies.forEach(e => {
+    const isCamOverride = !!(window.cameraState && window.cameraState.overrideActive);
+    const focalX = isCamOverride ? window.cameraState.x : playerState.x;
+    const focalY = isCamOverride ? window.cameraState.y : playerState.y;
+    const distToFocal = Math.hypot(focalX - e.x, focalY - e.y);
     const distToPlayer = Math.hypot(playerState.x - e.x, playerState.y - e.y);
-    const simRadius = isMobileDevice() ? 780 : 1050;
+    const effectiveSimDist = Math.min(distToPlayer, distToFocal);
+    const simRadius = isMobileDevice() ? 850 : 1200;
 
     // Dormant Off-Screen Optimization: If far off-screen, do lightweight drift and skip heavy collision/vision/combat
-    if (distToPlayer > simRadius) {
+    if (effectiveSimDist > simRadius) {
       e.prevX = e.x;
       e.prevY = e.y;
       e.vx = (e.vx || 0) * 0.98;
@@ -3183,9 +3873,11 @@ function updateGame(dt) {
 
     if (e.alertState === 'unaware' || e.alertState === 'suspicious') {
       let detected = false;
+      const isCinematicFlight = !!(window.cinematicFlightState && window.cinematicFlightState.active);
 
-      // Penjaga pulau yang damai/belum terprovokasi berpatroli damai dan tidak menyerang pemain
-      if (e.homeIslandId && !isIslandProvoked(e.homeIslandId) && e.clan !== 'blood') {
+      if (isCinematicFlight) {
+        detected = false;
+      } else if (e.homeIslandId && !isIslandProvoked(e.homeIslandId) && e.clan !== 'blood') {
         detected = false;
       } else if (e.guardWreckId) {
         // Scavenger guarding a sunken shipwreck: alerts if player approaches wreck or guard
@@ -3198,7 +3890,7 @@ function updateGame(dt) {
         }
       }
 
-      if (!detected && !(e.homeIslandId && !isIslandProvoked(e.homeIslandId) && e.clan !== 'blood')) {
+      if (!detected && !isCinematicFlight && !(e.homeIslandId && !isIslandProvoked(e.homeIslandId) && e.clan !== 'blood')) {
         if (e.isMonster) {
           // Sea Monster 360-degree circular underwater vibration sonar!
           const monsterAuraDist = 420 * (isPlayerMovingFast ? 1.25 : 0.95) * stealthMult;
@@ -3500,6 +4192,7 @@ function updateGame(dt) {
               const tIdx = entities.enemies.indexOf(target);
               if (tIdx !== -1) {
                 entities.enemies.splice(tIdx, 1);
+                recordEnemyShipDefeat(target);
                 createCombatDebris(target.x, target.y, target.tier);
               }
               e.targetEntity = null;
@@ -4021,13 +4714,16 @@ function updateGame(dt) {
   if (!_cachedSalvageCircle) _cachedSalvageCircle = document.getElementById('salvageCircle');
   const salvageCircle = _cachedSalvageCircle;
   let nearWreck = null;
+  const isCinematicFlightActive = !!(window.cinematicFlightState && window.cinematicFlightState.active);
 
-  entities.sunkenShips.forEach(s => {
-    const d = Math.sqrt((playerState.x - s.x) * (playerState.x - s.x) + (playerState.y - s.y) * (playerState.y - s.y));
-    if (d < 50 && !s.salvaged) {
-      nearWreck = s;
-    }
-  });
+  if (playerState.hp > 0 && !isCinematicFlightActive) {
+    entities.sunkenShips.forEach(s => {
+      const d = Math.sqrt((playerState.x - s.x) * (playerState.x - s.x) + (playerState.y - s.y) * (playerState.y - s.y));
+      if (d < 50 && !s.salvaged) {
+        nearWreck = s;
+      }
+    });
+  }
 
   if (nearWreck) {
     if (salvageContainer) {
@@ -4071,38 +4767,90 @@ function updateGame(dt) {
     if (salvageProgress >= 1) {
       nearWreck.salvaged = true;
       playerState.salvages++;
-      const diffCfg = (typeof getDifficultyConfig === 'function') ? getDifficultyConfig() : { rewardMultiplier: 1.0 };
-      const rMult = diffCfg.rewardMultiplier || 1.0;
-      const gReward = Math.round(nearWreck.goldReward * rMult);
-      const bReward = Math.round(nearWreck.bloodReward * rMult);
-      playerState.gold += gReward;
 
-      // Rich survival materials from ancient sunken cargo hold
-      if (!playerState.resources) playerState.resources = {};
-      const sWood = Math.floor(6 + Math.random() * 6);
-      const sIron = Math.floor(3 + Math.random() * 4);
-      const sRope = Math.floor(2 + Math.random() * 3);
-      const sStone = Math.floor(2 + Math.random() * 3);
-      playerState.resources.wood = (playerState.resources.wood || 0) + sWood;
-      playerState.resources.iron = (playerState.resources.iron || 0) + sIron;
-      playerState.resources.rope = (playerState.resources.rope || 0) + sRope;
-      playerState.resources.stone = (playerState.resources.stone || 0) + sStone;
+      if (nearWreck.isPlayerDeathWreck) {
+        // Recovery of lost player's own sunken ship cargo!
+        const restoredGold = nearWreck.goldReward || nearWreck.droppedGold || 0;
+        const restoredBlood = nearWreck.bloodReward || nearWreck.droppedBlood || 0;
+        playerState.gold = (playerState.gold || 0) + restoredGold;
+        playerState.bloodEssence = (playerState.bloodEssence || 0) + restoredBlood;
 
-      addFloatingText(`+${gReward} Koin`, playerState.x, playerState.y - 20, '#fbbf24', true);
-      addFloatingText(`+${sWood} Kayu, +${sIron} Besi, +${sRope} Tali`, playerState.x, playerState.y - 50, '#34d399');
+        if (nearWreck.droppedResources) {
+          if (!playerState.resources) playerState.resources = {};
+          for (const [resKey, amount] of Object.entries(nearWreck.droppedResources)) {
+            playerState.resources[resKey] = (playerState.resources[resKey] || 0) + (amount || 0);
+          }
+        }
 
-      if (bReward > 0) {
-        playerState.bloodEssence += bReward;
-        addFloatingText(`+${bReward} Darah`, playerState.x, playerState.y - 35, '#ef4444', true);
-        showToast(`Relik Kuno: +${gReward} Koin +${bReward} Darah & Bahan Melimpah!`, "anchor");
+        if (nearWreck.droppedCannons && Array.isArray(nearWreck.droppedCannons)) {
+          if (!playerState.cannonInventory) playerState.cannonInventory = [];
+          playerState.cannonInventory.push(...nearWreck.droppedCannons);
+        }
+
+        playerState.playerDeathWreck = null;
+
+        addFloatingText(`Kargo Bangkai Dipulihkan!`, playerState.x, playerState.y - 25, '#fbbf24', true);
+        if (restoredGold > 0) addFloatingText(`+${restoredGold} Koin`, playerState.x, playerState.y - 45, '#fbbf24');
+        if (restoredBlood > 0) addFloatingText(`+${restoredBlood} Darah`, playerState.x, playerState.y - 65, '#ef4444');
+
+        const isEn = (typeof currentLanguage !== 'undefined' && currentLanguage === 'en');
+        showToast(isEn 
+          ? "Sunken Ship Cargo Recovered! All lost resources returned!" 
+          : "Kargo Kapal Karam Berhasil Diselamatkan! Seluruh sumber daya kembali!", "anchor");
+
+        sound.playCoin();
+        sound.playLoot();
+        salvageProgress = 0;
+        sunkenShipCooldown = 15.0;
+        entities.sunkenShips = entities.sunkenShips.filter(s => !s.salvaged);
+        if (typeof saveGame === 'function') saveGame();
+        if (typeof updateHUD === 'function') updateHUD();
       } else {
-        showToast(`Harta Karam Diangkat: +${gReward} Koin, +${sWood} Kayu, +${sIron} Besi!`, "gold");
+        const diffCfg = (typeof getDifficultyConfig === 'function') ? getDifficultyConfig() : { rewardMultiplier: 1.0 };
+        const rMult = diffCfg.rewardMultiplier || 1.0;
+        const gReward = Math.round(nearWreck.goldReward * rMult);
+        const bReward = Math.round(nearWreck.bloodReward * rMult);
+        playerState.gold += gReward;
+
+        // Rich survival materials from ancient sunken cargo hold
+        if (!playerState.resources) playerState.resources = {};
+        const sWood = Math.floor(6 + Math.random() * 6);
+        const sIron = Math.floor(3 + Math.random() * 4);
+        const sRope = Math.floor(2 + Math.random() * 3);
+        const sStone = Math.floor(2 + Math.random() * 3);
+        const sBronze = Math.floor(2 + Math.random() * 3);
+        const sCloth = Math.floor(2 + Math.random() * 3);
+        const sBone = Math.random() < 0.35 ? 1 : 0;
+
+        playerState.resources.wood = (playerState.resources.wood || 0) + sWood;
+        playerState.resources.iron = (playerState.resources.iron || 0) + sIron;
+        playerState.resources.rope = (playerState.resources.rope || 0) + sRope;
+        playerState.resources.stone = (playerState.resources.stone || 0) + sStone;
+        playerState.resources.bronze = (playerState.resources.bronze || 0) + sBronze;
+        playerState.resources.sailCloth = (playerState.resources.sailCloth || 0) + sCloth;
+        if (sBone > 0) {
+          playerState.resources.leviathanBone = (playerState.resources.leviathanBone || 0) + sBone;
+        }
+
+        addFloatingText(`+${gReward} Koin`, playerState.x, playerState.y - 20, '#fbbf24', true);
+        addFloatingText(`+${sWood} Kayu, +${sIron} Besi, +${sBronze} Kuningan`, playerState.x, playerState.y - 50, '#34d399');
+        if (sBone > 0) {
+          addFloatingText(`+1 Tulang Purba Kuno!`, playerState.x, playerState.y - 65, '#f8fafc', true);
+        }
+
+        if (bReward > 0) {
+          playerState.bloodEssence += bReward;
+          addFloatingText(`+${bReward} Darah`, playerState.x, playerState.y - 35, '#ef4444', true);
+          showToast(`Relik Kuno: +${gReward} Koin +${bReward} Darah & Bahan Melimpah!`, "anchor");
+        } else {
+          showToast(`Harta Karam Diangkat: +${gReward} Koin, +${sWood} Kayu, +${sIron} Besi!`, "gold");
+        }
+        sound.playCoin();
+        sound.playLoot();
+        salvageProgress = 0;
+        sunkenShipCooldown = 25.0; // Cooldown before next wreck can spawn
+        entities.sunkenShips = entities.sunkenShips.filter(s => !s.salvaged);
       }
-      sound.playCoin();
-      sound.playLoot();
-      salvageProgress = 0;
-      sunkenShipCooldown = 25.0; // Cooldown before next wreck can spawn
-      entities.sunkenShips = entities.sunkenShips.filter(s => !s.salvaged);
     }
   } else {
     salvageProgress = 0;
@@ -4112,29 +4860,166 @@ function updateGame(dt) {
     }
   }
 
-  // Collect Floating Cargo & Message in a Bottle
+  // AAA Tactical Salvage Hook / Winch Action
+  window.triggerSalvageHook = function() {
+    if (!isGameStarted || isGamePaused) return;
+    if (playerState.hp <= 0 || (window.cinematicFlightState && window.cinematicFlightState.active)) return;
+    if (typeof sound !== 'undefined' && typeof sound.init === 'function') sound.init();
+
+    let actionTaken = false;
+
+    // 1. Check nearby sunken ships (< 150px)
+    if (entities.sunkenShips && entities.sunkenShips.length > 0) {
+      for (let i = 0; i < entities.sunkenShips.length; i++) {
+        const s = entities.sunkenShips[i];
+        if (s.salvaged) continue;
+        const d = Math.hypot(s.x - playerState.x, s.y - playerState.y);
+        if (d < 150) {
+          salvageProgress = Math.min(1.0, salvageProgress + 0.35);
+          showToast("Katrol Mempercepat Derek Bangkai!", "anchor");
+          if (typeof sound !== 'undefined' && typeof sound.playLoot === 'function') sound.playLoot();
+          actionTaken = true;
+          break;
+        }
+      }
+    }
+
+    // 2. Reel in nearby floating cargo & crates (< 360px)
+    if (entities.floatingLoots && entities.floatingLoots.length > 0) {
+      let reeledCount = 0;
+      for (let i = 0; i < entities.floatingLoots.length; i++) {
+        const loot = entities.floatingLoots[i];
+        const d = Math.hypot(loot.x - playerState.x, loot.y - playerState.y);
+        if (d < 360) {
+          const angle = Math.atan2(playerState.y - loot.y, playerState.x - loot.x);
+          loot.x += Math.cos(angle) * Math.min(d, 140);
+          loot.y += Math.sin(angle) * Math.min(d, 140);
+          reeledCount++;
+        }
+      }
+      if (reeledCount > 0) {
+        showToast(`${reeledCount} Peti Apung Ditarik Derek!`, "anchor");
+        if (typeof sound !== 'undefined' && typeof sound.playLoot === 'function') sound.playLoot();
+        actionTaken = true;
+      }
+    }
+
+    if (!actionTaken) {
+      showToast("Tidak ada bangkai atau kargo apung dalam jangkauan katrol (360m)", "info");
+    }
+  };
+
+  // Update Physics Movement, Lifespan & Collection of Floating Cargo & Crates
   for (let i = entities.floatingLoots.length - 1; i >= 0; i--) {
     const loot = entities.floatingLoots[i];
-    if (((playerState.x - loot.x) * (playerState.x - loot.x) + (playerState.y - loot.y) * (playerState.y - loot.y) < 36 * 36)) {
-      if (loot.type === 'repair' || loot.type === 'crate') {
-        if (!playerState.resources) playerState.resources = {};
-        const gainedW = Math.floor(3 + Math.random() * 3);
-        const gainedR = Math.floor(1 + Math.random() * 2);
-        playerState.resources.wood = (playerState.resources.wood || 0) + gainedW;
-        playerState.resources.rope = (playerState.resources.rope || 0) + gainedR;
-        if (Math.random() < 0.35) {
-          playerState.resources.iron = (playerState.resources.iron || 0) + 1;
-          addFloatingText(`+${gainedW} Kayu, +${gainedR} Tali, +1 Besi`, playerState.x, playerState.y, '#34d399');
-          showToast(`Puing Terapung: +${gainedW} Kayu, +${gainedR} Tali, +1 Besi!`, "wood");
-        } else {
-          addFloatingText(`+${gainedW} Kayu, +${gainedR} Tali`, playerState.x, playerState.y, '#34d399');
-          showToast(`Puing Terapung: +${gainedW} Kayu, +${gainedR} Tali!`, "wood");
-        }
+
+    // Dampen ejection velocity & apply water drift
+    if (loot.vx || loot.vy) {
+      loot.x += (loot.vx || 0) * dt;
+      loot.y += (loot.vy || 0) * dt;
+      loot.vx *= 0.94;
+      loot.vy *= 0.94;
+    }
+    if (loot.rot !== undefined && loot.vrot) {
+      loot.rot += loot.vrot * dt;
+      loot.vrot *= 0.96;
+    }
+
+    // Floating lifetime countdown
+    if (loot.life !== undefined) {
+      loot.life -= dt;
+      if (loot.life <= 0) {
+        entities.floatingLoots.splice(i, 1);
+        continue;
+      }
+    }
+
+    // Proximity pickup by player ship (radius 44px)
+    const dx = playerState.x - loot.x;
+    const dy = playerState.y - loot.y;
+    if (dx * dx + dy * dy < 44 * 44) {
+      if (!playerState.resources) playerState.resources = {};
+
+      if (loot.type === 'wood') {
+        const qty = loot.amount || 2;
+        playerState.resources.wood = (playerState.resources.wood || 0) + qty;
+        addFloatingText(`+${qty} Balok Kayu`, playerState.x, playerState.y - 15, '#34d399');
+        showToast(`Memungut Kargo: +${qty} Balok Kayu!`, "wood");
+        sound.playSplash();
+      } else if (loot.type === 'iron') {
+        const qty = loot.amount || 1;
+        playerState.resources.iron = (playerState.resources.iron || 0) + qty;
+        addFloatingText(`+${qty} Ingot Besi`, playerState.x, playerState.y - 15, '#94a3b8');
+        showToast(`Memungut Kargo: +${qty} Batang Besi Tempa!`, "iron");
+        sound.playLoot();
+      } else if (loot.type === 'rope') {
+        const qty = loot.amount || 1;
+        playerState.resources.rope = (playerState.resources.rope || 0) + qty;
+        addFloatingText(`+${qty} Gulung Tali`, playerState.x, playerState.y - 15, '#fde047');
+        showToast(`Memungut Kargo: +${qty} Gulungan Tali!`, "rope");
+        sound.playSplash();
+      } else if (loot.type === 'bamboo') {
+        const qty = loot.amount || 2;
+        playerState.resources.bamboo = (playerState.resources.bamboo || 0) + qty;
+        addFloatingText(`+${qty} Batang Bambu`, playerState.x, playerState.y - 15, '#a3e635');
+        showToast(`Memungut Kargo: +${qty} Batang Buluh Bambu!`, "bamboo");
+        sound.playSplash();
+      } else if (loot.type === 'mistOrb') {
+        playerState.resources.mistOrb = (playerState.resources.mistOrb || 0) + 1;
+        addFloatingText(`+1 Orb Kabut Gaib!`, playerState.x, playerState.y - 25, '#38bdf8', true);
+        showToast(`Artefak Suci: +1 Orb Kabut Gaib Terselamatkan!`, "mistOrb");
+        sound.playLoot();
+      } else if (loot.type === 'snowOrb') {
+        playerState.resources.snowOrb = (playerState.resources.snowOrb || 0) + 1;
+        addFloatingText(`+1 Orb Salju Fjord!`, playerState.x, playerState.y - 25, '#7dd3fc', true);
+        showToast(`Artefak Suci: +1 Orb Salju Fjord Terselamatkan!`, "snowOrb");
+        sound.playLoot();
+      } else if (loot.type === 'firePowder') {
+        playerState.resources.firePowder = (playerState.resources.firePowder || 0) + 1;
+        addFloatingText(`+1 Bubuk Mesiu Api!`, playerState.x, playerState.y - 25, '#fb923c', true);
+        showToast(`Bahan Peledak: +1 Tong Bubuk Mesiu Terselamatkan!`, "firePowder");
+        sound.playLoot();
+      } else if (loot.type === 'chitin') {
+        const qty = loot.amount || 2;
+        playerState.resources.chitin = (playerState.resources.chitin || 0) + qty;
+        addFloatingText(`+${qty} Kitin Abisal`, playerState.x, playerState.y - 25, '#e11d48', true);
+        showToast(`Bahan Palung: +${qty} Duri Kitin Monster Terselamatkan!`, "chitin");
+        sound.playLoot();
+      } else if (loot.type === 'sailCloth') {
+        const qty = loot.amount || 2;
+        playerState.resources.sailCloth = (playerState.resources.sailCloth || 0) + qty;
+        addFloatingText(`+${qty} Kain Layar Sutra`, playerState.x, playerState.y - 15, '#e2e8f0');
+        showToast(`Memungut Kargo: +${qty} Kain Layar Sutra!`, "sailCloth");
+        sound.playSplash();
+      } else if (loot.type === 'bronze') {
+        const qty = loot.amount || 1;
+        playerState.resources.bronze = (playerState.resources.bronze || 0) + qty;
+        addFloatingText(`+${qty} Kuningan Perunggu`, playerState.x, playerState.y - 15, '#ca8a04');
+        showToast(`Memungut Kargo: +${qty} Kuningan Perunggu Tempa!`, "bronze");
+        sound.playLoot();
+      } else if (loot.type === 'krakenInk') {
+        const qty = loot.amount || 1;
+        playerState.resources.krakenInk = (playerState.resources.krakenInk || 0) + qty;
+        addFloatingText(`+${qty} Tinta Cumi Abisal!`, playerState.x, playerState.y - 25, '#818cf8', true);
+        showToast(`Artefak Abisal: +${qty} Tinta Cumi Abisal Terselamatkan!`, "krakenInk");
+        sound.playLoot();
+      } else if (loot.type === 'leviathanBone') {
+        const qty = loot.amount || 1;
+        playerState.resources.leviathanBone = (playerState.resources.leviathanBone || 0) + qty;
+        addFloatingText(`+${qty} Tulang Purba Lautan!`, playerState.x, playerState.y - 25, '#f8fafc', true);
+        showToast(`Artefak Legendaris: +${qty} Tulang Monster Purba Terselamatkan!`, "leviathanBone");
+        sound.playLoot();
+      } else if (loot.type === 'repair' || loot.type === 'crate') {
+        const maxHp = (typeof getStatValue === 'function') ? getStatValue('hull', playerState.upgrades.hull) : 100;
+        playerState.hp = Math.min(maxHp, playerState.hp + 30);
+        playerState.resources.wood = (playerState.resources.wood || 0) + 2;
+        playerState.resources.rope = (playerState.resources.rope || 0) + 1;
+        addFloatingText(`Reparasi +30 HP, +2 Kayu, +1 Tali`, playerState.x, playerState.y - 15, '#34d399');
+        showToast(`Puing Kapal: Lambung diperbaiki +30 HP & dapat bahan baku!`, "wood");
         sound.playSplash();
       } else if (loot.type === 'bottle') {
         playerState.gold += loot.value;
         sound.playLoot();
-        // Target nearest unsalvaged ship or Skull Island
         const unsalvaged = entities.sunkenShips.find(s => !s.salvaged);
         if (unsalvaged) {
           activeTreasureHint = { x: unsalvaged.x, y: unsalvaged.y, name: unsalvaged.name || "Bangkai Harta Karun" };
@@ -4154,11 +5039,13 @@ function updateGame(dt) {
         else sound.playCoin();
       } else {
         playerState.gold += loot.value;
-        addFloatingText(`+${loot.value} Koin`, playerState.x, playerState.y, '#fbbf24');
-        showToast(`Peti Terapung: +${loot.value} Koin!`, "gold");
+        addFloatingText(`+${loot.value} Koin Emas`, playerState.x, playerState.y, '#fbbf24');
+        showToast(`Pundi Rampasan: +${loot.value} Koin!`, "gold");
         sound.playCoin();
       }
+
       entities.floatingLoots.splice(i, 1);
+      if (typeof updateHUD === 'function') updateHUD();
     }
   }
 
@@ -4213,6 +5100,10 @@ function updateGame(dt) {
       s.isCarrion = sDistFromCenter >= 75000 || isNearSkull;
 
       const distToPlayer = Math.hypot(s.x - playerState.x, s.y - playerState.y);
+      const isCinematicFlight = !!(window.cinematicFlightState && window.cinematicFlightState.active);
+      const simFocusX = (window.cameraState && window.cameraState.overrideActive) ? window.cameraState.x : playerState.x;
+      const simFocusY = (window.cameraState && window.cameraState.overrideActive) ? window.cameraState.y : playerState.y;
+      const distToFocus = Math.hypot(s.x - simFocusX, s.y - simFocusY);
 
       // -------------------------------------------------------------
       // STATE 1: PERCHED (Mampir di kapal atau pulau)
@@ -4372,11 +5263,11 @@ function updateGame(dt) {
           s.heading = angToSkull + Math.PI / 2 + 0.05;
         }
 
-        // Reposition seagulls if they drift too far from the player
-        if (distToPlayer > 1500) {
+        // Reposition seagulls if they drift too far from the player AND camera simulation focus
+        if (distToPlayer > 1500 && distToFocus > 1500) {
           const wrapAng = Math.random() * Math.PI * 2;
-          s.x = playerState.x + Math.cos(wrapAng) * 950;
-          s.y = playerState.y + Math.sin(wrapAng) * 950;
+          s.x = simFocusX + Math.cos(wrapAng) * 950;
+          s.y = simFocusY + Math.sin(wrapAng) * 950;
           s.heading = wrapAng + Math.PI + (Math.random() - 0.5) * 0.8;
           s.state = 'soaring';
           s.altitude = s.targetAlt;
@@ -4389,7 +5280,7 @@ function updateGame(dt) {
             let foundPerch = false;
 
             // 1. Check Player Ship perch
-            if (distToPlayer < 380 && perchedOnPlayer < 2 && Math.random() < 0.35) {
+            if (!isCinematicFlight && distToPlayer < 380 && perchedOnPlayer < 2 && Math.random() < 0.35) {
               const shipOffsets = [
                 { x: 0, y: -16 }, { x: 0, y: 16 }, { x: -6, y: -4 }, { x: 6, y: -4 }, { x: 0, y: 4 }
               ];
@@ -4535,7 +5426,12 @@ function updateGame(dt) {
   }
 
   if (screenShake > 0) {
+    if (typeof playGamepadRumble === 'function' && screenShake > 6 && (!window._lastRumbleShake || screenShake > window._lastRumbleShake + 2)) {
+      playGamepadRumble(Math.min(1.0, screenShake / 18), 0.5, 160);
+      window._lastRumbleShake = screenShake;
+    }
     screenShake = Math.max(0, screenShake - dt * 25);
+    if (screenShake <= 0) window._lastRumbleShake = 0;
   }
 
   // Real-time encounter spawn cooldown

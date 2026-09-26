@@ -169,6 +169,44 @@ canvas {
   border-bottom: 2px solid #d97706;
 }
 
+/* Controller / Gamepad Glyph Badges */
+.kbd-badge-gamepad {
+  border-radius: 9999px;
+  padding: 0.12rem 0.42rem;
+  letter-spacing: 0.03em;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+}
+
+.kbd-badge-xbox {
+  border-radius: 0.35rem;
+}
+
+.kbd-badge-ps {
+  border-radius: 0.35rem;
+}
+
+/* Gamepad Interactive Menu Navigation Focus */
+.gamepad-menu-focus {
+  outline: 2px solid #fbbf24 !important;
+  outline-offset: 3px !important;
+  box-shadow: 0 0 20px rgba(251, 191, 36, 0.7), inset 0 0 10px rgba(251, 191, 36, 0.25) !important;
+  transform: scale(1.025) !important;
+  transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  z-index: 20 !important;
+}
+
+.gamepad-nav-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  padding: 0.25rem 0.65rem;
+  border-radius: 9999px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
+}
+
 /* Modal transitions */
 .modal-enter {
   opacity: 0;
@@ -322,7 +360,7 @@ canvas {
     display: none !important;
   }
 
-  #mobileControlsDock {
+  #mobileControlsDock:not(.hidden) {
     position: fixed !important;
     bottom: max(0.85rem, env(safe-area-inset-bottom, 0.85rem)) !important;
     left: 0 !important;
@@ -342,13 +380,21 @@ canvas {
     display: none !important;
   }
 
-  #pcHullContainer {
+  #pcHullContainer:not(.hidden) {
     display: flex !important;
   }
 
-  #pcControlsBar {
+  #pcControlsBar:not(.hidden) {
     display: flex !important;
   }
+}
+
+/* Hard hide rules for in-game docks when menu or modal active */
+#pcControlsBar.hidden,
+#mobileControlsDock.hidden,
+#pcControlsBar[style*="display: none"],
+#mobileControlsDock[style*="display: none"] {
+  display: none !important;
 }
 
 /* Mobile Performance: reduce heavy visual effects */
@@ -534,6 +580,468 @@ canvas {
     height: 1.45rem;
   }
 }
+
+/* No Scrollbar Utility for Horizontal Chip Bars */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* ==========================================================================
+   PHASE 2: AAA TACTICAL ACTION DECK, SPYGLASS & HUD STYLES
+   ========================================================================== */
+
+/* Spyglass Brass Aperture Vignette */
+.spyglass-vignette {
+  background: radial-gradient(circle at center, transparent 38%, rgba(3, 7, 18, 0.72) 72%, rgba(0, 0, 0, 0.96) 100%);
+  box-shadow: inset 0 0 100px rgba(0, 0, 0, 0.95);
+}
+
+/* Action Deck Hotbar Slots (AAA RPG Style) */
+.action-slot {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  background: linear-gradient(135deg, rgba(20, 30, 48, 0.92) 0%, rgba(10, 15, 26, 0.97) 100%);
+  border: 1.5px solid rgba(217, 119, 6, 0.5);
+  border-radius: 0.85rem;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.7), inset 0 1px 1px rgba(251, 191, 36, 0.3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+  user-select: none;
+}
+
+@media (min-width: 640px) {
+  .action-slot {
+    width: 58px;
+    height: 58px;
+  }
+}
+
+.action-slot:hover {
+  border-color: #fbbf24;
+  box-shadow: 0 0 18px rgba(245, 158, 11, 0.55), inset 0 1px 2px rgba(255, 255, 255, 0.4);
+  transform: translateY(-2px);
+}
+
+.action-slot:active {
+  transform: translateY(1px) scale(0.96);
+}
+
+.action-slot.active-slot-glow {
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 20px rgba(56, 189, 248, 0.65), inset 0 0 10px rgba(56, 189, 248, 0.35) !important;
+  animation: spyglassPulse 2s infinite ease-in-out;
+}
+
+@keyframes spyglassPulse {
+  0%, 100% { border-color: rgba(56, 189, 248, 0.6); }
+  50% { border-color: #38bdf8; box-shadow: 0 0 22px rgba(56, 189, 248, 0.8); }
+}
+
+.action-slot.salvage-ready-glow {
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 16px rgba(56, 189, 248, 0.7) !important;
+  animation: salvagePulse 1.4s infinite alternate ease-in-out;
+}
+
+@keyframes salvagePulse {
+  0% { transform: scale(1); filter: brightness(1); }
+  100% { transform: scale(1.04); filter: brightness(1.25); box-shadow: 0 0 22px rgba(56, 189, 248, 0.9); }
+}
+
+.action-slot.locked {
+  opacity: 0.45;
+  filter: grayscale(0.85);
+  cursor: not-allowed;
+}
+
+.action-slot-cooldown {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  clip-path: polygon(50% 50%, 50% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 0%, 50% 0%);
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+/* Weather Chip Plaque */
+.weather-chip {
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.94) 0%, rgba(8, 14, 26, 0.98) 100%);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  transition: all 0.2s ease;
+}
+
+.weather-chip:hover {
+  border-color: rgba(56, 189, 248, 0.75);
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.3);
+}
+
+/* AAA Oceanic Cartography Table & Intel Drawer Styles */
+#islandIntelDrawer {
+  animation: intelSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+@keyframes intelSlideUp {
+  0% {
+    opacity: 0;
+    transform: translateY(16px) scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Subtle Parchment Depth Grid Shadow for Ocean Map */
+#seaMapCanvas {
+  background: radial-gradient(circle at center, #0c1527 0%, #070c18 60%, #03060d 100%);
+}
+
+/* ==========================================================================
+   PHASE 4: AAA 3-COLUMN NAVAL ARMORY, CARGO MATRIX & FOUNDRY STYLES
+   ========================================================================== */
+
+/* Cargo Slots Grid (AAA Beveled Metal Styling) */
+.cargo-slot {
+  position: relative;
+  min-height: 54px;
+  min-width: 54px;
+  border-radius: 0.85rem;
+  border: 1.5px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.85) 0%, rgba(8, 14, 26, 0.95) 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.08), 0 2px 8px rgba(0, 0, 0, 0.4);
+  user-select: none;
+}
+
+@media (min-width: 640px) {
+  .cargo-slot {
+    min-height: 60px;
+    min-width: 60px;
+  }
+}
+
+.cargo-slot:hover {
+  transform: translateY(-2px) scale(1.03);
+  border-color: rgba(245, 158, 11, 0.7);
+  box-shadow: 0 0 15px rgba(245, 158, 11, 0.3), inset 0 1px 2px rgba(255, 255, 255, 0.2);
+}
+
+.cargo-slot:active {
+  transform: translateY(1px) scale(0.97);
+}
+
+.cargo-slot.active {
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 18px rgba(56, 189, 248, 0.5), inset 0 0 8px rgba(56, 189, 248, 0.25) !important;
+}
+
+.cargo-slot-count {
+  position: absolute;
+  bottom: 2px;
+  right: 3px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 9.5px;
+  font-weight: 800;
+  color: #fbbf24;
+  background: rgba(3, 7, 18, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  padding: 0.5px 3.5px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.cargo-slot-durability {
+  position: absolute;
+  top: 2px;
+  right: 3px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 8px;
+  font-weight: 800;
+  border-radius: 4px;
+  padding: 0.5px 3px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+/* Category Filter Pills */
+.cargo-filter-btn, .craft-filter-btn {
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.cargo-filter-btn.active {
+  background: rgba(120, 53, 15, 0.8) !important;
+  color: #fde68a !important;
+  border-color: rgba(245, 158, 11, 0.7) !important;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.25);
+}
+
+.craft-filter-btn.active {
+  background: rgba(6, 78, 59, 0.8) !important;
+  color: #a7f3d0 !important;
+  border-color: rgba(16, 185, 129, 0.7) !important;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.25);
+}
+
+/* Hardpoint Tactical Cards */
+.hardpoint-card {
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.hardpoint-card:hover {
+  transform: translateY(-1px);
+}
+
+/* ==========================================================================
+   FASE 5: CINEMATIC TITLE SCREEN, AAA PAUSE BRIDGE, & SETTINGS TERMINAL
+   ========================================================================== */
+
+/* 1. Cinematic Atmosphere & Overlays */
+.oceanic-vignette {
+  background: radial-gradient(circle at 65% 35%, rgba(6, 12, 28, 0.45) 0%, rgba(3, 7, 18, 0.8) 55%, rgba(1, 3, 8, 0.96) 100%);
+}
+
+.title-starfield {
+  position: absolute;
+  inset: 0;
+  background-image: 
+    radial-gradient(1.5px 1.5px at 20px 30px, #ffffff, rgba(0,0,0,0)),
+    radial-gradient(1px 1px at 80px 120px, #fde68a, rgba(0,0,0,0)),
+    radial-gradient(2px 2px at 150px 60px, #fef08a, rgba(0,0,0,0)),
+    radial-gradient(1.5px 1.5px at 240px 180px, #ffffff, rgba(0,0,0,0)),
+    radial-gradient(2px 2px at 320px 90px, #fde047, rgba(0,0,0,0)),
+    radial-gradient(1px 1px at 450px 220px, #ffffff, rgba(0,0,0,0)),
+    radial-gradient(1.5px 1.5px at 580px 140px, #fbcfe8, rgba(0,0,0,0)),
+    radial-gradient(2px 2px at 720px 280px, #ffffff, rgba(0,0,0,0)),
+    radial-gradient(1.5px 1.5px at 890px 70px, #fed7aa, rgba(0,0,0,0)),
+    radial-gradient(1px 1px at 1020px 190px, #ffffff, rgba(0,0,0,0));
+  background-repeat: repeat;
+  background-size: 600px 350px;
+  opacity: 0.55;
+  animation: shimmerStars 8s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+@keyframes shimmerStars {
+  0% { opacity: 0.35; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.02); }
+  100% { opacity: 0.45; transform: scale(1); }
+}
+
+.title-crimson-nebula {
+  position: absolute;
+  top: -10%;
+  right: -5%;
+  width: 60vw;
+  height: 60vh;
+  background: radial-gradient(ellipse at center, rgba(159, 18, 57, 0.22) 0%, rgba(88, 28, 135, 0.12) 40%, transparent 75%);
+  filter: blur(40px);
+  pointer-events: none;
+  animation: nebulaFloat 16s ease-in-out infinite alternate;
+}
+
+@keyframes nebulaFloat {
+  0% { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(-30px, 20px) scale(1.08); }
+}
+
+.cinematic-mist-1, .cinematic-mist-2 {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(to top, rgba(2, 6, 23, 0.75) 0%, rgba(15, 23, 42, 0.25) 30%, transparent 70%);
+}
+
+.cinematic-mist-1 {
+  background-image: radial-gradient(circle at 30% 70%, rgba(56, 189, 248, 0.08) 0%, transparent 50%),
+                    radial-gradient(circle at 80% 60%, rgba(225, 29, 72, 0.08) 0%, transparent 45%);
+  animation: driftMist 25s linear infinite alternate;
+}
+
+.cinematic-mist-2 {
+  background-image: radial-gradient(circle at 60% 80%, rgba(245, 158, 11, 0.06) 0%, transparent 55%);
+  animation: driftMist 35s linear infinite alternate-reverse;
+}
+
+@keyframes driftMist {
+  0% { transform: translateX(-40px); }
+  100% { transform: translateX(40px); }
+}
+
+/* 2. Menu Navigation Buttons */
+.menu-nav-btn {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.92) 0%, rgba(3, 7, 18, 0.96) 100%);
+}
+
+.menu-nav-btn:hover {
+  transform: translateX(4px);
+  border-color: rgba(245, 158, 11, 0.75);
+  box-shadow: 0 4px 20px rgba(245, 158, 11, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+.menu-nav-btn:active {
+  transform: translateX(2px) scale(0.99);
+}
+
+.menu-nav-btn.primary {
+  border: 2px solid #fde047;
+  background: linear-gradient(135deg, #d97706 0%, #b45309 50%, #78350f 100%);
+  color: #fff;
+  box-shadow: 0 6px 25px rgba(217, 119, 6, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.4);
+}
+
+.menu-nav-btn.primary:hover {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 50%, #92400e 100%);
+  box-shadow: 0 8px 30px rgba(245, 158, 11, 0.55), inset 0 1px 3px rgba(255, 255, 255, 0.6);
+}
+
+.menu-nav-btn.continue {
+  border: 2px solid #34d399;
+  background: linear-gradient(135deg, rgba(6, 78, 59, 0.95) 0%, rgba(4, 47, 46, 0.95) 100%);
+  box-shadow: 0 6px 25px rgba(16, 185, 129, 0.35), inset 0 1px 2px rgba(255, 255, 255, 0.3);
+}
+
+.menu-nav-btn.continue:hover {
+  border-color: #6ee7b7;
+  background: linear-gradient(135deg, rgba(5, 150, 105, 0.95) 0%, rgba(13, 78, 65, 0.95) 100%);
+  box-shadow: 0 8px 30px rgba(16, 185, 129, 0.5), inset 0 1px 3px rgba(255, 255, 255, 0.5);
+}
+
+/* 3. Nautical Precision Slider */
+.nautical-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 9999px;
+  outline: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.nautical-slider:hover {
+  border-color: rgba(245, 158, 11, 0.6);
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.2);
+}
+
+.nautical-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  background: radial-gradient(circle at 35% 35%, #fef3c7 0%, #f59e0b 60%, #92400e 100%);
+  border: 1.5px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6), 0 0 8px rgba(245, 158, 11, 0.5);
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.nautical-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.7), 0 0 12px rgba(245, 158, 11, 0.8);
+}
+
+.nautical-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  background: radial-gradient(circle at 35% 35%, #fef3c7 0%, #f59e0b 60%, #92400e 100%);
+  border: 1.5px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6), 0 0 8px rgba(245, 158, 11, 0.5);
+  cursor: pointer;
+}
+
+/* 4. Settings Tabs & Quality Chips */
+.settings-tab-btn {
+  padding: 8px 14px;
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+  border-radius: 12px;
+  transition: all 0.18s ease;
+  user-select: none;
+  cursor: pointer;
+}
+
+.settings-tab-btn:hover {
+  color: #fde68a;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.settings-tab-btn.active {
+  color: #fbbf24;
+  background: rgba(217, 119, 6, 0.2);
+  border: 1px solid rgba(245, 158, 11, 0.5);
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.25);
+}
+
+.quality-chip {
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(15, 23, 42, 0.85);
+  transition: all 0.2s ease;
+  cursor: pointer;
+  user-select: none;
+}
+
+.quality-chip:hover {
+  border-color: rgba(245, 158, 11, 0.5);
+  transform: translateY(-1px);
+}
+
+.quality-chip.active {
+  border-color: #f59e0b;
+  background: rgba(120, 53, 15, 0.35);
+  box-shadow: 0 0 15px rgba(245, 158, 11, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+/* 5. AAA Pause Bridge Framing */
+.pause-command-bridge {
+  position: relative;
+  background: linear-gradient(160deg, rgba(8, 15, 30, 0.96) 0%, rgba(3, 7, 18, 0.98) 100%);
+  border: 2px solid rgba(245, 158, 11, 0.45);
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.85), 0 0 35px rgba(217, 119, 6, 0.15), inset 0 1px 1px rgba(255, 255, 255, 0.15);
+}
+
+.pause-command-bridge::before {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border: 1px solid rgba(245, 158, 11, 0.15);
+  border-radius: calc(1.5rem - 3px);
+  pointer-events: none;
+}
+
 
 
 

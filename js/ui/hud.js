@@ -55,6 +55,44 @@ let elJoystickHpCircle = null;
 let elMobileHpText = null;
 let elDockShopAction = null;
 let elDockShopSubtitle = null;
+let elCargoWidget = null;
+let elCargoCountText = null;
+let elCargoFillBar = null;
+let elCargoMiniPips = null;
+
+// New Phase 2 Telemetry & Action Hotbar Cached Elements
+let elWeatherWidget = null;
+let elWeatherIcon = null;
+let elWeatherName = null;
+let elWeatherTimer = null;
+let elWeatherTooltipTitle = null;
+let elWeatherTooltipTimer = null;
+let elWeatherTooltipDesc = null;
+let elKnotSpeedText = null;
+let elThrottleStateText = null;
+let elPcKnotSpeed = null;
+let elPcThrottleStatus = null;
+let elMobileSpeedText = null;
+let elSlotFireCooldown = null;
+let elSlotMineCooldown = null;
+let elActionSlotMine = null;
+let elActionSlotSalvage = null;
+let elActionSlotRepair = null;
+let elMobileFireCooldownSvg = null;
+let elMobileFireCooldownCircle = null;
+let elBtnMobileMine = null;
+let elBtnMobileSalvage = null;
+
+// Day/Night Cycle Astrolabe Celestial Clock Elements
+let elAstrolabeClockWidget = null;
+let elClockCelestialIcon = null;
+let elSvgSunIcon = null;
+let elSvgMoonIcon = null;
+let elClockTimeText = null;
+let elClockPhaseBadge = null;
+let elClockTooltipPhase = null;
+let elClockTooltipTime = null;
+let elClockTooltipDesc = null;
 
 let lastHpDisplay = -1;
 let lastMaxHpDisplay = -1;
@@ -67,6 +105,22 @@ let lastStealthPercent = -1;
 let lastStealthState = '';
 let lastDockedState = false;
 let lastCargoSignature = '';
+let lastSpeedRounded = -1;
+let lastThrottleStr = '';
+let lastWeatherType = '';
+let lastWeatherTimerStr = '';
+let lastHudLang = '';
+
+const WEATHER_SVGS = {
+  clear: `<svg class="w-3 h-3 text-amber-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`,
+  overcast: `<svg class="w-3 h-3 text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>`,
+  rain: `<svg class="w-3 h-3 text-sky-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M16 14v6"/><path d="M8 14v6"/><path d="M12 16v6"/></svg>`,
+  gale: `<svg class="w-3 h-3 text-teal-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.7 7.7A7.1 7.1 0 1 1 5 10.8"/><path d="m18 10 4-4-4-4"/><path d="M4 14h12a4 4 0 0 1 4 4c0 1.1-.9 2-2 2H8"/><path d="m14 18 4 4-4-4"/></svg>`,
+  storm: `<svg class="w-3 h-3 text-cyan-300 animate-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/><polyline points="13 14 10 18 14 18 11 22"/></svg>`,
+  thunderstorm: `<svg class="w-3 h-3 text-amber-400 animate-bounce" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,
+  fog: `<svg class="w-3 h-3 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="12" x2="20" y2="12"/><line x1="6" y1="8" x2="18" y2="8"/><line x1="6" y1="16" x2="18" y2="16"/></svg>`,
+  blood_squall: `<svg class="w-3 h-3 text-rose-500 animate-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>`
+};
 
 const STEALTH_ICONS = {
   detected: `<svg class="w-3.5 h-3.5 text-rose-500 animate-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/><line x1="1" y1="1" x2="23" y2="23" stroke="#ef4444" stroke-width="2.5"/></svg>`,
@@ -96,6 +150,48 @@ function initHUDElements() {
   elCargoCountText = document.getElementById('hudCargoCountText');
   elCargoFillBar = document.getElementById('hudCargoFillBar');
   elCargoMiniPips = document.getElementById('hudCargoMiniPips');
+
+  // Phase 2 Elements
+  elWeatherWidget = document.getElementById('weatherWidget');
+  elWeatherIcon = document.getElementById('weatherIcon');
+  elWeatherName = document.getElementById('weatherName');
+  elWeatherTimer = document.getElementById('weatherTimer');
+  elWeatherTooltipTitle = document.getElementById('weatherTooltipTitle');
+  elWeatherTooltipTimer = document.getElementById('weatherTooltipTimer');
+  elWeatherTooltipDesc = document.getElementById('weatherTooltipDesc');
+  elKnotSpeedText = document.getElementById('knotSpeedText');
+  elThrottleStateText = document.getElementById('throttleStateText');
+  elPcKnotSpeed = document.getElementById('pcKnotSpeed');
+  elPcThrottleStatus = document.getElementById('pcThrottleStatus');
+  elMobileSpeedText = document.getElementById('mobileSpeedText');
+  elSlotFireCooldown = document.getElementById('slotFireCooldown');
+  elSlotMineCooldown = document.getElementById('slotMineCooldown');
+  elActionSlotMine = document.getElementById('actionSlotMine');
+  elActionSlotSalvage = document.getElementById('actionSlotSalvage');
+  elActionSlotRepair = document.getElementById('actionSlotRepair');
+  elMobileFireCooldownSvg = document.getElementById('mobileFireCooldownSvg');
+  elMobileFireCooldownCircle = document.getElementById('mobileFireCooldownCircle');
+  elBtnMobileMine = document.getElementById('btnMobileMine');
+  elBtnMobileSalvage = document.getElementById('btnMobileSalvage');
+
+  // Cache Day/Night Astrolabe Clock Elements
+  elAstrolabeClockWidget = document.getElementById('astrolabeClockWidget');
+  elClockCelestialIcon = document.getElementById('clockCelestialIcon');
+  elSvgSunIcon = document.getElementById('svgSunIcon');
+  elSvgMoonIcon = document.getElementById('svgMoonIcon');
+  elClockTimeText = document.getElementById('clockTimeText');
+  elClockPhaseBadge = document.getElementById('clockPhaseBadge');
+  elClockTooltipPhase = document.getElementById('clockTooltipPhase');
+  elClockTooltipTime = document.getElementById('clockTooltipTime');
+  elClockTooltipDesc = document.getElementById('clockTooltipDesc');
+
+  if (elAstrolabeClockWidget) {
+    elAstrolabeClockWidget.addEventListener('click', () => {
+      // Quick jump dev control or audio bell
+      if (typeof sound !== 'undefined' && sound.playClick) sound.playClick();
+    });
+  }
+
   if (elCargoWidget) {
     elCargoWidget.addEventListener('click', () => {
       if (typeof toggleInventoryModal === 'function') toggleInventoryModal();
@@ -311,7 +407,12 @@ function renderCompassBar() {
   ctx.fillRect(0, 0, w, h);
 
   // Player Heading in Degrees
-  const headingRad = normAngle(playerState.angle + Math.PI / 2);
+  const norm = (typeof normAngle === 'function') ? normAngle : (a => {
+    while (a > Math.PI) a -= Math.PI * 2;
+    while (a < -Math.PI) a += Math.PI * 2;
+    return a;
+  });
+  const headingRad = norm(playerState.angle + Math.PI / 2);
   let headingDeg = ((headingRad * 180 / Math.PI) + 360) % 360;
 
   // Distort heading if compass is compromised
@@ -541,6 +642,88 @@ function renderCompassBar() {
     }
   }
 
+  // 5. Custom Waypoint Navigation Pin Marker on Compass Bar
+  if (playerState.waypointPin) {
+    const pin = playerState.waypointPin;
+    const pinDist = Math.hypot(pin.x - playerState.x, pin.y - playerState.y);
+    const pinAngle = Math.atan2(pin.y - playerState.y, pin.x - playerState.x);
+    const angleDiff = normAngle(pinAngle - playerState.angle);
+
+    // Check arrival at waypoint pin (< 75px)
+    if (pinDist < 75) {
+      playerState.waypointPin = null;
+      showToast(typeof t === 'function' ? t('toastPinArrived') : "Tiba di Titik Tujuan Pin Navigasi!", "gold");
+      if (typeof sound !== 'undefined' && typeof sound.playQuestComplete === 'function') {
+        sound.playQuestComplete();
+      }
+    } else if (Math.abs(angleDiff) < FOV_RAD) {
+      // Pin is directly within the forward compass field of view!
+      const px = cx + (angleDiff / FOV_RAD) * (w * 0.46);
+      if (px >= 18 && px <= w - 18) {
+        ctx.save();
+        // Drop shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+        ctx.beginPath();
+        ctx.ellipse(px, 21, 3.5, 1.8, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Pin Body
+        ctx.fillStyle = '#f43f5e';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.1;
+        ctx.beginPath();
+        ctx.moveTo(px, 20); // Tip pointing down
+        ctx.lineTo(px - 4, 11);
+        ctx.arc(px, 11, 4, Math.PI, 0, false);
+        ctx.lineTo(px, 20);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Gold center dot
+        ctx.fillStyle = '#fbbf24';
+        ctx.beginPath();
+        ctx.arc(px, 11, 1.8, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Distance text
+        ctx.font = 'bold 7.5px "Plus Jakarta Sans", monospace';
+        ctx.fillStyle = '#fda4af';
+        ctx.textAlign = 'center';
+        ctx.fillText(`${Math.round(pinDist)}m`, px, 5);
+        ctx.restore();
+      }
+    } else {
+      // Pin is outside forward FOV: draw edge navigation indicator pointing left or right
+      const isRight = angleDiff > 0;
+      const arrowX = isRight ? (w - 18) : 18;
+      ctx.save();
+      ctx.fillStyle = '#f43f5e';
+      ctx.strokeStyle = '#fbbf24';
+      ctx.lineWidth = 1.2;
+
+      ctx.beginPath();
+      if (isRight) {
+        ctx.moveTo(arrowX - 4, 10);
+        ctx.lineTo(arrowX + 4, 15);
+        ctx.lineTo(arrowX - 4, 20);
+      } else {
+        ctx.moveTo(arrowX + 4, 10);
+        ctx.lineTo(arrowX - 4, 15);
+        ctx.lineTo(arrowX + 4, 20);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.font = 'bold 7px "Plus Jakarta Sans", monospace';
+      ctx.fillStyle = '#fda4af';
+      ctx.textAlign = isRight ? 'right' : 'left';
+      ctx.fillText(`PIN ${Math.round(pinDist)}m`, isRight ? (arrowX - 7) : (arrowX + 7), 16);
+      ctx.restore();
+    }
+  }
+
   ctx.restore();
 }
 
@@ -610,7 +793,20 @@ function updateHealthMeters(roundedHp, maxHp) {
    ========================================================================== */
 
 function updateHUD() {
+  if (typeof isGameStarted !== 'undefined' && !isGameStarted) return;
   if (!elHpBar) initHUDElements();
+
+  const curLang = (typeof currentLanguage !== 'undefined' && currentLanguage) ? currentLanguage : 'id';
+  if (curLang !== lastHudLang) {
+    lastHudLang = curLang;
+    lastZoneName = '';
+    lastShipRank = -1;
+    lastStealthState = '';
+    lastThrottleStr = '';
+    lastWeatherType = '';
+    lastWeatherTimerStr = '';
+    lastDockedState = !playerState.isDockedAtPort;
+  }
 
   const maxHp = getStatValue('hull', playerState.upgrades.hull);
   const roundedHp = Math.round(playerState.hp);
@@ -622,12 +818,12 @@ function updateHUD() {
 
   if (playerState.gold !== lastGoldDisplay) {
     lastGoldDisplay = playerState.gold;
-    if (elGoldText) elGoldText.innerText = playerState.gold.toLocaleString('id-ID');
+    if (elGoldText) elGoldText.innerText = playerState.gold.toLocaleString(curLang === 'en' ? 'en-US' : 'id-ID');
   }
 
   if (playerState.bloodEssence !== lastBloodDisplay) {
     lastBloodDisplay = playerState.bloodEssence;
-    if (elBloodText) elBloodText.innerText = playerState.bloodEssence.toLocaleString('id-ID');
+    if (elBloodText) elBloodText.innerText = playerState.bloodEssence.toLocaleString(curLang === 'en' ? 'en-US' : 'id-ID');
   }
 
   // Update exterior nautical cargo hold widget
@@ -662,7 +858,8 @@ function updateHUD() {
           const resDef = typeof RESOURCE_TYPES !== 'undefined' && RESOURCE_TYPES[k];
           const iconSvg = resDef && SVG_ICONS && SVG_ICONS[resDef.iconKey || k] ? SVG_ICONS[resDef.iconKey || k] : '';
           const count = playerState.resources[k];
-          pipsHtml += `<div class="flex items-center gap-0.5 text-[8.5px] font-mono font-bold text-amber-200/90" title="${resDef ? resDef.name : k}: ${count}"><span class="w-3.5 h-3.5 flex items-center justify-center shrink-0">${iconSvg}</span><span>${count}</span></div>`;
+          const resName = resDef ? ((curLang === 'en' && resDef.nameEn) ? resDef.nameEn : resDef.name) : k;
+          pipsHtml += `<div class="flex items-center gap-0.5 text-[8.5px] font-mono font-bold text-amber-200/90" title="${resName}: ${count}"><span class="w-3.5 h-3.5 flex items-center justify-center shrink-0">${iconSvg}</span><span>${count}</span></div>`;
         }
         elCargoMiniPips.innerHTML = pipsHtml;
       }
@@ -694,7 +891,7 @@ function updateHUD() {
   }
 
   const tier = getShipTier();
-  if (tier.rank !== lastShipRank) {
+  if (tier.rank !== lastShipRank || tier.name !== (elShipTitle ? elShipTitle.innerText : '')) {
     lastShipRank = tier.rank;
     if (elShipTitle) {
       elShipTitle.innerText = tier.name;
@@ -722,15 +919,15 @@ function updateHUD() {
     if (elStealthIcon) elStealthIcon.innerHTML = STEALTH_ICONS[currentStealthState];
     if (elStealthLabel) {
       if (currentStealthState === 'detected') {
-        elStealthLabel.innerText = 'AWAS!';
+        elStealthLabel.innerText = t('stealthDetected');
         elStealthLabel.className = 'text-rose-400 font-bold truncate';
         if (elStealthBar) elStealthBar.className = 'bg-rose-600 h-full transition-all duration-150';
       } else if (currentStealthState === 'warn') {
-        elStealthLabel.innerText = 'Waspada';
+        elStealthLabel.innerText = t('stealthWarn');
         elStealthLabel.className = 'text-amber-400 font-bold truncate';
         if (elStealthBar) elStealthBar.className = 'bg-amber-500 h-full transition-all duration-150';
       } else {
-        elStealthLabel.innerText = 'Aman';
+        elStealthLabel.innerText = t('stealthSafe');
         elStealthLabel.className = 'text-emerald-400 font-bold truncate';
         if (elStealthBar) elStealthBar.className = 'bg-emerald-500 h-full transition-all duration-150';
       }
@@ -744,18 +941,415 @@ function updateHUD() {
   if (!elDockShopAction) elDockShopAction = document.getElementById('dockShopAction');
   if (!elDockShopSubtitle) elDockShopSubtitle = document.getElementById('dockShopSubtitle');
 
-  if (playerState.isDockedAtPort !== lastDockedState) {
+  const isFlightActive = !!(window.cinematicFlightState && window.cinematicFlightState.active);
+  const isDead = (playerState.hp <= 0);
+  const isInitialCleanPort = (playerState.hasDepartedInitialPort === false);
+
+  if (isFlightActive || isDead || isInitialCleanPort) {
+    if (elDockShopAction) elDockShopAction.classList.add('hidden');
+    lastDockedState = false;
+  } else if (playerState.isDockedAtPort !== lastDockedState) {
     lastDockedState = playerState.isDockedAtPort;
     if (elDockShopAction) {
       if (playerState.isDockedAtPort && playerState.dockedPort) {
         elDockShopAction.classList.remove('hidden');
         if (elDockShopSubtitle) {
-          elDockSubtitle.innerText = `Berlabuh di ${playerState.dockedPort.name}`;
+          elDockShopSubtitle.innerText = t('dockedAt', { port: playerState.dockedPort.name });
         }
       } else {
         elDockShopAction.classList.add('hidden');
       }
     }
   }
+
+  // =========================================================================
+  // PHASE 2: SPEEDOMETER, WEATHER INTEL & ACTION HOTBAR TICK
+  // =========================================================================
+
+  // 1. Knot Speedometer & Throttle Status
+  const speedKts = Math.hypot(playerState.vx, playerState.vy) * 2.8;
+  const speedRounded = Math.round(speedKts * 10) / 10;
+  if (speedRounded !== lastSpeedRounded) {
+    lastSpeedRounded = speedRounded;
+    const speedStr = `${speedRounded.toFixed(1)} Kts`;
+    if (elKnotSpeedText) elKnotSpeedText.innerText = speedStr;
+    if (elPcKnotSpeed) elPcKnotSpeed.innerText = speedStr;
+    if (elMobileSpeedText) elMobileSpeedText.innerText = speedStr;
+  }
+
+  let throttleStr = t('throttleNeutral');
+  if (typeof pcNavalState !== 'undefined' && pcNavalState.boost) {
+    throttleStr = t('throttleBoost');
+  } else if (speedKts > 5.5) {
+    throttleStr = t('throttleFull');
+  } else if (speedKts > 1.0) {
+    throttleStr = t('throttleHalf');
+  } else if (typeof pcNavalState !== 'undefined' && pcNavalState.stealth) {
+    throttleStr = t('throttleStealth');
+  }
+  if (throttleStr !== lastThrottleStr) {
+    lastThrottleStr = throttleStr;
+    if (elThrottleStateText) elThrottleStateText.innerText = throttleStr;
+    if (elPcThrottleStatus) elPcThrottleStatus.innerText = throttleStr;
+  }
+
+  // 2. AAA Weather Intelligence Widget
+  if (typeof weatherState !== 'undefined') {
+    const wType = weatherState.type || 'clear';
+    const cfg = (typeof WEATHER_CONFIGS !== 'undefined' && WEATHER_CONFIGS[wType]) ? WEATHER_CONFIGS[wType] : { name: 'Laut Tenang', nameEn: 'Calm Seas', subtext: 'Perairan bersahabat', subtextEn: 'Friendly waters' };
+    const isEn = (curLang === 'en');
+    const wName = (isEn && cfg.nameEn) ? cfg.nameEn : (cfg.name || t('weatherClearName'));
+    const wDesc = (isEn && cfg.subtextEn) ? cfg.subtextEn : (cfg.subtext || t('weatherClearDesc'));
+
+    let rem = 0;
+    if (wType === 'clear') {
+      rem = Math.max(0, Math.ceil(weatherState.cooldown || 0));
+    } else {
+      rem = Math.max(0, Math.ceil(weatherState.timer || 0));
+    }
+    const mins = Math.floor(rem / 60);
+    const secs = rem % 60;
+    const timerStr = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+
+    if (wType !== lastWeatherType) {
+      lastWeatherType = wType;
+      if (elWeatherIcon) elWeatherIcon.innerHTML = WEATHER_SVGS[wType] || WEATHER_SVGS.clear;
+      if (elWeatherName) {
+        elWeatherName.innerText = wName;
+        elWeatherName.style.color = cfg.color || '#38bdf8';
+      }
+      if (elWeatherTooltipTitle) elWeatherTooltipTitle.innerText = wName;
+      if (elWeatherTooltipDesc) elWeatherTooltipDesc.innerText = wDesc;
+    }
+
+    if (timerStr !== lastWeatherTimerStr) {
+      lastWeatherTimerStr = timerStr;
+      if (elWeatherTimer) elWeatherTimer.innerText = timerStr;
+      if (elWeatherTooltipTimer) elWeatherTooltipTimer.innerText = t('weatherRemaining', { time: timerStr });
+    }
+  }
+
+  // 2b. Day/Night Cycle Astrolabe Celestial Clock Widget
+  if (typeof dayNightState !== 'undefined') {
+    const timeHours = (dayNightState.time !== undefined) ? dayNightState.time : 8.0;
+    const hours = Math.floor(timeHours) % 24;
+    const mins = Math.floor((timeHours % 1) * 60);
+    const timeStr = `${hours < 10 ? '0' : ''}${hours}:${mins < 10 ? '0' : ''}${mins}`;
+    
+    if (elClockTimeText && elClockTimeText.innerText !== timeStr) {
+      elClockTimeText.innerText = timeStr;
+    }
+
+    const phaseId = dayNightState.phaseId || 'morning';
+    const phaseKey = `timePhase_${phaseId}`;
+    const phaseDescKey = `timeDesc_${phaseId}`;
+    const phaseName = (typeof t === 'function') ? t(phaseKey) : phaseId.toUpperCase();
+    const phaseDesc = (typeof t === 'function') ? t(phaseDescKey) : '';
+
+    if (elClockPhaseBadge && elClockPhaseBadge.innerText !== phaseName) {
+      elClockPhaseBadge.innerText = phaseName;
+    }
+
+    // Toggle Sun vs Moon Icon and smooth rotation
+    const isDay = dayNightState.isDay;
+    if (elSvgSunIcon && elSvgMoonIcon) {
+      if (isDay) {
+        if (elSvgSunIcon.classList.contains('hidden')) elSvgSunIcon.classList.remove('hidden');
+        if (!elSvgMoonIcon.classList.contains('hidden')) elSvgMoonIcon.classList.add('hidden');
+      } else {
+        if (!elSvgSunIcon.classList.contains('hidden')) elSvgSunIcon.classList.add('hidden');
+        if (elSvgMoonIcon.classList.contains('hidden')) elSvgMoonIcon.classList.remove('hidden');
+      }
+    }
+
+    // Astrolabe Dial rotation: sun rises at 06:00 (0 deg), noon at 12:00 (90 deg), sunset at 18:00 (180 deg), midnight at 00:00 (270 deg)
+    if (elClockCelestialIcon) {
+      const dialDeg = ((timeHours - 6.0 + 24.0) % 24.0) * 15.0; // 360 / 24 = 15 deg per hour
+      elClockCelestialIcon.style.transform = `rotate(${dialDeg.toFixed(1)}deg)`;
+    }
+
+    if (elClockTooltipPhase) elClockTooltipPhase.innerText = phaseName;
+    if (elClockTooltipTime) elClockTooltipTime.innerText = timeStr;
+    if (elClockTooltipDesc) elClockTooltipDesc.innerText = phaseDesc;
+  }
+
+  // 3. Action Hotbar Slot 1: Broadside Cannon Cooldown
+  const reloadDelay = Math.max(0.35, 1.3 - (playerState.upgrades.speed - 1) * 0.1);
+  const fireElapsed = (Date.now() / 1000) - lastFireTime;
+  const fireFrac = Math.max(0, Math.min(1, fireElapsed / reloadDelay));
+  if (elSlotFireCooldown) {
+    if (fireFrac < 1) {
+      elSlotFireCooldown.style.opacity = '1';
+      const deg = Math.floor((1 - fireFrac) * 360);
+      elSlotFireCooldown.style.background = `conic-gradient(rgba(0,0,0,0.78) ${deg}deg, transparent 0deg)`;
+    } else {
+      elSlotFireCooldown.style.opacity = '0';
+    }
+  }
+  if (elMobileFireCooldownSvg && elMobileFireCooldownCircle) {
+    if (fireFrac < 1) {
+      elMobileFireCooldownSvg.style.opacity = '1';
+      const circ = 131.95;
+      elMobileFireCooldownCircle.style.strokeDashoffset = `${circ * (1 - fireFrac)}`;
+    } else {
+      elMobileFireCooldownSvg.style.opacity = '0';
+    }
+  }
+
+  // Action Hotbar Slot 2: Stern Chaser / Mine Cooldown & Unlock State
+  const rearLvl = playerState.upgrades.rearDefense;
+  if (elActionSlotMine) {
+    if (rearLvl <= 0) {
+      elActionSlotMine.classList.add('locked');
+    } else {
+      elActionSlotMine.classList.remove('locked');
+      const rearElapsed = (Date.now() / 1000) - lastRearDefenseTime;
+      const rearFrac = Math.max(0, Math.min(1, rearElapsed / 1.6));
+      if (elSlotMineCooldown) {
+        if (rearFrac < 1) {
+          elSlotMineCooldown.style.opacity = '1';
+          const deg = Math.floor((1 - rearFrac) * 360);
+          elSlotMineCooldown.style.background = `conic-gradient(rgba(0,0,0,0.78) ${deg}deg, transparent 0deg)`;
+        } else {
+          elSlotMineCooldown.style.opacity = '0';
+        }
+      }
+    }
+  }
+  if (elBtnMobileMine) {
+    if (rearLvl <= 0) elBtnMobileMine.classList.add('opacity-40');
+    else elBtnMobileMine.classList.remove('opacity-40');
+  }
+
+  // Action Hotbar Slot 3: Salvage Hook Proximity Glow
+  let nearSalvage = false;
+  if (entities.sunkenShips && entities.sunkenShips.some(s => !s.salvaged && Math.hypot(s.x - playerState.x, s.y - playerState.y) < 140)) {
+    nearSalvage = true;
+  } else if (entities.floatingLoots && entities.floatingLoots.some(l => Math.hypot(l.x - playerState.x, l.y - playerState.y) < 360)) {
+    nearSalvage = true;
+  }
+  if (elActionSlotSalvage) {
+    if (nearSalvage) elActionSlotSalvage.classList.add('salvage-ready-glow');
+    else elActionSlotSalvage.classList.remove('salvage-ready-glow');
+  }
+  if (elBtnMobileSalvage) {
+    if (nearSalvage) elBtnMobileSalvage.classList.add('border-sky-400', 'animate-pulse');
+    else elBtnMobileSalvage.classList.remove('border-sky-400', 'animate-pulse');
+  }
+
+  // Action Hotbar Slot 5: Emergency Repair Readiness
+  if (elActionSlotRepair) {
+    if (roundedHp < maxHp && playerState.gold >= 15) {
+      elActionSlotRepair.classList.add('border-emerald-400', 'animate-pulse');
+    } else {
+      elActionSlotRepair.classList.remove('border-emerald-400', 'animate-pulse');
+    }
+  }
 }
+
+/* ==========================================================================
+   DYNAMIC CONTROLLER & KEYBOARD PROMPT GLYPH SYSTEM
+   Swaps hotbar & telemetry badges smoothly based on active device
+   ========================================================================== */
+function updateInputPromptGlyphs(deviceType) {
+  const isXbox = deviceType === 'gamepad_xbox';
+  const isPS = deviceType === 'gamepad_ps';
+  const isGamepad = isXbox || isPS;
+
+  const bFire = document.getElementById('badgeFire');
+  const bMine = document.getElementById('badgeMine');
+  const bSalvage = document.getElementById('badgeSalvage');
+  const bSpyglass = document.getElementById('badgeSpyglass');
+  const bRepair = document.getElementById('badgeRepair');
+  const bSteerKeys = document.getElementById('badgeSteerKeys');
+  const pcSteerLabel = document.getElementById('pcSteerLabel');
+  const bBoostKeys = document.getElementById('badgeBoostKeys');
+  const pcBoostLabel = document.getElementById('pcBoostLabel');
+  const bStealthKeys = document.getElementById('badgeStealthKeys');
+  const pcStealthLabel = document.getElementById('pcStealthLabel');
+
+  if (isGamepad) {
+    if (bFire) {
+      bFire.textContent = isXbox ? 'RT' : 'R2';
+      bFire.className = 'kbd-badge font-bold px-1.5 py-0 mt-0.5 pointer-events-none bg-emerald-950/80 border-emerald-500/50 text-emerald-300 shadow-sm';
+    }
+    if (bMine) {
+      bMine.textContent = isXbox ? 'RB' : 'R1';
+      bMine.className = 'kbd-badge font-bold px-1.5 py-0 mt-0.5 pointer-events-none bg-amber-950/80 border-amber-500/50 text-amber-300 shadow-sm';
+    }
+    if (bSalvage) {
+      bSalvage.textContent = isXbox ? 'X' : '□';
+      bSalvage.className = 'kbd-badge font-bold px-1.5 py-0 mt-0.5 pointer-events-none bg-sky-950/80 border-sky-500/50 text-sky-300 shadow-sm';
+    }
+    if (bSpyglass) {
+      bSpyglass.textContent = isXbox ? 'Y' : '△';
+      bSpyglass.className = 'kbd-badge font-bold px-1.5 py-0 mt-0.5 pointer-events-none bg-cyan-950/80 border-cyan-500/50 text-cyan-300 shadow-sm';
+    }
+    if (bRepair) {
+      bRepair.textContent = isXbox ? 'LB' : 'L1';
+      bRepair.className = 'kbd-badge font-bold px-1.5 py-0 mt-0.5 pointer-events-none bg-teal-950/80 border-teal-500/50 text-teal-300 shadow-sm';
+    }
+    if (bSteerKeys) {
+      bSteerKeys.innerHTML = `<kbd class="kbd-badge font-bold px-1.5 py-0.5 bg-slate-800 border-slate-600 text-amber-300">${isXbox ? 'LS' : 'L-Stick'}</kbd><span class="text-slate-400 text-[8px] font-sans">/ D-Pad</span>`;
+    }
+    if (pcSteerLabel) {
+      pcSteerLabel.textContent = typeof t === 'function' ? (t('steerJoystickLabel') || 'Joystick 360°') : 'Joystick 360°';
+    }
+    if (bBoostKeys) {
+      bBoostKeys.innerHTML = `<kbd class="kbd-badge font-bold px-1.5 py-0.5 bg-amber-950/80 border-amber-500/50 text-amber-300">${isXbox ? 'LT' : 'L2'}</kbd>`;
+    }
+    if (pcBoostLabel) {
+      pcBoostLabel.textContent = typeof t === 'function' ? (t('boostLabel') || 'Laju Cepat') : 'Laju Cepat';
+    }
+    if (bStealthKeys) {
+      bStealthKeys.innerHTML = `<kbd class="kbd-badge font-bold px-1.5 py-0.5 bg-emerald-950/80 border-emerald-500/50 text-emerald-300">L3</kbd>`;
+    }
+    if (pcStealthLabel) {
+      pcStealthLabel.textContent = typeof t === 'function' ? (t('stealthLabel') || 'Siluman') : 'Siluman';
+    }
+    const bDockKey = document.getElementById('badgeDockKey');
+    if (bDockKey) {
+      bDockKey.textContent = isXbox ? 'Y' : '△';
+      bDockKey.className = 'kbd-badge font-bold px-1.5 py-0 bg-amber-950/80 border-amber-500/50 text-amber-300 shadow-sm text-[8px] sm:text-[9px]';
+    }
+    const bMapKey = document.getElementById('badgeMapKey');
+    if (bMapKey) {
+      bMapKey.textContent = isXbox ? 'View' : 'Touchpad';
+      bMapKey.className = 'kbd-badge font-bold px-1.5 py-0.5 bg-sky-950/90 border-sky-500/60 text-sky-300 shadow-sm text-[8px] sm:text-[9px] inline-flex';
+    }
+    const bInvKey = document.getElementById('badgeInvKey');
+    if (bInvKey) {
+      bInvKey.textContent = 'D-Pad ↓';
+      bInvKey.className = 'kbd-badge font-bold px-1.5 py-0.5 bg-amber-950/90 border-amber-500/60 text-amber-300 shadow-sm text-[8px] sm:text-[9px] inline-flex';
+    }
+    const bCargoBarKey = document.getElementById('badgeCargoBarKey');
+    if (bCargoBarKey) {
+      bCargoBarKey.textContent = 'D-Pad ↓';
+      bCargoBarKey.className = 'kbd-badge font-bold text-[8px] px-1.5 py-0.2 ml-auto inline-block bg-amber-950/90 border-amber-500/60 text-amber-300';
+    }
+
+    // Ensure PC Controls Bar is visible and Mobile Dock is hidden during active voyage with Gamepad
+    if (typeof isGameStarted !== 'undefined' && isGameStarted) {
+      const pcBar = document.getElementById('pcControlsBar');
+      if (pcBar) {
+        pcBar.classList.remove('hidden');
+        pcBar.style.display = 'flex';
+      }
+      const mobDock = document.getElementById('mobileControlsDock');
+      if (mobDock) {
+        mobDock.classList.add('hidden');
+        mobDock.style.display = 'none';
+      }
+    }
+  } else {
+    if (bFire) {
+      bFire.textContent = 'SPACE';
+      bFire.className = 'kbd-badge text-[7.5px] px-1 py-0 mt-0.5 pointer-events-none';
+    }
+    if (bMine) {
+      bMine.textContent = '2';
+      bMine.className = 'kbd-badge text-[7.5px] px-1 py-0 mt-0.5 pointer-events-none';
+    }
+    if (bSalvage) {
+      bSalvage.textContent = 'E';
+      bSalvage.className = 'kbd-badge text-[7.5px] px-1 py-0 mt-0.5 pointer-events-none';
+    }
+    if (bSpyglass) {
+      bSpyglass.textContent = 'F';
+      bSpyglass.className = 'kbd-badge text-[7.5px] px-1 py-0 mt-0.5 pointer-events-none';
+    }
+    if (bRepair) {
+      bRepair.textContent = 'R';
+      bRepair.className = 'kbd-badge text-[7.5px] px-1 py-0 mt-0.5 pointer-events-none';
+    }
+    if (bSteerKeys) {
+      bSteerKeys.innerHTML = `<kbd class="kbd-badge">W</kbd><kbd class="kbd-badge">A</kbd><kbd class="kbd-badge">S</kbd><kbd class="kbd-badge">D</kbd>`;
+    }
+    if (pcSteerLabel) {
+      pcSteerLabel.textContent = typeof t === 'function' ? (t('steerLabel') || 'Kemudi') : 'Kemudi';
+    }
+    if (bBoostKeys) {
+      bBoostKeys.innerHTML = `<kbd class="kbd-badge">Shift</kbd>`;
+    }
+    if (pcBoostLabel) {
+      pcBoostLabel.textContent = typeof t === 'function' ? (t('boostLabel') || 'Laju Cepat') : 'Laju Cepat';
+    }
+    if (bStealthKeys) {
+      bStealthKeys.innerHTML = `<kbd class="kbd-badge">Ctrl</kbd>`;
+    }
+    if (pcStealthLabel) {
+      pcStealthLabel.textContent = typeof t === 'function' ? (t('stealthLabel') || 'Siluman') : 'Siluman';
+    }
+    const bDockKey = document.getElementById('badgeDockKey');
+    if (bDockKey) {
+      bDockKey.textContent = 'U';
+      bDockKey.className = 'kbd-badge bg-black/80 text-amber-200 border-amber-400 text-[8px] sm:text-[9px]';
+    }
+    const bMapKey = document.getElementById('badgeMapKey');
+    if (bMapKey) {
+      bMapKey.textContent = 'M';
+      bMapKey.className = 'kbd-badge hidden sm:inline-flex';
+    }
+    const bInvKey = document.getElementById('badgeInvKey');
+    if (bInvKey) {
+      bInvKey.textContent = 'I';
+      bInvKey.className = 'kbd-badge hidden sm:inline-flex';
+    }
+    const bCargoBarKey = document.getElementById('badgeCargoBarKey');
+    if (bCargoBarKey) {
+      bCargoBarKey.textContent = 'I';
+      bCargoBarKey.className = 'kbd-badge text-[8px] px-1 py-0.2 ml-auto hidden sm:inline-block';
+    }
+
+    // Restore device-appropriate dock on keyboard
+    if (typeof isGameStarted !== 'undefined' && isGameStarted) {
+      const pcBar = document.getElementById('pcControlsBar');
+      const mobDock = document.getElementById('mobileControlsDock');
+      const isMob = typeof isMobileDevice === 'function' ? isMobileDevice() : (window.innerWidth < 1024);
+      if (pcBar) {
+        if (!isMob && window.innerWidth >= 1024) {
+          pcBar.classList.remove('hidden');
+          pcBar.style.display = 'flex';
+        } else {
+          pcBar.classList.add('hidden');
+          pcBar.style.display = 'none';
+        }
+      }
+      if (mobDock) {
+        if (isMob || window.innerWidth < 1024) {
+          mobDock.classList.remove('hidden', 'pointer-events-none');
+          mobDock.style.display = 'flex';
+        } else {
+          mobDock.classList.add('hidden');
+          mobDock.style.display = 'none';
+        }
+      }
+    }
+  }
+
+  // Update Help Modal status if open
+  const statusEl = document.getElementById('helpGamepadStatus');
+  if (statusEl) {
+    if (typeof connectedGamepadIndex !== 'undefined' && connectedGamepadIndex >= 0) {
+      const gName = (typeof connectedGamepadName !== 'undefined' && connectedGamepadName) ? connectedGamepadName : (isPS ? 'PlayStation Controller' : 'Xbox Controller');
+      statusEl.innerHTML = `
+        <div class="flex items-center gap-2 text-emerald-400 font-bold text-[11px]">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping inline-block"></span>
+          <span>TERHUBUNG: ${gName}</span>
+          <span class="text-[9px] px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-500/40">Haptik Siap</span>
+        </div>`;
+    } else {
+      statusEl.innerHTML = `
+        <div class="flex items-center gap-2 text-slate-400 font-semibold text-[11px]">
+          <span class="w-2 h-2 rounded-full bg-amber-400/80 inline-block"></span>
+          <span>SIAP TERHUBUNG: Sambungkan USB / Bluetooth & tekan sembarang tombol</span>
+        </div>`;
+    }
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.updateInputPromptGlyphs = updateInputPromptGlyphs;
+}
+
 

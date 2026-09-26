@@ -102,6 +102,11 @@ class SoundFX {
     this.battleMusicVolume = 0;
     this.targetBattleVolume = 0;
 
+    this.introMusicAudio = null;
+    this.introMusicVolume = 0;
+    this.targetIntroMusicVolume = 0;
+    this._introFadeTimer = null;
+
     this.rainAudio = null;
     this.denseFogAudio = null;
     this.bloodSeaAudio = null;
@@ -167,6 +172,9 @@ class SoundFX {
     if (this.battleMusicAudio) {
       this.battleMusicAudio.volume = this._muted ? 0 : Math.max(0, Math.min(1, this.battleMusicVolume * this.masterVolume * this.battleVolume * 0.92));
     }
+    if (this.introMusicAudio) {
+      this.introMusicAudio.volume = this._muted ? 0 : Math.max(0, Math.min(1, this.introMusicVolume * this.masterVolume));
+    }
     if (this._muted) {
       if (this.rainAudio) this.rainAudio.volume = 0;
       if (this.denseFogAudio) this.denseFogAudio.volume = 0;
@@ -229,6 +237,16 @@ class SoundFX {
       this.sfxMasterGain = this.ctx.createGain();
       this.sfxMasterGain.connect(this.masterLimiter);
       this.updateVolumeRatios();
+
+      // Pre-allocate 0.25s reusable noise buffer for crackles & explosions (eliminates runtime audio GC spikes)
+      if (!this._cachedNoiseBuffer025s) {
+        const noiseSamples = Math.floor(this.ctx.sampleRate * 0.25);
+        this._cachedNoiseBuffer025s = this.ctx.createBuffer(1, noiseSamples, this.ctx.sampleRate);
+        const noiseData = this._cachedNoiseBuffer025s.getChannelData(0);
+        for (let i = 0; i < noiseSamples; i++) {
+          noiseData[i] = (Math.random() * 2 - 1) * (Math.random() > 0.35 ? 1.0 : 0.08);
+        }
+      }
     }
     if (this.ctx && this.ctx.state === 'suspended') {
       this.ctx.resume();
@@ -328,6 +346,7 @@ class SoundFX {
     if (this.bloodSeaAudio) this.bloodSeaAudio.pause();
     if (this.corrosiveSizzleAudio) this.corrosiveSizzleAudio.pause();
     if (this.conquestFanfareAudio) this.conquestFanfareAudio.pause();
+    if (this.introMusicAudio) this.introMusicAudio.pause();
   }
 
   resumeAudio() {
@@ -657,6 +676,92 @@ class SoundFX {
         this.battleMusicAudio.pause();
       }
     }
+  }
+
+  stopBattleMusic() {
+    this.battleMusicVolume = 0;
+    this.targetBattleVolume = 0;
+    if (this.battleMusicAudio) {
+      try {
+        this.battleMusicAudio.pause();
+        this.battleMusicAudio.currentTime = 0;
+        this.battleMusicAudio.volume = 0;
+      } catch (err) {}
+    }
+  }
+
+  playIntroMusic() {
+    if (!this.introMusicAudio) {
+      this.introMusicAudio = new Audio('./sound effect/intro.mp3');
+      this.introMusicAudio.loop = false;
+    }
+    if (this._introFadeTimer) {
+      clearInterval(this._introFadeTimer);
+      this._introFadeTimer = null;
+    }
+    try {
+      this.introMusicAudio.currentTime = 0;
+    } catch(e) {}
+    this.introMusicVolume = 0;
+    this.targetIntroMusicVolume = 0.88;
+    if (!this._muted) {
+      this.introMusicAudio.volume = 0;
+      this.introMusicAudio.play().catch(() => {});
+    }
+    this._fadeIntroMusic(0, 0.88, 1.8);
+  }
+
+  fadeIntroMusicOut(durationSec = 6.0) {
+    this.targetIntroMusicVolume = 0;
+    this._fadeIntroMusic(this.introMusicVolume, 0, durationSec, () => {
+      if (this.introMusicAudio) {
+        try {
+          this.introMusicAudio.pause();
+          this.introMusicAudio.currentTime = 0;
+          this.introMusicAudio.volume = 0;
+        } catch(e) {}
+      }
+    });
+  }
+
+  stopIntroMusic(instant = false) {
+    this.targetIntroMusicVolume = 0;
+    if (instant) {
+      if (this._introFadeTimer) {
+        clearInterval(this._introFadeTimer);
+        this._introFadeTimer = null;
+      }
+      this.introMusicVolume = 0;
+      if (this.introMusicAudio) {
+        try {
+          this.introMusicAudio.pause();
+          this.introMusicAudio.currentTime = 0;
+          this.introMusicAudio.volume = 0;
+        } catch(e) {}
+      }
+    } else {
+      this.fadeIntroMusicOut(1.2);
+    }
+  }
+
+  _fadeIntroMusic(fromVol, toVol, durationSec, onEnd) {
+    if (this._introFadeTimer) clearInterval(this._introFadeTimer);
+    const startTime = performance.now();
+    const durationMs = Math.max(100, durationSec * 1000);
+    this._introFadeTimer = setInterval(() => {
+      const elapsed = performance.now() - startTime;
+      const progress = Math.min(1.0, elapsed / durationMs);
+      this.introMusicVolume = fromVol + (toVol - fromVol) * progress;
+      if (this.introMusicAudio) {
+        const eff = this._muted ? 0 : Math.max(0, Math.min(1, this.introMusicVolume * this.masterVolume));
+        this.introMusicAudio.volume = eff;
+      }
+      if (progress >= 1.0) {
+        clearInterval(this._introFadeTimer);
+        this._introFadeTimer = null;
+        if (typeof onEnd === 'function') onEnd();
+      }
+    }, 35);
   }
 
   playSeagullNear(x, y) {
@@ -1004,38 +1109,74 @@ class SoundFX {
     osc2.stop(now + 0.9);
   }
 
-  playGhostWisp() {
-    if (this.muted || !this.ctx) return;
+  playGhostWisp(x = null, y = null) {
+    if (this._muted || this.muted) return;
+    const gain = (x !== null && y !== null) ? this.getSpatialVolume(x, y, 1400, 0.65) : 0.45;
+    if (gain <= 0.01) return;
+    this.init();
+    if (!this.ctx) return;
     const now = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
+    const g = this.ctx.createGain();
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(440, now);
-    osc.frequency.exponentialRampToValueAtTime(220, now + 0.5);
-    gain.gain.setValueAtTime(0.25, now);
-    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
-    osc.connect(gain);
-    gain.connect(this.destinationNode);
+    osc.frequency.setValueAtTime(480, now);
+    osc.frequency.exponentialRampToValueAtTime(210, now + 0.5);
+    g.gain.setValueAtTime(gain * 0.4, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+    osc.connect(g);
+    g.connect(this.destinationNode);
     osc.start(now);
     osc.stop(now + 0.5);
-      osc.onended = () => { osc.disconnect(); gain.disconnect(); };
+    osc.onended = () => { try { osc.disconnect(); g.disconnect(); } catch (e) {} };
   }
 
-  playSpikeLaunch() {
-    if (this.muted || !this.ctx) return;
+  playSpikeLaunch(x = null, y = null) {
+    if (this._muted || this.muted) return;
+    const gain = (x !== null && y !== null) ? this.getSpatialVolume(x, y, 1400, 0.65) : 0.45;
+    if (gain <= 0.01) return;
+    this.init();
+    if (!this.ctx) return;
     const now = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
+    const g = this.ctx.createGain();
     osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(600, now);
+    osc.frequency.setValueAtTime(620, now);
     osc.frequency.exponentialRampToValueAtTime(110, now + 0.22);
-    gain.gain.setValueAtTime(0.3, now);
-    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.22);
-    osc.connect(gain);
-    gain.connect(this.destinationNode);
+    g.gain.setValueAtTime(gain * 0.45, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+    osc.connect(g);
+    g.connect(this.destinationNode);
     osc.start(now);
     osc.stop(now + 0.22);
-      osc.onended = () => { osc.disconnect(); gain.disconnect(); };
+    osc.onended = () => { try { osc.disconnect(); g.disconnect(); } catch (e) {} };
+  }
+
+  // Unified Unique Audio Dispatcher for all Weapon and Cannon Factions
+  playCannonType(type = 'standard', x = 0, y = 0) {
+    if (this._muted || this.muted) return;
+    switch (type) {
+      case 'wokou':
+        this.playRocketBarrage(x, y);
+        break;
+      case 'frost':
+      case 'viking':
+        this.playFrostThrow(x, y);
+        break;
+      case 'mist':
+        this.playGhostWisp(x, y);
+        break;
+      case 'chitin':
+      case 'blood':
+        this.playSpikeLaunch(x, y);
+        break;
+      case 'standard':
+      case 'pirate':
+      case 'iron':
+      case 'gold':
+      default:
+        this.playCannon(x, y);
+        break;
+    }
   }
 
   playHit(x, y) {
@@ -1169,8 +1310,8 @@ class SoundFX {
   }
 
   playRocketBarrage(x, y) {
-    if (this._muted) return;
-    const gain = this.getSpatialVolume(x, y, 1500, 0.68);
+    if (this._muted || this.muted) return;
+    const gain = this.getSpatialVolume(x, y, 1500, 0.72);
     if (gain <= 0.01) return;
 
     if (this.rocketVolleyBuffer) {
@@ -1179,18 +1320,41 @@ class SoundFX {
       this.init();
       if (!this.ctx) return;
       const now = this.ctx.currentTime;
+
+      // 1. Rising whistling rocket booster (kembang api meluncur)
       const osc = this.ctx.createOscillator();
       const g = this.ctx.createGain();
       osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(420, now);
-      osc.frequency.linearRampToValueAtTime(980, now + 0.18);
-      g.gain.setValueAtTime(gain * 0.35, now);
-      g.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+      osc.frequency.setValueAtTime(320 + Math.random() * 60, now);
+      osc.frequency.exponentialRampToValueAtTime(1250 + Math.random() * 200, now + 0.18);
+      g.gain.setValueAtTime(gain * 0.4, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
       osc.connect(g);
       g.connect(this.destinationNode);
       osc.start(now);
-      osc.stop(now + 0.22);
+      osc.stop(now + 0.24);
       osc.onended = () => { try { osc.disconnect(); g.disconnect(); } catch (e) {} };
+
+      // 2. Firecracker sizzle & crackle pop burst (mesiu kembang api meletup)
+      try {
+        if (this._cachedNoiseBuffer025s) {
+          const noiseSrc = this.ctx.createBufferSource();
+          noiseSrc.buffer = this._cachedNoiseBuffer025s;
+          const noiseFilter = this.ctx.createBiquadFilter();
+          noiseFilter.type = 'bandpass';
+          noiseFilter.frequency.setValueAtTime(1800, now + 0.06);
+          noiseFilter.Q.setValueAtTime(2.2, now + 0.06);
+          const noiseGain = this.ctx.createGain();
+          noiseGain.gain.setValueAtTime(gain * 0.35, now + 0.05);
+          noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.23);
+          noiseSrc.connect(noiseFilter);
+          noiseFilter.connect(noiseGain);
+          noiseGain.connect(this.destinationNode);
+          noiseSrc.start(now + 0.05);
+          noiseSrc.stop(now + 0.23);
+          noiseSrc.onended = () => { try { noiseSrc.disconnect(); noiseFilter.disconnect(); noiseGain.disconnect(); } catch (e) {} };
+        }
+      } catch (err) {}
     }
   }
 

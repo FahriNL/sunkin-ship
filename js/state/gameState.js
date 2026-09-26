@@ -3,12 +3,36 @@
    Player stats, Upgrades, Active Entities, Spiked Mines, Towers, & LocalStorage
    ========================================================================== */
 
+var lastTime = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+
+// Cinematic Camera State (Smooth camera override for intro & death recovery sequences)
+var cameraState = {
+  x: PLAYER_SPAWN.x,
+  y: PLAYER_SPAWN.y,
+  overrideActive: false,
+  zoomOverride: null
+};
+if (typeof window !== 'undefined') window.cameraState = cameraState;
+
+// Cinematic Seagull Flight Controller
+var cinematicFlightState = {
+  active: false,
+  type: 'new_game', // 'new_game' (with credits) or 'respawn' (without credits)
+  elapsed: 0,
+  duration: 14.0,
+  startPos: { x: 1800, y: 1400 },
+  endPos: { x: PLAYER_SPAWN.x, y: PLAYER_SPAWN.y },
+  seagull: null,
+  onComplete: null
+};
+if (typeof window !== 'undefined') window.cinematicFlightState = cinematicFlightState;
+
 let playerState = {
   x: PLAYER_SPAWN.x,
   y: PLAYER_SPAWN.y,
   angle: PLAYER_SPAWN.angle,
   hp: 100,
-  gold: 50,
+  gold: 25,
   bloodEssence: 0,
   kills: 0,
   salvages: 0,
@@ -17,10 +41,14 @@ let playerState = {
   inkedTimer: 0, // Kraken ink blindness timer
   whirlpoolPull: { x: 0, y: 0 }, // Leviathan whirlpool pull vector
   conqueredIslands: ['haven', 'shop_haven_senja', 'shop_karang_tengah', 'shop_ambang_kabut'],
+  clearedPirateIslands: [],
+  piratesKilledAtIsland: {},
+  waypointPin: null, // Custom player map navigation pin: { x, y }
   mapLevel: 1, // 1 to 4
   exploredSectors: {}, // { "x,y": true }
   isDockedAtPort: true,
   dockedPort: null,
+  dayTime: 8.0, // 08:00 AM (Morning)
   resources: {
     wood: 14,
     rope: 6,
@@ -30,7 +58,11 @@ let playerState = {
     mistOrb: 0,
     snowOrb: 0,
     firePowder: 0,
-    chitin: 0
+    chitin: 0,
+    sailCloth: 0,
+    bronze: 0,
+    krakenInk: 0,
+    leviathanBone: 0
   },
   cannonInventory: [],
   equippedCannons: [],
@@ -41,7 +73,8 @@ let playerState = {
     rearDefense: 0, // 0 = locked, 1-6 = unlocked & upgraded
     stealthCamo: 1, // 1-6
     relicSiphon: 1  // 1-6
-  }
+  },
+  playerDeathWreck: null // Active recoverable sunken shipwreck: { x, y, angle, deathTime, expiresAt, droppedGold, droppedBlood, droppedResources, droppedCannons }
 };
 
 // Global entities pool
@@ -76,6 +109,54 @@ let weatherState = {
   compassStatus: 'normal', // 'normal' | 'jitter' | 'blind' | 'corrupted'
   banner: { text: '', subtext: '', alpha: 0, timer: 0 },
   bloodCorrosionTimer: 0
+};
+
+// Dynamic 24-Hour Day/Night Cycle & Celestial Illumination State
+let dayNightState = {
+  time: 8.0, // Starts at 08:00 AM (Morning)
+  timeScale: 1.0,
+  isPaused: false,
+  phaseId: 'morning',
+  phaseName: 'Pagi',
+  phaseNameEn: 'Morning',
+  isDay: true,
+  activeCelestial: 'sun',
+  celestialAngle: 0,
+  celestialAlt: 45,
+  lightDirX: 1,
+  lightDirY: 0,
+  shadowDirX: -0.4,
+  shadowDirY: 0.8,
+  shadowOffsetX: -3,
+  shadowOffsetY: 6,
+  shadowVecX: -3,
+  shadowVecY: 6,
+  shadowLen: 8,
+  shadowAlpha: 0.42,
+  ambientMult: 1.0,
+  ambientRGB: [255, 255, 255],
+  waterTint: [0, 0, 2],
+  glintColor: [255, 255, 255],
+  specularIntensity: 0.7,
+  bioLum: 0.0,
+  isCosmicMirror: false,
+  cosmicIntensity: 0.0,
+  forcedCosmicMirror: false,
+  cosmicMeteors: []
+};
+
+// Gamepad Controller State & Active Input Device ('keyboard' | 'gamepad_xbox' | 'gamepad_ps')
+let activeInputDevice = 'keyboard';
+let connectedGamepadIndex = -1;
+let connectedGamepadName = "";
+
+// Gamepad 360° Omnidirectional Analog Joystick State (True Joystick Steering)
+const gamepadJoystickState = {
+  active: false,
+  angle: 0,
+  magnitude: 0,
+  boost: false,
+  stealth: false
 };
 
 // Game Difficulty State & Persistence (Easy, Medium/Default, Hard)
@@ -502,9 +583,9 @@ function seedWorldMerchants() {
 
 // Entity Factory for Ships and Abyssal Sea Monsters
 function createEnemyEntity(clanKey, tierIndex, x, y, angle, options = {}) {
-  const normClan = (clanKey === 'batavia') ? 'gold' : (clanKey || 'gold');
-  const clanData = CLAN_LORE[normClan] || CLAN_LORE.gold;
-  const tierData = clanData.tiers[Math.max(0, Math.min(2, tierIndex))];
+  const normClan = (clanKey === 'batavia') ? 'gold' : ((clanKey === 'uninhabited') ? 'pirate' : (clanKey || 'gold'));
+  const clanData = (typeof CLAN_LORE !== 'undefined' && CLAN_LORE[normClan]) ? CLAN_LORE[normClan] : (CLAN_LORE.gold || {});
+  const tierData = (clanData.tiers && clanData.tiers[Math.max(0, Math.min(2, tierIndex))]) || { level: 1, name: 'Kapal Bajak Laut', hp: 70, speed: 2.6, damage: 14, radius: 24 };
   const isMonster = normClan === 'blood';
   const diffCfg = (typeof getDifficultyConfig === 'function') ? getDifficultyConfig() : { enemyHpMultiplier: 1.0 };
   const baseHp = options.hp || tierData.hp;
@@ -512,8 +593,8 @@ function createEnemyEntity(clanKey, tierIndex, x, y, angle, options = {}) {
 
   const monsterType = options.monsterType || (isMonster ? (tierIndex === 0 ? 'larva' : (tierIndex === 1 ? 'kraken' : 'leviathan')) : null);
   let speed = options.speed || tierData.speed;
-  let preferredDist = isMonster ? (100 + tierIndex * 30) : (clanKey === 'iron' ? (120 + tierIndex * 20) : (clanKey === 'viking' ? 95 : (clanKey === 'wokou' ? 220 : (180 + tierIndex * 35))));
-  let turnRate = isMonster ? 3.6 : (clanKey === 'wokou' ? 2.8 : (clanKey === 'viking' ? 2.5 : 2.2));
+  let preferredDist = isMonster ? (100 + tierIndex * 30) : (normClan === 'pirate' ? (130 + tierIndex * 25) : (normClan === 'iron' ? (120 + tierIndex * 20) : (normClan === 'viking' ? 95 : (normClan === 'wokou' ? 220 : (180 + tierIndex * 35)))));
+  let turnRate = isMonster ? 3.6 : (normClan === 'pirate' ? 3.0 : (normClan === 'wokou' ? 2.8 : (normClan === 'viking' ? 2.5 : 2.2)));
 
   if (monsterType === 'megalodon') {
     speed = options.speed || 3.8;
@@ -548,9 +629,9 @@ function createEnemyEntity(clanKey, tierIndex, x, y, angle, options = {}) {
     prevX: x,
     prevY: y,
     angle: angle,
-    clan: clanKey,
+    clan: normClan,
     tier: tierData.level,
-    name: options.name || tierData.name,
+    name: options.name || (normClan === 'pirate' && typeof getRandomPirateShipName === 'function' ? getRandomPirateShipName() : tierData.name),
     isMonster: isMonster,
     monsterType: monsterType,
     hp: scaledHp,
@@ -920,22 +1001,25 @@ let salvageProgress = 0;
 let screenShake = 0;
 let highestDetectionLevel = 0; // 0 to 1 for HUD stealth bar
 let battleIntensityLevel = 0;  // 0 to 1 for battle music fading
+let isSpyglassActive = false;  // AAA Nautical Spyglass long-range reconnaissance mode
 
 // Save & Load Generational World Map
-function saveWorldGeneration() {
+function saveWorldGeneration(slot = currentSaveSlot) {
   try {
-    localStorage.setItem(WORLD_GEN_KEY, JSON.stringify({
+    const payload = JSON.stringify({
       seed: currentWorldGenSeed,
       genNumber: currentWorldGenNumber
-    }));
+    });
+    localStorage.setItem(getWorldGenSlotKey(slot), payload);
+    localStorage.setItem(WORLD_GEN_KEY, payload);
   } catch (e) {
     console.warn("World gen save error:", e);
   }
 }
 
-function loadWorldGeneration() {
+function loadWorldGeneration(slot = currentSaveSlot) {
   try {
-    const raw = localStorage.getItem(WORLD_GEN_KEY);
+    const raw = localStorage.getItem(getWorldGenSlotKey(slot)) || localStorage.getItem(WORLD_GEN_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && parsed.seed) {
@@ -950,16 +1034,19 @@ function loadWorldGeneration() {
 }
 
 // Hardcore Roguelike Reset: Wipes upgrades, stats, currencies, generates fresh procedural world
-function resetRoguelikeRun() {
+function resetRoguelikeRun(slot = currentSaveSlot) {
+  currentSaveSlot = slot;
+  localStorage.setItem('SUNKEN_SHIP_ACTIVE_SLOT', slot);
   // 1. Procedural Generational World Generation
   currentWorldGenNumber = (currentWorldGenNumber || 1) + 1;
   const newSeed = Math.floor(Math.random() * 10000000) + 1;
   generateGenerationalWorld(newSeed, currentWorldGenNumber);
-  saveWorldGeneration();
+  saveWorldGeneration(slot);
 
   playerState.x = PLAYER_SPAWN.x;
   playerState.y = PLAYER_SPAWN.y;
   playerState.angle = PLAYER_SPAWN.angle;
+  playerState.hasDepartedInitialPort = false;
   playerState.gold = 50;
   playerState.bloodEssence = 0;
   playerState.kills = 0;
@@ -973,19 +1060,42 @@ function resetRoguelikeRun() {
     stealthCamo: 1,
     relicSiphon: 1
   };
+  playerState.resources = {
+    wood: 14,
+    rope: 6,
+    iron: 5,
+    stone: 4,
+    bamboo: 0,
+    mistOrb: 0,
+    snowOrb: 0,
+    firePowder: 0,
+    chitin: 0,
+    sailCloth: 0,
+    bronze: 0,
+    krakenInk: 0,
+    leviathanBone: 0
+  };
   playerState.hp = getStatValue('hull', 1);
   playerState.speedSnareTimer = 0;
 
   playerState.conqueredIslands = ['haven', 'shop_haven_senja', 'shop_karang_tengah', 'shop_ambang_kabut'];
+  playerState.clearedPirateIslands = [];
+  playerState.piratesKilledAtIsland = {};
+  playerState.waypointPin = null;
   playerState.mapLevel = 1;
   playerState.exploredSectors = {};
   playerState.isDockedAtPort = true;
   playerState.dockedPort = null;
+  playerState.playerDeathWreck = null;
+  if (typeof window !== 'undefined') {
+    window.shouldPlayCinematicPrologue = true;
+  }
 
   // Reset conquered state on world islands
   WORLD_ISLANDS.forEach(isl => {
     if (!isl.isHomePort && !isl.isShopIsland) {
       isl.isConquered = false;
+      isl.isPirateCleared = false;
     }
   });
 
@@ -1004,18 +1114,26 @@ function resetRoguelikeRun() {
   entities.seaRipples = [];
   entities.floatingTexts = [];
 
-  // Reset Regional Weather to calm state
+  // Reset Regional Weather to calm state with generous peaceful buffer
   if (typeof weatherState !== 'undefined') {
     weatherState.type = 'clear';
     weatherState.targetType = 'clear';
     weatherState.intensity = 0;
     weatherState.timer = 0;
-    weatherState.cooldown = 25.0;
+    weatherState.cooldown = 120.0; // 2 minutes of peaceful sailing before first weather event
     weatherState.windDrift = { x: 0, y: 0 };
     weatherState.activeStrikes = [];
     weatherState.compassStatus = 'normal';
     weatherState.banner = { text: '', subtext: '', alpha: 0, timer: 0 };
     weatherState.bloodCorrosionTimer = 0;
+  }
+
+  // Reset Day/Night Cycle to 8:00 AM (Fresh Morning Sailing)
+  if (typeof dayNightState !== 'undefined') {
+    dayNightState.time = 8.0;
+    dayNightState.timeScale = 1.0;
+    dayNightState.isPaused = false;
+    playerState.dayTime = 8.0;
   }
 
   // Seed live starting world formations across the ocean rings
@@ -1046,13 +1164,15 @@ function resetRoguelikeRun() {
   currentSalvagingShip = null;
   salvageProgress = 0;
   screenShake = 0;
+  isSpyglassActive = false;
   hasEnteredBloodSeaThisRun = false;
   activeTreasureHint = null;
   windAngle = Math.random() * Math.PI * 2;
 
   // 5. Perma-Death Storage Reset
   try {
-    localStorage.removeItem(SAVE_KEY);
+    localStorage.removeItem(getSaveSlotKey(slot));
+    if (slot === 1) localStorage.removeItem(SAVE_KEY);
     saveGame();
   } catch (e) {
     console.warn("Roguelike wipe storage error:", e);
@@ -1064,19 +1184,21 @@ function resetRoguelikeRun() {
   }
 
   if (typeof showToast === 'function') {
-    showToast(`Dunia Baru Terbangkit: Generasi #${currentWorldGenNumber}`, "compass");
+    showToast(`Dunia Baru: Generasi #${currentWorldGenNumber}`, "compass");
   }
 }
 
-function loadSavedGame() {
+function loadSavedGame(slot = currentSaveSlot) {
   try {
-    const genLoaded = loadWorldGeneration();
+    currentSaveSlot = slot;
+    localStorage.setItem('SUNKEN_SHIP_ACTIVE_SLOT', slot);
+    const genLoaded = loadWorldGeneration(slot);
     if (!genLoaded) {
       generateGenerationalWorld(currentWorldGenSeed, currentWorldGenNumber);
-      saveWorldGeneration();
+      saveWorldGeneration(slot);
     }
 
-    const data = localStorage.getItem(SAVE_KEY);
+    const data = localStorage.getItem(getSaveSlotKey(slot)) || (slot === 1 ? localStorage.getItem(SAVE_KEY) : null);
     if (data) {
       const parsed = JSON.parse(data);
       playerState = { 
@@ -1087,20 +1209,55 @@ function loadSavedGame() {
       if (!Array.isArray(playerState.conqueredIslands)) {
         playerState.conqueredIslands = ['haven', 'shop_haven_senja', 'shop_karang_tengah', 'shop_ambang_kabut'];
       }
+      if (!Array.isArray(playerState.clearedPirateIslands)) playerState.clearedPirateIslands = [];
+      if (!playerState.piratesKilledAtIsland || typeof playerState.piratesKilledAtIsland !== 'object') {
+        playerState.piratesKilledAtIsland = {};
+      }
+      if (playerState.waypointPin && (typeof playerState.waypointPin.x !== 'number' || typeof playerState.waypointPin.y !== 'number')) {
+        playerState.waypointPin = null;
+      }
       if (!playerState.mapLevel) playerState.mapLevel = 1;
       if (!playerState.exploredSectors) playerState.exploredSectors = {};
 
       // Migrate & ensure survival resources integrity
+      const defRes = {
+        wood: 14, rope: 6, iron: 5, stone: 4, bamboo: 0,
+        mistOrb: 0, snowOrb: 0, firePowder: 0, chitin: 0,
+        sailCloth: 0, bronze: 0, krakenInk: 0, leviathanBone: 0
+      };
       if (!playerState.resources || typeof playerState.resources !== 'object') {
-        playerState.resources = { wood: 14, rope: 6, iron: 5, stone: 4, bamboo: 0, mistOrb: 0, snowOrb: 0, firePowder: 0, chitin: 0 };
+        playerState.resources = { ...defRes };
       } else {
-        const defRes = { wood: 14, rope: 6, iron: 5, stone: 4, bamboo: 0, mistOrb: 0, snowOrb: 0, firePowder: 0, chitin: 0 };
         for (const k in defRes) {
           if (typeof playerState.resources[k] !== 'number') playerState.resources[k] = defRes[k];
         }
       }
       if (!Array.isArray(playerState.cannonInventory)) playerState.cannonInventory = [];
       if (!Array.isArray(playerState.equippedCannons)) playerState.equippedCannons = [];
+
+      // Ensure all equipped and cargo cannons have level property and valid maxDurability
+      playerState.equippedCannons.forEach(c => {
+        if (!c) return;
+        if (!c.level) c.level = 1;
+        const targetMax = (typeof getCannonMaxDurability === 'function') 
+          ? getCannonMaxDurability(c.type, c.level) 
+          : (c.maxDurability || 180);
+        if (c.maxDurability < targetMax) {
+          c.maxDurability = targetMax;
+          c.durability = Math.max(c.durability, targetMax);
+        }
+      });
+      playerState.cannonInventory.forEach(c => {
+        if (!c) return;
+        if (!c.level) c.level = 1;
+        const targetMax = (typeof getCannonMaxDurability === 'function') 
+          ? getCannonMaxDurability(c.type, c.level) 
+          : (c.maxDurability || 180);
+        if (c.maxDurability < targetMax) {
+          c.maxDurability = targetMax;
+          c.durability = Math.max(c.durability, targetMax);
+        }
+      });
 
       // Ensure player has starter cannon equipped if slots are empty
       const maxSlots = getMaxCannonSlots(playerState.upgrades.cannons || 1);
@@ -1109,8 +1266,9 @@ function loadSavedGame() {
           id: 'starter_gun_1',
           type: 'standard',
           name: 'Meriam Besi Standar',
-          durability: 90,
-          maxDurability: 90
+          level: 1,
+          durability: 180,
+          maxDurability: 180
         });
       }
       if (playerState.equippedCannons.length > maxSlots) {
@@ -1129,6 +1287,37 @@ function loadSavedGame() {
       playerState.y = PLAYER_SPAWN.y;
       playerState.angle = PLAYER_SPAWN.angle;
       playerState.hp = getStatValue('hull', playerState.upgrades.hull);
+      if (typeof playerState.dayTime === 'number' && typeof dayNightState !== 'undefined') {
+        dayNightState.time = playerState.dayTime;
+      }
+
+      // Re-hydrate active player death shipwreck into live sea entities
+      if (playerState.playerDeathWreck) {
+        if (Date.now() < playerState.playerDeathWreck.expiresAt) {
+          const w = playerState.playerDeathWreck;
+          entities.sunkenShips = entities.sunkenShips.filter(s => !s.isPlayerDeathWreck);
+          entities.sunkenShips.push({
+            id: 'player_death_wreck_' + (w.deathTime || Date.now()),
+            x: w.x,
+            y: w.y,
+            angle: w.angle || 0,
+            radius: 40,
+            salvageTime: 4.0,
+            salvaged: false,
+            isAbyssal: Math.hypot(w.x, w.y) >= 75000,
+            isGuarded: false,
+            isPlayerDeathWreck: true,
+            goldReward: w.droppedGold || 0,
+            bloodReward: w.droppedBlood || 0,
+            droppedResources: w.droppedResources || {},
+            droppedCannons: w.droppedCannons || [],
+            deathTime: w.deathTime,
+            expiresAt: w.expiresAt
+          });
+        } else {
+          playerState.playerDeathWreck = null;
+        }
+      }
     } else {
       // First-time new game state setup
       if (playerState.equippedCannons.length === 0) {
@@ -1136,8 +1325,9 @@ function loadSavedGame() {
           id: 'starter_gun_1',
           type: 'standard',
           name: 'Meriam Besi Standar',
-          durability: 90,
-          maxDurability: 90
+          level: 1,
+          durability: 180,
+          maxDurability: 180
         });
       }
     }
@@ -1154,10 +1344,128 @@ function loadSavedGame() {
 
 function saveGame() {
   try {
-    localStorage.setItem(SAVE_KEY, JSON.stringify(playerState));
+    if (typeof dayNightState !== 'undefined') {
+      playerState.dayTime = dayNightState.time;
+    }
+    const raw = JSON.stringify(playerState);
+    localStorage.setItem(getSaveSlotKey(currentSaveSlot), raw);
+    if (currentSaveSlot === 1) localStorage.setItem(SAVE_KEY, raw);
   } catch (e) {
     console.warn("Save write failed:", e);
   }
+}
+
+function deleteSaveSlot(slot) {
+  try {
+    localStorage.removeItem(getSaveSlotKey(slot));
+    localStorage.removeItem(getWorldGenSlotKey(slot));
+    if (slot === 1) localStorage.removeItem(SAVE_KEY);
+    if (slot === currentSaveSlot) {
+      resetPlayerToHaven();
+    }
+  } catch (e) {
+    console.warn("Delete save slot failed:", e);
+  }
+}
+
+// Souls-like Death & Sunken Shipwreck Overhaul
+function createDeathShipwreck() {
+  const droppedRes = { ...(playerState.resources || {}) };
+  const droppedGold = playerState.gold || 0;
+  const droppedBlood = playerState.bloodEssence || 0;
+  const droppedCannons = playerState.cannonInventory ? [...playerState.cannonInventory] : [];
+  const expiresAt = Date.now() + 9 * 60 * 1000; // 9 minutes lifespan
+
+  const deathWreck = {
+    id: 'player_death_wreck_' + Date.now(),
+    x: playerState.x,
+    y: playerState.y,
+    angle: playerState.angle || 0,
+    radius: 40,
+    salvageTime: 4.0,
+    salvaged: false,
+    isAbyssal: Math.hypot(playerState.x, playerState.y) >= 75000,
+    isGuarded: false,
+    isPlayerDeathWreck: true,
+    goldReward: droppedGold,
+    bloodReward: droppedBlood,
+    droppedResources: droppedRes,
+    droppedCannons: droppedCannons,
+    deathTime: Date.now(),
+    expiresAt: expiresAt
+  };
+
+  playerState.playerDeathWreck = {
+    x: playerState.x,
+    y: playerState.y,
+    angle: playerState.angle || 0,
+    deathTime: Date.now(),
+    expiresAt: expiresAt,
+    droppedGold: droppedGold,
+    droppedBlood: droppedBlood,
+    droppedResources: droppedRes,
+    droppedCannons: droppedCannons
+  };
+
+  // Strip player cargo and resources upon sinking
+  playerState.gold = 0;
+  playerState.bloodEssence = 0;
+  if (playerState.resources) {
+    for (const k in playerState.resources) {
+      playerState.resources[k] = 0;
+    }
+  }
+  playerState.cannonInventory = [];
+
+  // Register in live entities.sunkenShips pool (100% visually identical)
+  if (typeof entities !== 'undefined' && Array.isArray(entities.sunkenShips)) {
+    entities.sunkenShips = entities.sunkenShips.filter(s => !s.isPlayerDeathWreck);
+    entities.sunkenShips.push(deathWreck);
+  }
+
+  saveGame();
+  return deathWreck;
+}
+
+function respawnAfterDeath() {
+  playerState.x = PLAYER_SPAWN.x;
+  playerState.y = PLAYER_SPAWN.y;
+  playerState.angle = PLAYER_SPAWN.angle;
+  playerState.vx = 0;
+  playerState.vy = 0;
+  playerState.speed = 0;
+  playerState.targetSpeed = 0;
+  playerState.hasDepartedInitialPort = false;
+
+  // Restore max HP based on current hull upgrade
+  const maxHp = (typeof getStatValue === 'function') 
+    ? getStatValue('hull', (playerState.upgrades && playerState.upgrades.hull) ? playerState.upgrades.hull : 1)
+    : (100 + (((playerState.upgrades && playerState.upgrades.hull) ? playerState.upgrades.hull : 1) - 1) * 35);
+  playerState.hp = maxHp;
+  playerState.speedSnareTimer = 0;
+  playerState.inkedTimer = 0;
+
+  playerState.isDockedAtPort = true;
+  playerState.dockedPort = 'haven';
+
+  highestDetectionLevel = 0;
+  battleIntensityLevel = 0;
+  currentSalvagingShip = null;
+  salvageProgress = 0;
+  screenShake = 0;
+  isSpyglassActive = false;
+
+  // Peaceful weather buffer
+  if (typeof weatherState !== 'undefined') {
+    weatherState.type = 'clear';
+    weatherState.targetType = 'clear';
+    weatherState.intensity = 0;
+    weatherState.timer = 0;
+    weatherState.cooldown = 120.0;
+  }
+
+  saveGame();
+  if (typeof updateHUD === 'function') updateHUD();
 }
 
 function getMaxCannonSlots(level) {
@@ -1178,11 +1486,12 @@ function getStatValue(type, level) {
 
 function getShipTier() {
   const sum = Object.values(playerState.upgrades).reduce((a, b) => a + b, 0);
+  const isEn = (typeof currentLanguage !== 'undefined' && currentLanguage === 'en');
   if (sum >= 30) return { name: "Leviathan Slayer", rank: 5, color: "#f43f5e" };
-  if (sum >= 23) return { name: "Galleon Perang Besi", rank: 4, color: "#a855f7" };
-  if (sum >= 16) return { name: "Brigantine Tempur", rank: 3, color: "#38bdf8" };
-  if (sum >= 9)  return { name: "Caravel Penjelajah", rank: 2, color: "#34d399" };
-  return { name: "Sekoci Pemburu", rank: 1, color: "#fbbf24" };
+  if (sum >= 23) return { name: isEn ? "Iron War Galleon" : "Galleon Perang Besi", rank: 4, color: "#a855f7" };
+  if (sum >= 16) return { name: isEn ? "Combat Brigantine" : "Brigantine Tempur", rank: 3, color: "#38bdf8" };
+  if (sum >= 9)  return { name: isEn ? "Explorer Caravel" : "Caravel Penjelajah", rank: 2, color: "#34d399" };
+  return { name: isEn ? "Hunter Sloop" : "Sekoci Pemburu", rank: 1, color: "#fbbf24" };
 }
 
 function canAcceptResource(resKey) {
@@ -1200,7 +1509,7 @@ function addPlayerResource(resKey, amount) {
   if (!playerState.resources) playerState.resources = {};
   if (!canAcceptResource(resKey)) {
     if (typeof showToast === 'function') {
-      showToast("Pundi Kargo Penuh! Tidak dapat menampung jenis barang baru.", "alert");
+      showToast(typeof t === 'function' ? t('toastCargoFull') : "Pundi Kargo Penuh! Tidak dapat menampung jenis barang baru.", "alert");
     }
     return false;
   }

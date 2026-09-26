@@ -17,7 +17,13 @@ function fireCannons(source, target = null, isPlayer = false, customAimAngle = n
   if (isPlayer && now - lastFireTime < reloadDelay) return;
   if (isPlayer) lastFireTime = now;
 
-  sound.playCannon(source.x, source.y);
+  if (!isPlayer) {
+    if (typeof sound !== 'undefined' && typeof sound.playCannonType === 'function') {
+      sound.playCannonType(source.clan || 'standard', source.x, source.y);
+    } else if (typeof sound !== 'undefined') {
+      sound.playCannon(source.x, source.y);
+    }
+  }
 
   let angles = [source.angle - Math.PI / 2, source.angle + Math.PI / 2];
 
@@ -75,10 +81,20 @@ function fireCannons(source, target = null, isPlayer = false, customAimAngle = n
   if (isPlayer) {
     const activeCannons = (playerState.equippedCannons || []).filter(c => c && c.durability > 0);
     if (activeCannons.length === 0) {
-      showToast("Meriam kapal kosong atau aus! Buka Galangan Kapal [U] / Inventori [I].", "alert");
+      showToast(typeof t === 'function' ? t('toastCannonsEmptyOrJammed') : "Meriam kapal kosong atau aus! Buka Galangan Kapal [U] / Inventori [I].", "alert");
       if (typeof sound !== 'undefined' && typeof sound.playSplash === 'function') sound.playSplash();
       return;
     }
+
+    // Play distinct weapon sound effect for each unique equipped cannon type!
+    const firedTypes = new Set(activeCannons.map(c => c.type || 'standard'));
+    firedTypes.forEach(t => {
+      if (typeof sound !== 'undefined' && typeof sound.playCannonType === 'function') {
+        sound.playCannonType(t, source.x, source.y);
+      } else if (typeof sound !== 'undefined') {
+        sound.playCannon(source.x, source.y);
+      }
+    });
 
     angles.forEach(sideAngle => {
       const muzzleX = source.x + Math.cos(sideAngle) * (source.radius || 20);
@@ -107,26 +123,24 @@ function fireCannons(source, target = null, isPlayer = false, customAimAngle = n
         const count = activeCannons.length;
         const spread = (idx - (count - 1) / 2) * 0.14;
         const fireDir = sideAngle + spread;
-        const dmg = cConf.damage * (diffCfg.playerDamageDealtMult || 1);
+        const baseDmg = (typeof getCannonDamage === 'function') ? getCannonDamage(c) : (cConf.damage || 22);
+        const dmg = baseDmg * (diffCfg.playerDamageDealtMult || 1);
 
         if (c.type === 'wokou') {
-          // Wokou Bamboo Rocket Salvo (3 rapid burst rockets)
-          for (let r = 0; r < 3; r++) {
-            const rSpread = fireDir + (r - 1) * 0.08;
-            entities.projectiles.push({
-              type: 'rocket_arrow',
-              sourceClan: 'player',
-              x: muzzleX,
-              y: muzzleY,
-              vx: Math.cos(rSpread) * 8.6,
-              vy: Math.sin(rSpread) * 8.6,
-              angle: rSpread,
-              radius: 5,
-              damage: dmg * 0.45,
-              isPlayer: true,
-              life: 1.35
-            });
-          }
+          // Wokou Bamboo Fireworks Rocket (Single powerful rocket per side, total 2 per wokou cannon)
+          entities.projectiles.push({
+            type: 'rocket_arrow',
+            sourceClan: 'player',
+            x: muzzleX,
+            y: muzzleY,
+            vx: Math.cos(fireDir) * 8.6,
+            vy: Math.sin(fireDir) * 8.6,
+            angle: fireDir,
+            radius: 5,
+            damage: dmg,
+            isPlayer: true,
+            life: 1.35
+          });
         } else if (c.type === 'mist') {
           // Mist Spirit Occult Wisps (Homing towards nearest hostile enemy or tower)
           let mistTarget = null;
@@ -214,16 +228,18 @@ function fireCannons(source, target = null, isPlayer = false, customAimAngle = n
       if (c.durability <= 0) {
         c.durability = 0;
         const cConf = (typeof CANNON_TYPES !== 'undefined' && CANNON_TYPES[c.type]) ? CANNON_TYPES[c.type] : null;
+        const isEn = typeof currentLanguage !== 'undefined' && currentLanguage === 'en';
+        const cName = (isEn && cConf?.nameEn) ? cConf.nameEn : (cConf?.name || c.name || (isEn ? 'Cannon' : 'Meriam'));
         if (cConf && cConf.isOrbSpecial) {
           // Special Orb Cannon shatters completely and vanishes forever!
           playerState.equippedCannons.splice(cIdx, 1);
-          showToast(`${c.name} telah aus dan pecah hancur berkeping-keping!`, "skull");
-          addFloatingText("MERIAM PECAH!", playerState.x, playerState.y - 25, '#ef4444', true);
+          showToast(typeof t === 'function' ? t('toastCannonBroken', { name: cName }) : `${cName} telah aus dan pecah hancur berkeping-keping!`, "skull");
+          addFloatingText(typeof t === 'function' ? t('cannonBrokenFloat') : "MERIAM PECAH!", playerState.x, playerState.y - 25, '#ef4444', true);
           if (typeof sound !== 'undefined' && typeof sound.playHit === 'function') sound.playHit(playerState.x, playerState.y);
         } else {
           // Standard Cannon is jammed/worn out - needs port workshop refurbish
-          showToast(`${c.name} aus dan macet! Perlu perbaikan di pelabuhan.`, "alert");
-          addFloatingText("MERIAM MACET!", playerState.x, playerState.y - 25, '#f59e0b', true);
+          showToast(typeof t === 'function' ? t('toastCannonJammed', { name: cName }) : `${cName} aus dan macet! Perlu perbaikan di pelabuhan.`, "alert");
+          addFloatingText(typeof t === 'function' ? t('cannonJammedFloat') : "MERIAM MACET!", playerState.x, playerState.y - 25, '#f59e0b', true);
         }
       }
     }
@@ -307,7 +323,7 @@ function triggerPlayerRearDefense() {
       radius: 12,
       life: 8.0
     });
-    showToast("Ranjau Mesiu Dilepas ke Belakang!", "rearDefense");
+    showToast(typeof t === 'function' ? t('toastMineDeployed') : "Ranjau Mesiu Dilepas ke Belakang!", "rearDefense");
   }
 }
 

@@ -3,9 +3,800 @@
    Upgrades, Clans, Lore, Islands, & Biome Constants (Emoji-Free / SVG Powered)
    ========================================================================== */
 
-const SAVE_KEY = 'BLOOD_SEA_SAVE_DATA_v2';
+let currentSaveSlot = parseInt(localStorage.getItem('SUNKEN_SHIP_ACTIVE_SLOT') || '1', 10);
+if (isNaN(currentSaveSlot) || currentSaveSlot < 1 || currentSaveSlot > 3) currentSaveSlot = 1;
+
+function getSaveSlotKey(slot = currentSaveSlot) {
+  return `SUNKEN_SHIP_SAVE_SLOT_${slot}`;
+}
+function getWorldGenSlotKey(slot = currentSaveSlot) {
+  return `SUNKEN_SHIP_WORLD_GEN_SLOT_${slot}`;
+}
+
+// Automatic Migration from legacy BLOOD_SEA_SAVE_DATA_v2 to Slot 1
+try {
+  if (!localStorage.getItem('SUNKEN_SHIP_SAVE_SLOT_1') && localStorage.getItem('BLOOD_SEA_SAVE_DATA_v2')) {
+    localStorage.setItem('SUNKEN_SHIP_SAVE_SLOT_1', localStorage.getItem('BLOOD_SEA_SAVE_DATA_v2'));
+  }
+} catch (e) {
+  console.warn("Save slot migration error:", e);
+}
+
+const SAVE_KEY = 'BLOOD_SEA_SAVE_DATA_v2'; // fallback legacy reference
 const SETTINGS_KEY = 'BLOOD_SEA_SETTINGS_v2';
 const DIFFICULTY_STORAGE_KEY = 'BLOOD_SEA_DIFFICULTY_v2';
+const WORLD_GEN_KEY = 'BLOOD_SEA_WORLD_GEN_v2';
+const LANGUAGE_STORAGE_KEY = 'SUNKEN_SHIP_LANGUAGE';
+
+let currentLanguage = localStorage.getItem(LANGUAGE_STORAGE_KEY) || 'id';
+if (currentLanguage !== 'id' && currentLanguage !== 'en') currentLanguage = 'id';
+
+// Comprehensive Localization Dictionary (Bahasa Indonesia & English)
+const TRANSLATIONS = {
+  id: {
+    // Brand & Main Menu
+    gameTitle: "SUNKEN SHIP",
+    diffLabel: "TINGKAT KESULITAN:",
+    playBtnText: "BERLAYAR SEKARANG",
+    playBtnSub: "PILIH SLOT & JELAJAHI SAMUDRA",
+    codexBtnText: "LOG & BESTIARY",
+    codexBtnTag: "DOKUMEN HISTORIS",
+    settingsBtnText: "PENGATURAN",
+    settingsBtnTag: "AUDIO & GRAFIS",
+    controlsBtnText: "PANDUAN KONTROL",
+    controlsBtnTag: "NAVIGASI & MERIAM",
+
+    // Save Slots
+    saveSlotsTitle: "SLOT PERJALANAN EKSPEDISI",
+    saveSlotsSubtitle: "Pilih slot data untuk memulai atau melanjutkan pelayaran",
+    slotEmptyBadge: "KOSONG",
+    slotActiveBadge: "AKTIF",
+    slotEmptyTitle: "Slot Kosong",
+    slotEmptyDesc: "Siap untuk petualangan baru",
+    newGame: "MULAI BARU",
+    continueGame: "LANJUTKAN",
+    deleteSlot: "HAPUS",
+    shipLabel: "Kapal:",
+    tierLabel: "Tingkat:",
+    hullLabel: "Lambung:",
+    wealthLabel: "Kekayaan:",
+    worldLabel: "Dunia:",
+    goldUnit: "Emas",
+    bloodUnit: "Darah",
+    confirmDeleteTitle: "HAPUS SLOT {slot}?",
+    confirmDeleteDesc: "Apakah Anda yakin ingin menghapus Slot {slot}? Seluruh data petualangan dan progres kapal pada slot ini akan dihapus secara permanen.",
+    cancel: "BATAL",
+    deleteConfirm: "HAPUS PERMANEN",
+
+    // Pause Menu
+    pauseTitle: "PERMAINAN DIHENTIKAN",
+    pauseSubtitle: "Kapal lego jangkar di samudra luas",
+    pauseFleetStatus: "STATUS ARMADA",
+    pauseHullIntegrity: "INTEGRITAS LAMBUNG",
+    pauseCargoCapacity: "KAPASITAS KARGO",
+    pauseWorldGen: "DUNIA LAUT DARAH",
+    pauseResume: "LANJUTKAN BERLAYAR (ESC)",
+    pauseInventory: "INVENTARIS & CRAFTING (I)",
+    pauseMap: "PETA SAMUDRA & KABUT (M)",
+    pauseCodex: "LOG HISTORIS & KLAN (L)",
+    pauseSettings: "PENGATURAN SUARA & GRAFIS",
+    pauseControls: "PANDUAN KONTROL & KEMUDI (H)",
+    pauseRestart: "MULAI ULANG PERMAINAN",
+    pauseReturnMenu: "KEMBALI KE MENU UTAMA",
+
+    // Settings Modal
+    settingsTitle: "PENGATURAN",
+    settingsSubtitle: "Audio, Grafis & Kontrol",
+    tabAudio: "SUARA",
+    tabGraphics: "GRAFIS",
+    tabGameplay: "GAMEPLAY & BAHASA",
+
+    // Audio Settings
+    masterVol: "Volume Utama (Master Volume)",
+    sfxVol: "Efek Suara (SFX Meriam, Ledakan & Tabrakan)",
+    seaAmbienceVol: "Suara Laut (Sea Ambience & Desau Angin)",
+    seaAmbienceDesc: "Gemuruh deburan ombak dan desau angin samudra purba.",
+    battleMusicVol: "Musik Pertempuran & Badai (Dynamic Battle Music)",
+    muteAll: "Senyapkan Semua Suara (Mute All)",
+    muteAllDesc: "Nonaktifkan seluruh suara dan musik permainan",
+
+    // Graphics Settings
+    graphicsPreset: "Preset Kualitas Grafis",
+    graphicsBuffer: "DPR & Rendering Buffer",
+    qualityHigh: "TINGGI",
+    qualityHighDesc: "DPR 2.0x • Partikel Penuh • Cahaya Halus (60 FPS)",
+    qualityMed: "SEIMBANG",
+    qualityMedDesc: "DPR 1.5x • Keseimbangan Visual & Performa",
+    qualityLow: "HEMAT BATERAI",
+    qualityLowDesc: "DPR 1.0x • Ringan GPU • Suhu Dingin di Ponsel",
+    fullscreenMode: "Mode Layar Penuh (Fullscreen)",
+    fullscreenDesc: "Buka permainan dalam layar penuh tanpa gangguan browser",
+    btnFullscreenToggle: "Aktifkan",
+    autoFullscreen: "Auto Fullscreen Saat Mulai Main",
+    autoFullscreenDesc: "Otomatis masuk layar penuh saat klik Berlayar",
+    screenShake: "Efek Guncangan Layar (Screen Shake)",
+    screenShakeDesc: "Getaran kamera saat ledakan & benturan lambung",
+
+    // Gameplay & Language
+    languageTitle: "Bahasa Permainan (Language)",
+    languageDesc: "Pilih bahasa pengantar antarmuka dan narasi.",
+    difficultyTitle: "Tingkat Kesulitan Ekspedisi",
+    diffEasy: "Mudah",
+    diffMedium: "Normal",
+    diffHard: "Sulit",
+    controlsGuideTitle: "Panduan Kontrol PC & Sentuh",
+    controlsGuideDesc: "Lihat diagram tombol kemudi, hotkey meriam, dan gestur layar",
+    btnOpenGuide: "Buka Panduan",
+    saveAndReturn: "SIMPAN & KEMBALI",
+
+    // Difficulty Descriptions
+    diffEasyDesc: "Petualangan santai: Kerusakan diterima -25%, damage meriam +20%, hadiah Koin & Darah +25%.",
+    diffMediumDesc: "Keseimbangan standar ekspedisi Laut Darah saat ini.",
+    diffHardDesc: "Kutukan Palung: Kerusakan diterima +35%, musuh lebih tangguh & agresif, hadiah Koin & Darah +50%.",
+
+    // Help & Lore
+    loreModalTitle: "KODEX 4 KLAN LAUT",
+    loreModalSubtitle: "Peta kekuasaan faksi bajak laut & teror palung abisal",
+    helpModalTitle: "PANDUAN KONTROL BAHARI PC",
+    helpModalSubtitle: "Kemudi kapal, laju layar, dan persenjataan keyboard & mouse",
+    helpCloseEsc: "Tekan Esc untuk menutup panduan",
+
+    // Loading & Game Over
+    loadingStatus: "Memuat Samudra...",
+    gameOverTitle: "KAPAL KARAM",
+    gameOverReason: "Armada Anda telah karam di kedalaman samudra.",
+    gameOverPermaText: "",
+    statMaxDist: "Jarak Terjauh:",
+    statKills: "Musuh Dikalahkan:",
+    statSalvages: "Bangkai Diselamatkan:",
+    respawnBtn: "RESPAWN",
+    cinematicCredits: [
+      { subtitle: "KARYA PERTAMA", title: "Dibuat oleh Iyodihhh" },
+      { subtitle: "TEKNOLOGI AGENTIK", title: "Vibe coded with Antigravity" },
+      { subtitle: "TATA SUARA & MUSIK", title: "Procedural Web Audio" },
+      { subtitle: "SAMUDRA TAK BERUJUNG", title: "Selamat Berlayar" }
+    ],
+
+    // In-game Toasts & HUD
+    toastGameStarted: "Petualangan Dimulai! Selamat Berlayar.",
+    toastGameResumed: "Selamat Datang Kembali, Kapten!",
+    toastSaved: "Progres Disimpan!",
+    toastSlotDeleted: "Slot {slot} berhasil dihapus.",
+    toastSettingsSaved: "Pengaturan Berhasil Disimpan",
+
+    // In-game HUD & Telemetry
+    throttleNeutral: "Netral",
+    throttleClear: "Layar Bersih",
+    throttleHalf: "Layar Setengah",
+    throttleFull: "Layar Penuh",
+    throttleStealth: "Layar Senyap",
+    throttleBoost: "Laju Cepat",
+    hullFirm: "Lambung Kokoh",
+    stealthSafe: "Aman",
+    stealthWarn: "Waspada",
+    stealthDetected: "Terdeteksi!",
+    hudPauseBtn: "JEDA",
+    hudMapBtn: "PETA",
+    hudBagBtn: "TAS",
+    hudCargoTitle: "KARGO",
+    hudCargoHoldTooltip: "Buka Pundi Kargo & Bengkel [I]",
+    hudSailingSpeed: "Kecepatan Berlayar",
+    hudGoldTitle: "Koin Emas Rampasan",
+    hudBloodTitle: "Darah Abisal",
+    spyglassTitle: "PENGINTAI CAKRAWALA",
+    spyglassExit: "[ESC] / [F] KELUAR TEROPONG",
+    divingSalvage: "Menyelam Bangkai...",
+
+    // Hotbars & Controls
+    hotbarSalvo: "SALVO",
+    hotbarMine: "BURITAN",
+    hotbarSalvage: "KATROL",
+    hotbarSpyglass: "TEROPONG",
+    hotbarRepair: "REPARASI",
+    hotbarSalvoTip: "Tembakan Meriam Salvo Lambung [SPACE]",
+    hotbarMineTip: "Peluncur Ranjau Buritan & Meriam Belakang [2]",
+    hotbarSalvageTip: "Katrol Derek Bangkai Kapal & Penarik Peti [E]",
+    hotbarSpyglassTip: "Teropong Samudra Jarak Jauh [F]",
+    hotbarRepairTip: "Reparasi Lambung Cepat (15 Koin) [R]",
+    pcSteer: "Kemudi",
+    pcBoost: "Laju Cepat",
+    pcStealth: "Siluman",
+    pcSpeedLabel: "LAJU:",
+    mobileSalvo: "SALVO",
+    mobileRepair: "REPAIR",
+    mobileMineTip: "Ranjau Buritan [2]",
+    mobileSalvageTip: "Katrol Derek [E]",
+    mobileSpyglassTip: "Teropong Samudra [F]",
+    mobileFireTip: "Tembak Meriam Broadside [Space]",
+
+    // Contextual Dock Prompt
+    dockPromptTitle: "GALANGAN KAPAL",
+    dockPromptSub: "Berlabuh di Pelabuhan",
+    dockedAt: "Berlabuh di {port}",
+
+    // Weather Intel
+    weatherIntelTitle: "Kondisi Samudra",
+    weatherForecast: "Prakiraan Cuaca Samudra",
+    weatherRemaining: "{time} tersisa",
+    weatherClearName: "Laut Tenang",
+    weatherClearDesc: "Angin sepoi-sepoi dan perairan bersahabat. Kemudi stabil tanpa hambatan cuaca.",
+    weatherOvercastName: "Langit Berawan",
+    weatherOvercastDesc: "Awan tebal meredupkan cakrawala samudra.",
+    weatherRainName: "Hujan Samudra",
+    weatherRainDesc: "Rintik hujan membasahi geladak, pengereman licin.",
+    weatherGaleName: "Angin Kencang",
+    weatherGaleDesc: "Hembusan angin kencang menyeret haluan kapal.",
+    weatherStormName: "Badai Gelombang",
+    weatherStormDesc: "Ombak ganas bergulung dan hempasan angin liar.",
+    weatherThunderName: "Badai Petir Maut",
+    weatherThunderDesc: "Kilat membelah langit, interferensi kompas terjadi.",
+    weatherMistName: "Kabut Halimun",
+    weatherMistDesc: "Kabut mistis perairan kutukan menyelimuti laut.",
+    weatherDenseFogName: "Kabut Padat Abisal",
+    weatherDenseFogDesc: "Pandangan tertutup pekat, musuh terselubung misteri.",
+    weatherBloodName: "Prahara Darah Neraka",
+    weatherBloodDesc: "Hujan darah korosif dan petir abisal merah.",
+
+    // Day/Night & Celestial Time
+    timePhase_predawn: "Fajar Awal",
+    timePhase_dawn: "Subuh",
+    timePhase_morning: "Pagi",
+    timePhase_noon: "Siang",
+    timePhase_afternoon: "Sore",
+    timePhase_sunset: "Senja (Matahari Terbenam)",
+    timePhase_dusk: "Lembayung Malam",
+    timePhase_night: "Malam",
+    timePhase_midnight: "Tengah Malam",
+    hudClockTooltipTitle: "Waktu & Astronomi Bahari",
+    hudClockTooltipDesc: "Siklus siang dan malam mengarahkan bayangan matahari, pantulan kemilau laut, serta visibilitas lentera.",
+    devTimeDawn: "Subuh (06:00)",
+    devTimeNoon: "Siang (12:00)",
+    devTimeSunset: "Sore (17:30)",
+    devTimeNight: "Malam (22:00)",
+    devTimeSpeed: "Kecepatan Waktu",
+    devTimePause: "Jeda Waktu",
+
+    // Shipyard & Upgrades
+    shipyardHeader: "GALANGAN KAPAL",
+    shipyardSub: "Pusat Arsitektur Kapal & Modifikasi Geladak",
+    shipyardAtPort: "Dermaga Berlabuh: {port}",
+    shipOverallTierTitle: "ARMADA SAAT INI:",
+    maxProgressLabel: "Kemajuan Armada:",
+    effLevel: "Tingkat Efektivitas",
+    archStage: "Tahap Arsitektur",
+    archLevelOf: "{lvl} dari {max} Tingkat",
+    vesselEffect: "Efek Kapal",
+    optimalPerf: "Performa Optimal",
+    effectiveBoost: "+Peningkatan Efektif",
+    upgradeCost: "Biaya Peningkatan:",
+    peakTierReached: "Telah Mencapai Tingkat Puncak!",
+    compartmentMaxed: "KOMPARTEMEN MAKSIMAL",
+    upgradeToLevel: "TINGKATKAN KE LEVEL {lvl}",
+    insufficientResources: "SUMBER DAYA TIDAK CUKUP",
+    upgradeCompleted: "SELESAI",
+    upgradeBtn: "TINGKATKAN",
+    insufficientBtn: "KURANG",
+    fleetPeakTier: "Tingkat Puncak Armada",
+    repairResources: "Reparasi (6 Kayu + 3 Tali)",
+    hullPrime: "Lambung Prima (100%)",
+    repairDockRequired: "Reparasi (Wajib di Dermaga)",
+    repairMissingMat: "Kurang Bahan ({wood}/6 Kayu, {rope}/3 Tali)",
+    repairGoldService: "Jasa Galangan (85 Koin)",
+    goldServiceDockReq: "Jasa (Wajib di Dermaga)",
+    goldServiceMissing: "Emas Kurang ({gold}/85 Koin)",
+    blueprintTitle: "SKEMA POTONGAN KAPAL (FLAGSHIP BLUEPRINT)",
+    selectCompartmentHint: "Pilih Kompartemen",
+    terminalTitle: "TERMINAL REKAYASA & PENINGKATAN",
+    terminalSub: "ARSITEKTUR ARMADA",
+    mobileUpgradeCardsTitle: "OPSI PENINGKATAN KAPAL",
+    mobileUpgradeCardsSub: "Pilih Modul & Ketuk Tingkatkan",
+
+    // Inventory & Forge Workshop
+    invTitle: "ARSENAL KAPAL & BENGKEL TEMPA",
+    invSubtitle: "Pundi Kargo 16 Slot • Manajemen Artileri Kapal • Peleburan & Tempa Senjata Faksi",
+    invSailingStatus: "Laut Lepas (Berlayar)",
+    invMooredStatus: "Berlabuh di {port}",
+    invAlmanacBtn: "ALMANAK RESEP",
+    invBackBtn: "KEMBALI",
+    invMobileCargo: "Pundi Kargo",
+    invMobileArmory: "Armori Geladak",
+    invMobileCraft: "Bengkel Tempa",
+    invCargoSection: "RUANG MUATAN KAPAL",
+    invFilterAll: "Semua",
+    invFilterRes: "Material",
+    invFilterWeap: "Senjata",
+    invSlotLabel: "Slot:",
+    invEmptySlot: "Slot Kosong",
+    invItemDetails: "DOSSIER & TINDAKAN BENDA",
+    invTapToInspect: "Pilih benda di dalam kargo untuk memeriksa detail, memasang senjata, atau membuang muatan.",
+    invEquipBtn: "PASANG",
+    invUnequipBtn: "LEPAS",
+    invDiscardBtn: "HAPUS / BUANG",
+    invArmorySection: "GELADAK ARTILERI KAPAL",
+    invArmorySub: "Konfigurasi senjata broadside dan daya hancur armada",
+    invMountPrompt: "Ketuk untuk Pasang Meriam",
+    invNoWeaponInCargo: "Belum Ada Senjata di Kargo",
+    invRepairCannon: "Reparasi",
+    invDurability: "Durabilitas Laras:",
+    invWorkshopSection: "BENGKEL TEMPA SENJATA",
+    invCraftPortReq: "Dermaga Saja",
+    invCraftWeapon: "RAKIT SENJATA",
+    invMissingMats: "Bahan Kurang",
+    invDockRequired: "Wajib di Dermaga",
+    invFormulaBlueprint: "Formula lengkap cetak biru:",
+    invOpenAlmanac: "Buka Almanak",
+    invFooterHint: "Tekan I untuk menutup inventori • Tempa meriam hingga Lv.5 untuk meningkatkan daya ledak & durabilitas 3x",
+    invToShipyard: "Menuju Galangan Kapal",
+    cannonPickerTitle: "PASANG MERIAM GELADAK",
+    cannonPickerSub: "Pilih senjata dari kargo untuk dipasang ke kapal",
+    cannonPickerFooter: "Rakit senjata faksi di Bengkel Dermaga",
+    cannonPickerClose: "Tutup",
+    cannonPickerMount: "Pasang",
+
+    // Sea Map
+    mapTitle: "BAGAN KARTOGRAFI SAMUDRA",
+    mapShipCoord: "Kapal: X: {x}, Y: {y}",
+    mapSector: "Sektor {sec}",
+    mapFogProgress: "KABUT SAMUDRA:",
+    mapPinActive: "Pin: Aktif",
+    mapPinOff: "Pin: Mati",
+    mapReturnSea: "KEMBALI KE LAUT",
+    mapInstruction: "Ketuk pulau untuk intelijen • Ketuk laut untuk pin • Geser & cubit untuk peta",
+    mapZoomIn: "Perbesar Peta (Zoom In)",
+    mapZoomOut: "Perkecil Peta (Zoom Out)",
+    mapCenterShip: "Pusatkan Pada Kapal Anda [C]",
+    mapResetZoom: "Reset Skala Peta (100%)",
+    mapClearPin: "Hapus Pin Navigasi",
+    mapLegendPlayer: "Kapal Anda",
+    mapLegendPin: "Pin Navigasi",
+    mapLegendHomePort: "Pelabuhan Asal",
+    mapLegendTrade: "Pasar Niaga",
+    mapLegendConquered: "Taklukan",
+    mapLegendPirate: "Sarang Bajak Laut / Klan Musuh",
+    mapLegendMerchant: "Saudagar",
+    mapTierLabel: "Tingkat Kartografi:",
+    mapUpgradeBtn: "Tingkatkan Peta ({cost} Koin)",
+    intelIslandName: "Nama Pulau",
+    intelShipDist: "JARAK KAPAL:",
+    intelCoords: "KOORDINAT:",
+    intelSafe: "Kondisi Wilayah: Bebas Bahaya",
+    intelThreatLow: "Kondisi Wilayah: Ancaman Ringan",
+    intelThreatHigh: "Kondisi Wilayah: Armada Berbahaya",
+    intelSetWaypoint: "TETAPKAN WAYPOINT",
+    intelCenterCamera: "Pusatkan Kamera ke Pulau Ini",
+
+    // Toasts
+    toastPinCleared: "Pin navigasi dihapus",
+    toastPinArrived: "Tiba di Titik Tujuan Pin Navigasi!",
+    toastWaypointSet: "Waypoint ditetapkan ke {island}! Jarak: {dist}m",
+    toastRepairDockOnly: "Reparasi lambung hanya dapat dilakukan saat berlabuh di pelabuhan/dermaga!",
+    toastRepairPrime: "Lambung kapal sudah dalam kondisi prima 100%!",
+    toastRepairResourceDone: "Lambung diperbaiki menggunakan 6 Kayu & 3 Tali!",
+    toastRepairNoMats: "Bahan baku tidak cukup! Butuh 6 Kayu & 3 Tali (Miliki: {wood} Kayu, {rope} Tali).",
+    toastRepairGoldDone: "Jasa galangan telah memperbaiki kapal! (-85 Koin)",
+    toastRepairNoGold: "Koin emas tidak mencukupi untuk jasa galangan (Butuh 85 Koin).",
+    toastCargoFull: "Pundi Kargo Penuh! Tidak dapat menampung jenis barang baru.",
+    toastNoCannonsInCargo: "Belum ada meriam di kargo! Rakit senjata faksi di Bengkel Rakit terlebih dahulu.",
+    toastGraphicChanged: "Kualitas Grafis Diubah: {label}",
+    toastCannonEquipped: "{name} berhasil dipasang ke Slot #{slot}!",
+    toastCannonUnequipped: "{name} dilepas ke kargo.",
+    toastCannonCrafted: "{name} berhasil dirakit & disimpan di kargo!",
+    toastCannonRepaired: "Meriam berhasil diperbaiki!",
+    toastItemDiscarded: "{name} dibuang dari kargo.",
+    toastMapUpgraded: "Peta berhasil ditingkatkan! Jangkauan kabut berkurang.",
+    toastCannonsEmptyOrJammed: "Meriam kapal kosong atau aus! Buka Galangan Kapal [U] / Inventori [I].",
+    toastCannonBroken: "{name} telah aus dan pecah hancur berkeping-keping!",
+    toastCannonJammed: "{name} aus dan macet! Perlu perbaikan di pelabuhan.",
+    cannonBrokenFloat: "MERIAM PECAH!",
+    cannonJammedFloat: "MERIAM MACET!",
+    toastMineDeployed: "Ranjau Mesiu Dilepas ke Belakang!",
+    toastUpgradeSternNeeded: "Tingkatkan Kompartemen Buritan di Galangan!",
+    toastSpyglassActive: "Teropong Samudra Aktif [F]",
+    toastDockedReady: "Berlabuh di {port}: Galangan kapal siap melayani!",
+    toastUpgraded: "{name} ditingkatkan ke Lv.{level}!",
+    toastNotEnoughUpgrade: "Emas atau Esensi Darah Anda tidak mencukupi untuk peningkatan ini.",
+    toastGamepadConnected: "Kontroler Terhubung: {name}",
+    toastGamepadDisconnected: "Kontroler Terputus!",
+    toastCosmicMirrorStarted: "Fenomena Laut Kaca Bimasakti! Samudra mencerminkan kubah kosmos.",
+    helpTabKeyboard: "KEYBOARD & MOUSE (PC)",
+    helpTabGamepad: "KONTROLER / GAMEPAD",
+    steerLabel: "Kemudi",
+    steerJoystickLabel: "Joystick 360°",
+    boostLabel: "Laju Cepat",
+    stealthLabel: "Siluman"
+  },
+  en: {
+    // Brand & Main Menu
+    gameTitle: "SUNKEN SHIP",
+    diffLabel: "DIFFICULTY:",
+    playBtnText: "SET SAIL NOW",
+    playBtnSub: "SELECT SLOT & EXPLORE OCEANS",
+    codexBtnText: "LOG & BESTIARY",
+    codexBtnTag: "HISTORICAL ARCHIVES",
+    settingsBtnText: "SETTINGS",
+    settingsBtnTag: "AUDIO & GRAPHICS",
+    controlsBtnText: "CONTROLS GUIDE",
+    controlsBtnTag: "NAVIGATION & CANNONS",
+
+    // Save Slots
+    saveSlotsTitle: "EXPEDITION VOYAGE SLOTS",
+    saveSlotsSubtitle: "Select a save slot to embark or resume your voyage",
+    slotEmptyBadge: "EMPTY",
+    slotActiveBadge: "ACTIVE",
+    slotEmptyTitle: "Empty Slot",
+    slotEmptyDesc: "Ready for a new adventure",
+    newGame: "NEW GAME",
+    continueGame: "CONTINUE",
+    deleteSlot: "DELETE",
+    shipLabel: "Ship:",
+    tierLabel: "Tier:",
+    hullLabel: "Hull:",
+    wealthLabel: "Wealth:",
+    worldLabel: "World:",
+    goldUnit: "Gold",
+    bloodUnit: "Blood",
+    confirmDeleteTitle: "DELETE SLOT {slot}?",
+    confirmDeleteDesc: "Are you sure you want to delete Slot {slot}? All expedition data and ship progress in this slot will be permanently erased.",
+    cancel: "CANCEL",
+    deleteConfirm: "DELETE PERMANENTLY",
+
+    // Pause Menu
+    pauseTitle: "GAME PAUSED",
+    pauseSubtitle: "Ship anchored in the open ocean",
+    pauseFleetStatus: "FLEET STATUS",
+    pauseHullIntegrity: "HULL INTEGRITY",
+    pauseCargoCapacity: "CARGO CAPACITY",
+    pauseWorldGen: "BLOOD SEA WORLD",
+    pauseResume: "RESUME SAILING (ESC)",
+    pauseInventory: "INVENTORY & CRAFTING (I)",
+    pauseMap: "OCEAN MAP & FOG (M)",
+    pauseCodex: "LORE ARCHIVE & CLANS (L)",
+    pauseSettings: "AUDIO & GRAPHICS SETTINGS",
+    pauseControls: "CONTROLS & HELM GUIDE (H)",
+    pauseRestart: "RESTART EXPEDITION",
+    pauseReturnMenu: "RETURN TO MAIN MENU",
+
+    // Settings Modal
+    settingsTitle: "SETTINGS",
+    settingsSubtitle: "Audio, Graphics & Controls",
+    tabAudio: "AUDIO",
+    tabGraphics: "GRAPHICS",
+    tabGameplay: "GAMEPLAY & LANGUAGE",
+
+    // Audio Settings
+    masterVol: "Master Volume",
+    sfxVol: "Sound Effects (Cannons, Explosions & Impact)",
+    seaAmbienceVol: "Sea Ambience & Wind Gusts",
+    seaAmbienceDesc: "Roaring waves and ancient ocean winds.",
+    battleMusicVol: "Dynamic Battle & Storm Music",
+    muteAll: "Mute All Audio",
+    muteAllDesc: "Disable all game sounds and music",
+
+    // Graphics Settings
+    graphicsPreset: "Graphics Quality Preset",
+    graphicsBuffer: "DPR & Rendering Buffer",
+    qualityHigh: "HIGH",
+    qualityHighDesc: "DPR 2.0x • Full Particles • Smooth Lighting (60 FPS)",
+    qualityMed: "BALANCED",
+    qualityMedDesc: "DPR 1.5x • Visual Balance & Performance",
+    qualityLow: "BATTERY SAVER",
+    qualityLowDesc: "DPR 1.0x • GPU Friendly • Runs Cool on Mobile",
+    fullscreenMode: "Fullscreen Mode",
+    fullscreenDesc: "Play in fullscreen without browser distractions",
+    btnFullscreenToggle: "Toggle",
+    autoFullscreen: "Auto Fullscreen on Launch",
+    autoFullscreenDesc: "Automatically enter fullscreen when sailing",
+    screenShake: "Screen Shake Effect",
+    screenShakeDesc: "Camera vibration during explosions & hull impacts",
+
+    // Gameplay & Language
+    languageTitle: "Game Language",
+    languageDesc: "Choose interface and narrative language.",
+    difficultyTitle: "Expedition Difficulty",
+    diffEasy: "Easy",
+    diffMedium: "Normal",
+    diffHard: "Hard",
+    controlsGuideTitle: "PC & Touch Controls Guide",
+    controlsGuideDesc: "View helm keys, cannon hotkeys, and touch gestures",
+    btnOpenGuide: "View Guide",
+    saveAndReturn: "SAVE & RETURN",
+
+    // Difficulty Descriptions
+    diffEasyDesc: "Relaxed voyage: Damage received -25%, cannon damage +20%, Gold & Blood rewards +25%.",
+    diffMediumDesc: "Standard balanced Blood Sea expedition experience.",
+    diffHardDesc: "Trench Curse: Damage received +35%, tougher & aggressive enemies, rewards +50%.",
+
+    // Help & Lore
+    loreModalTitle: "OCEAN CLAN CODEX",
+    loreModalSubtitle: "Pirate faction territories & abyssal trench horrors",
+    helpModalTitle: "PC NAVAL CONTROLS GUIDE",
+    helpModalSubtitle: "Ship steering, sail speeds, keyboard & mouse controls",
+    helpCloseEsc: "Press Esc to close guide",
+
+    // Loading & Game Over
+    loadingStatus: "Loading Ocean...",
+    gameOverTitle: "SHIP SUNK",
+    gameOverReason: "Your fleet has perished in the ocean depths.",
+    gameOverPermaText: "",
+    statMaxDist: "Max Distance:",
+    statKills: "Enemies Defeated:",
+    statSalvages: "Wrecks Salvaged:",
+    respawnBtn: "RESPAWN",
+    cinematicCredits: [
+      { subtitle: "ORIGINAL CREATION", title: "Created by Iyodihhh" },
+      { subtitle: "AGENTIC CRAFT", title: "Vibe coded with Antigravity" },
+      { subtitle: "SOUND & MUSIC", title: "Procedural Web Audio" },
+      { subtitle: "THE ENDLESS OCEAN", title: "Bon Voyage" }
+    ],
+
+    // In-game Toasts & HUD
+    toastGameStarted: "Adventure Begins! Smooth Sailing.",
+    toastGameResumed: "Welcome Back, Captain!",
+    toastSaved: "Progress Saved!",
+    toastSlotDeleted: "Slot {slot} successfully deleted.",
+    toastSettingsSaved: "Settings Saved Successfully",
+
+    // In-game HUD & Telemetry
+    throttleNeutral: "Neutral",
+    throttleClear: "Clear Sails",
+    throttleHalf: "Half Sail",
+    throttleFull: "Full Sail",
+    throttleStealth: "Silent Sail",
+    throttleBoost: "Full Boost",
+    hullFirm: "Sturdy Hull",
+    stealthSafe: "Safe",
+    stealthWarn: "Caution",
+    stealthDetected: "Detected!",
+    hudPauseBtn: "PAUSE",
+    hudMapBtn: "MAP",
+    hudBagBtn: "CARGO",
+    hudCargoTitle: "CARGO",
+    hudCargoHoldTooltip: "Open Cargo & Workshop [I]",
+    hudSailingSpeed: "Sailing Speed",
+    hudGoldTitle: "Looted Gold Coins",
+    hudBloodTitle: "Abyssal Blood",
+    spyglassTitle: "HORIZON SCOUT",
+    spyglassExit: "[ESC] / [F] EXIT SPYGLASS",
+    divingSalvage: "Diving Wreck...",
+
+    // Hotbars & Controls
+    hotbarSalvo: "SALVO",
+    hotbarMine: "STERN",
+    hotbarSalvage: "WINCH",
+    hotbarSpyglass: "SPYGLASS",
+    hotbarRepair: "REPAIR",
+    hotbarSalvoTip: "Broadside Cannon Salvo [SPACE]",
+    hotbarMineTip: "Stern Chasers & Mine Dispenser [2]",
+    hotbarSalvageTip: "Wreck Salvage Hook & Winch [E]",
+    hotbarSpyglassTip: "Long-Range Ocean Spyglass [F]",
+    hotbarRepairTip: "Emergency Hull Repair (15 Gold) [R]",
+    pcSteer: "Steer",
+    pcBoost: "Full Boost",
+    pcStealth: "Stealth",
+    pcSpeedLabel: "SPEED:",
+    mobileSalvo: "SALVO",
+    mobileRepair: "REPAIR",
+    mobileMineTip: "Stern Mines [2]",
+    mobileSalvageTip: "Salvage Winch [E]",
+    mobileSpyglassTip: "Ocean Spyglass [F]",
+    mobileFireTip: "Fire Broadside Cannons [Space]",
+
+    // Contextual Dock Prompt
+    dockPromptTitle: "SHIPYARD",
+    dockPromptSub: "Moored at Port",
+    dockedAt: "Moored at {port}",
+
+    // Weather Intel
+    weatherIntelTitle: "Ocean Conditions",
+    weatherForecast: "Ocean Weather Forecast",
+    weatherRemaining: "{time} remaining",
+    weatherClearName: "Calm Seas",
+    weatherClearDesc: "Gentle breeze and friendly waters. Steady helm with no weather hindrance.",
+    weatherOvercastName: "Overcast Skies",
+    weatherOvercastDesc: "Thick clouds darken the ocean horizon.",
+    weatherRainName: "Ocean Rain",
+    weatherRainDesc: "Rain drenches the deck, slippery braking.",
+    weatherGaleName: "Gale Winds",
+    weatherGaleDesc: "Strong wind gusts dragging the ship's prow.",
+    weatherStormName: "Storm Seas",
+    weatherStormDesc: "Fierce rolling waves and wild wind bursts.",
+    weatherThunderName: "Thunderstorm",
+    weatherThunderDesc: "Lightning splits the sky, compass interference occurs.",
+    weatherMistName: "Mystic Mist",
+    weatherMistDesc: "Mystic fog shrouds the cursed waters.",
+    weatherDenseFogName: "Dense Abyssal Fog",
+    weatherDenseFogDesc: "Heavy zero visibility, enemies cloaked in mystery.",
+    weatherBloodName: "Blood Tempest",
+    weatherBloodDesc: "Corrosive blood rain and abyssal crimson lightning.",
+
+    // Day/Night & Celestial Time
+    timePhase_predawn: "Astronomical Twilight",
+    timePhase_dawn: "Dawn",
+    timePhase_morning: "Morning",
+    timePhase_noon: "Midday",
+    timePhase_afternoon: "Afternoon",
+    timePhase_sunset: "Golden Hour (Sunset)",
+    timePhase_dusk: "Dusk",
+    timePhase_night: "Night",
+    timePhase_midnight: "Midnight",
+    hudClockTooltipTitle: "Nautical Time & Celestial Watch",
+    hudClockTooltipDesc: "The day and night cycle dictates solar shadows, sea specular glint, and lantern illumination.",
+    devTimeDawn: "Dawn (06:00)",
+    devTimeNoon: "Noon (12:00)",
+    devTimeSunset: "Sunset (17:30)",
+    devTimeNight: "Night (22:00)",
+    devTimeSpeed: "Time Speed",
+    devTimePause: "Pause Time",
+
+    // Shipyard & Upgrades
+    shipyardHeader: "SHIPYARD",
+    shipyardSub: "Naval Architecture & Deck Modification Center",
+    shipyardAtPort: "Moored at: {port}",
+    shipOverallTierTitle: "CURRENT FLEET:",
+    maxProgressLabel: "Fleet Progress:",
+    effLevel: "Effectiveness Level",
+    archStage: "Architectural Stage",
+    archLevelOf: "{lvl} of {max} Tiers",
+    vesselEffect: "Ship Effect",
+    optimalPerf: "Optimal Performance",
+    effectiveBoost: "+Effective Boost",
+    upgradeCost: "Upgrade Cost:",
+    peakTierReached: "Peak Fleet Tier Reached!",
+    compartmentMaxed: "COMPARTMENT MAXED",
+    upgradeToLevel: "UPGRADE TO LEVEL {lvl}",
+    insufficientResources: "INSUFFICIENT RESOURCES",
+    upgradeCompleted: "MAX LEVEL",
+    upgradeBtn: "UPGRADE",
+    insufficientBtn: "INSUFFICIENT",
+    fleetPeakTier: "Peak Fleet Tier",
+    repairResources: "Repair (6 Wood + 3 Rope)",
+    hullPrime: "Hull Prime (100%)",
+    repairDockRequired: "Repair (Dock Required)",
+    repairMissingMat: "Missing Materials ({wood}/6 Wood, {rope}/3 Rope)",
+    repairGoldService: "Shipyard Service (85 Gold)",
+    goldServiceDockReq: "Service (Dock Required)",
+    goldServiceMissing: "Need Gold ({gold}/85 Gold)",
+    blueprintTitle: "FLAGSHIP CROSS-SECTION BLUEPRINT",
+    selectCompartmentHint: "Select Compartment",
+    terminalTitle: "ENGINEERING & UPGRADE TERMINAL",
+    terminalSub: "FLEET ARCHITECTURE",
+    mobileUpgradeCardsTitle: "SHIP UPGRADE OPTIONS",
+    mobileUpgradeCardsSub: "Select a module and tap Upgrade",
+
+    // Inventory & Forge Workshop
+    invTitle: "NAVAL ARSENAL & FORGE WORKSHOP",
+    invSubtitle: "16-Slot Cargo Hold • Ship Artillery Management • Faction Weapon Smelting & Forging",
+    invSailingStatus: "Open Waters (Sailing)",
+    invMooredStatus: "Moored at {port}",
+    invAlmanacBtn: "RECIPE ALMANAC",
+    invBackBtn: "BACK",
+    invMobileCargo: "Cargo Hold",
+    invMobileArmory: "Deck Armory",
+    invMobileCraft: "Forge Workshop",
+    invCargoSection: "SHIP CARGO HOLD",
+    invFilterAll: "All",
+    invFilterRes: "Materials",
+    invFilterWeap: "Weapons",
+    invSlotLabel: "Slots:",
+    invEmptySlot: "Empty Slot",
+    invItemDetails: "ITEM DOSSIER & ACTIONS",
+    invTapToInspect: "Select an item in cargo to inspect details, equip weapons, or discard freight.",
+    invEquipBtn: "EQUIP",
+    invUnequipBtn: "UNEQUIP",
+    invDiscardBtn: "DISCARD",
+    invArmorySection: "SHIP ARTILLERY DECK",
+    invArmorySub: "Broadside hardpoint configuration and fleet firepower",
+    invMountPrompt: "Tap to Mount Cannon",
+    invNoWeaponInCargo: "No Weapons in Cargo",
+    invRepairCannon: "Repair",
+    invDurability: "Barrel Durability:",
+    invWorkshopSection: "FACTION WEAPON FORGE",
+    invCraftPortReq: "Port Dock Only",
+    invCraftWeapon: "CRAFT WEAPON",
+    invMissingMats: "Missing Materials",
+    invDockRequired: "Requires Docking",
+    invFormulaBlueprint: "Complete blueprint formulas:",
+    invOpenAlmanac: "Open Almanac",
+    invFooterHint: "Press I to close inventory • Forge cannons up to Lv.5 to triple firepower & durability",
+    invToShipyard: "Go to Shipyard",
+    cannonPickerTitle: "MOUNT DECK CANNON",
+    cannonPickerSub: "Select a weapon from cargo to mount on your ship",
+    cannonPickerFooter: "Craft faction weapons at the Port Workshop",
+    cannonPickerClose: "Close",
+    cannonPickerMount: "Mount",
+
+    // Sea Map
+    mapTitle: "OCEAN CARTOGRAPHY CHART",
+    mapShipCoord: "Ship: X: {x}, Y: {y}",
+    mapSector: "Sector {sec}",
+    mapFogProgress: "OCEAN FOG:",
+    mapPinActive: "Pin: Active",
+    mapPinOff: "Pin: Off",
+    mapReturnSea: "RETURN TO SEA",
+    mapInstruction: "Tap island for intel • Tap ocean to pin • Drag & pinch to navigate",
+    mapZoomIn: "Zoom In (+)",
+    mapZoomOut: "Zoom Out (-)",
+    mapCenterShip: "Center on Ship [C]",
+    mapResetZoom: "Reset Map Scale (100%)",
+    mapClearPin: "Clear Waypoint Pin",
+    mapLegendPlayer: "Your Ship",
+    mapLegendPin: "Navigation Pin",
+    mapLegendHomePort: "Home Port",
+    mapLegendTrade: "Trade Outpost",
+    mapLegendConquered: "Conquered Port",
+    mapLegendPirate: "Pirate Lair / Enemy Clan",
+    mapLegendMerchant: "Merchant Ship",
+    mapTierLabel: "Cartography Tier:",
+    mapUpgradeBtn: "Upgrade Map ({cost} Gold)",
+    intelIslandName: "Island Name",
+    intelShipDist: "SHIP DISTANCE:",
+    intelCoords: "COORDINATES:",
+    intelSafe: "Territory Status: Safe Waters",
+    intelThreatLow: "Territory Status: Low Threat",
+    intelThreatHigh: "Territory Status: Dangerous Fleet",
+    intelSetWaypoint: "SET WAYPOINT",
+    intelCenterCamera: "Center Camera on Island",
+
+    // Toasts
+    toastPinCleared: "Navigation pin removed",
+    toastPinArrived: "Arrived at Navigation Waypoint!",
+    toastWaypointSet: "Waypoint set to {island}! Distance: {dist}m",
+    toastRepairDockOnly: "Hull repairs can only be performed while moored at a port dock!",
+    toastRepairPrime: "Ship hull is already in 100% prime condition!",
+    toastRepairResourceDone: "Hull repaired using 6 Wood & 3 Rope!",
+    toastRepairNoMats: "Insufficient materials! Requires 6 Wood & 3 Rope (Have: {wood} Wood, {rope} Rope).",
+    toastRepairGoldDone: "Shipyard service has repaired the ship! (-85 Gold)",
+    toastRepairNoGold: "Insufficient gold for shipyard service (Need 85 Gold).",
+    toastCargoFull: "Cargo Hold Full! Cannot hold new types of cargo.",
+    toastNoCannonsInCargo: "No cannons in cargo! Craft faction weapons at the Workshop first.",
+    toastGraphicChanged: "Graphics Quality Changed: {label}",
+    toastCannonEquipped: "{name} successfully mounted to Slot #{slot}!",
+    toastCannonUnequipped: "{name} returned to cargo.",
+    toastCannonCrafted: "{name} successfully crafted & stored in cargo!",
+    toastCannonRepaired: "Cannon successfully repaired!",
+    toastItemDiscarded: "{name} discarded from cargo.",
+    toastMapUpgraded: "Map successfully upgraded! Fog of war reduced.",
+    toastCannonsEmptyOrJammed: "Ship cannons are empty or jammed! Open Shipyard [U] / Inventory [I].",
+    toastCannonBroken: "{name} has shattered into pieces!",
+    toastCannonJammed: "{name} is jammed! Needs repairs at port.",
+    cannonBrokenFloat: "CANNON BROKEN!",
+    cannonJammedFloat: "CANNON JAMMED!",
+    toastMineDeployed: "Gunpowder Mine Deployed Aft!",
+    toastUpgradeSternNeeded: "Upgrade Stern Castle at the Shipyard!",
+    toastSpyglassActive: "Ocean Spyglass Active [F]",
+    toastDockedReady: "Docked at {port}: Shipyard ready for service!",
+    toastUpgraded: "{name} upgraded to Lv.{level}!",
+    toastNotEnoughUpgrade: "Insufficient Gold or Blood Essence for this upgrade.",
+    toastGamepadConnected: "Gamepad Connected: {name}",
+    toastGamepadDisconnected: "Gamepad Disconnected!",
+    toastCosmicMirrorStarted: "Mirror of the Cosmos Active! The ocean reflects the starry heavens.",
+    helpTabKeyboard: "KEYBOARD & MOUSE (PC)",
+    helpTabGamepad: "CONTROLLER / GAMEPAD",
+    steerLabel: "Helm",
+    steerJoystickLabel: "360° Joystick",
+    boostLabel: "Full Sail",
+    stealthLabel: "Stealth"
+  }
+};
+
+function t(key, vars = {}) {
+  const lang = (typeof currentLanguage !== 'undefined' && currentLanguage) ? currentLanguage : 'id';
+  let str = (TRANSLATIONS[lang] && TRANSLATIONS[lang][key]) || (TRANSLATIONS['id'] && TRANSLATIONS['id'][key]) || key;
+  for (const [k, v] of Object.entries(vars)) {
+    str = str.replace(new RegExp(`\\{${k}\\}`, 'g'), v);
+  }
+  return str;
+}
+function normAngle(a) {
+  while (a > Math.PI) a -= Math.PI * 2;
+  while (a < -Math.PI) a += Math.PI * 2;
+  return a;
+}
+if (typeof window !== 'undefined') {
+  window.TRANSLATIONS = TRANSLATIONS;
+  window.t = t;
+  window.normAngle = normAngle;
+}
 
 // Difficulty System Configuration (Easy, Medium/Default, Hard)
 const DIFFICULTY_SETTINGS = {
@@ -13,8 +804,10 @@ const DIFFICULTY_SETTINGS = {
     id: 'easy',
     name: 'Mudah (Easy)',
     badge: 'MUDAH',
+    badgeEn: 'EASY',
     badgeColor: 'text-emerald-400 bg-emerald-950 border-emerald-500/40',
     desc: 'Petualangan santai: Kerusakan diterima -25%, damage meriam +20%, hadiah Koin & Darah +25%.',
+    descEn: 'Relaxed voyage: Damage received -25%, cannon damage +20%, Gold & Blood rewards +25%.',
     playerDamageReceivedMult: 0.75,
     playerDamageDealtMult: 1.20,
     rewardMultiplier: 1.25,
@@ -25,8 +818,10 @@ const DIFFICULTY_SETTINGS = {
     id: 'medium',
     name: 'Normal (Medium)',
     badge: 'NORMAL',
+    badgeEn: 'NORMAL',
     badgeColor: 'text-amber-300 bg-amber-950 border-amber-500/40',
     desc: 'Keseimbangan standar ekspedisi Laut Darah saat ini.',
+    descEn: 'Standard balanced Blood Sea expedition experience.',
     playerDamageReceivedMult: 1.0,
     playerDamageDealtMult: 1.0,
     rewardMultiplier: 1.0,
@@ -37,8 +832,10 @@ const DIFFICULTY_SETTINGS = {
     id: 'hard',
     name: 'Sulit (Hard)',
     badge: 'EKSTREM',
+    badgeEn: 'EXTREME',
     badgeColor: 'text-rose-400 bg-rose-950 border-rose-500/40',
     desc: 'Kutukan Palung: Kerusakan diterima +35%, musuh lebih tangguh & agresif, hadiah Koin & Darah +50%.',
+    descEn: 'Trench Curse: Damage received +35%, tougher & aggressive enemies, rewards +50%.',
     playerDamageReceivedMult: 1.35,
     playerDamageDealtMult: 0.90,
     rewardMultiplier: 1.50,
@@ -77,6 +874,10 @@ const SVG_ICONS = {
   snowOrb: `<svg class="w-6 h-6 text-sky-300 animate-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" fill="rgba(56,189,248,0.2)"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/></svg>`,
   firePowder: `<svg class="w-6 h-6 text-rose-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h8l-1 5H9L8 3z" fill="rgba(244,63,94,0.3)"/><path d="M7 8h10c2 4 2 9-1 12H8C5 17 5 12 7 8z" fill="rgba(244,63,94,0.2)"/><polygon points="12,12 13.5,15 11,15.5 12.5,18 10,18" fill="currentColor"/></svg>`,
   chitin: `<svg class="w-6 h-6 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C9 7 4 12 4 18a8 8 0 0 0 16 0c0-6-5-11-8-16z" fill="rgba(225,29,72,0.2)"/><path d="M12 6v14M8 11l4 3 4-3M7 16l5 3 5-3"/></svg>`,
+  sailCloth: `<svg class="w-6 h-6 text-slate-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c0 8-4 16-16 16V4z" fill="rgba(226,232,240,0.25)"/><path d="M4 12c4 0 8-2 12-6"/><line x1="4" y1="20" x2="4" y2="4"/><line x1="2" y1="20" x2="6" y2="20"/></svg>`,
+  bronze: `<svg class="w-6 h-6 text-amber-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8" fill="rgba(202,138,4,0.25)"/><polygon points="12 4 14.5 9.5 20.5 10 16 14.5 17.5 20.5 12 17.5 6.5 20.5 8 14.5 3.5 10 9.5 9.5 12 4" stroke="#eab308" stroke-width="1.5"/><circle cx="12" cy="12" r="2.5" fill="#fde047"/></svg>`,
+  krakenInk: `<svg class="w-6 h-6 text-indigo-400 animate-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C8 7 4 12 4 17a8 8 0 0 0 16 0c0-5-4-10-8-15z" fill="rgba(99,102,241,0.3)"/><path d="M9 14c1.5 2 4.5 2 6 0"/><circle cx="12" cy="11" r="2" fill="currentColor"/></svg>`,
+  leviathanBone: `<svg class="w-6 h-6 text-slate-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8c2-2 5-2 7 1l1 1 1-1c2-3 5-3 7-1 2 2 1 5-1 7l-7 7-7-7c-2-2-3-5-1-7z" fill="rgba(241,245,249,0.25)"/><path d="M8 12l4 4 4-4"/><circle cx="12" cy="8" r="2" fill="currentColor"/></svg>`,
 
   // Faction Cannon Inventory Items Icons (Distinct Weapon Gear)
   cannon_standard: `<svg class="w-7 h-7 text-amber-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 14 13-4 2 5-13 4z" fill="rgba(148,163,184,0.3)"/><circle cx="6" cy="18" r="3" fill="#78350f" stroke="#f59e0b"/><circle cx="15" cy="18" r="2.5" fill="#78350f" stroke="#f59e0b"/><line x1="16" y1="10" x2="22" y2="8"/><line x1="18" y1="15" x2="22" y2="13.5"/></svg>`,
@@ -96,121 +897,236 @@ const SVG_ICONS = {
 };
 
 // Maximum cargo slots capacity for the ship's hold
-const MAX_CARGO_SLOTS = 16;
+const MAX_CARGO_SLOTS = 24;
 
 // Survival Resource Items Configuration (Strict Vector & Semantic Categories)
 const RESOURCE_TYPES = {
   wood: {
     id: 'wood',
     name: 'Kayu Gelondong',
+    nameEn: 'Timber Logs',
     category: 'Bahan Baku',
+    categoryEn: 'Raw Material',
     rarity: 'Umum',
+    rarityEn: 'Common',
     desc: 'Kayu jati gelondong kuat. Bahan primer reparasi lambung dan struktur dudukan meriam.',
+    descEn: 'Sturdy teak logs. Primary material for hull repairs and gun mount frames.',
     color: '#b45309',
     icon: 'wood',
     iconKey: 'wood',
     baseCost: 3,
-    dropSource: 'Peti Apung & Kapal Karam'
+    dropSource: 'Peti Apung & Kapal Karam',
+    dropSourceEn: 'Floating Crates & Shipwrecks'
   },
   rope: {
     id: 'rope',
     name: 'Tali Rami',
+    nameEn: 'Hemp Rope',
     category: 'Bahan Baku',
+    categoryEn: 'Raw Material',
     rarity: 'Umum',
+    rarityEn: 'Common',
     desc: 'Pintalan serat rami laut. Pengikat tambatan layar, lashing meriam, dan reparasi cepat.',
+    descEn: 'Braided sea hemp fibers. Used for sail rigging, cannon lashing, and field repairs.',
     color: '#d97706',
     icon: 'rope',
     iconKey: 'rope',
     baseCost: 4,
-    dropSource: 'Peti Terapung Samudra'
+    dropSource: 'Peti Terapung Samudra',
+    dropSourceEn: 'Floating Ocean Crates'
   },
   iron: {
     id: 'iron',
     name: 'Pelat Besi Baja',
+    nameEn: 'Steel Plates',
     category: 'Bahan Baku',
+    categoryEn: 'Raw Material',
     rarity: 'Biasa',
+    rarityEn: 'Standard',
     desc: 'Logam tempa balok baja. Komponen utama selongsong meriam berat dan penguat struktur.',
+    descEn: 'Forged steel bars. Core component for heavy cannon jackets and hull plating.',
     color: '#94a3b8',
     icon: 'iron',
     iconKey: 'iron',
     baseCost: 7,
-    dropSource: 'Bangkai Kapal Dagang & Menara'
+    dropSource: 'Bangkai Kapal Dagang & Menara',
+    dropSourceEn: 'Merchant Hulks & Watchtowers'
   },
   stone: {
     id: 'stone',
     name: 'Bongkahan Batu',
+    nameEn: 'Granite Boulders',
     category: 'Bahan Baku',
+    categoryEn: 'Raw Material',
     rarity: 'Umum',
+    rarityEn: 'Common',
     desc: 'Batu granit padat dari tebing pulau. Pemberat balast kapal dan fondasi pertahanan cadas.',
+    descEn: 'Dense granite carved from sea crags. Ballast weight and defensive stronghold masonry.',
     color: '#64748b',
     icon: 'stone',
     iconKey: 'stone',
     baseCost: 2,
-    dropSource: 'Tebing Pulau Karang & Reruntuhan'
+    dropSource: 'Tebing Pulau Karang & Reruntuhan',
+    dropSourceEn: 'Reef Cliffs & Ruins'
   },
   bamboo: {
     id: 'bamboo',
     name: 'Batang Bambu',
+    nameEn: 'Bamboo Poles',
     category: 'Bahan Baku',
+    categoryEn: 'Raw Material',
     rarity: 'Khusus',
+    rarityEn: 'Special',
     desc: 'Bambu oriental lentur dan tahan api. Selongsong baterai roket salvo armada Wokou.',
+    descEn: 'Flexible fire-resistant eastern bamboo. Casing for Wokou salvo rocket batteries.',
     color: '#84cc16',
     icon: 'bamboo',
     iconKey: 'bamboo',
     baseCost: 5,
-    dropSource: 'Kapal Bajak Laut Wokou'
+    dropSource: 'Kapal Bajak Laut Wokou',
+    dropSourceEn: 'Wokou Pirate Vessels'
   },
   mistOrb: {
     id: 'mistOrb',
     name: 'Orb Kabut Gaib',
+    nameEn: 'Mystic Fog Orb',
     category: 'Artefak Faksi',
+    categoryEn: 'Faction Artifact',
     rarity: 'Mistik',
+    rarityEn: 'Occult',
     desc: 'Esensi roh berdenyut gaib. Menghidupkan meriam berpelacak roh otomatis (Homing).',
+    descEn: 'Pulsing spiritual essence. Powers auto-tracking spirit projectiles (Homing).',
     color: '#06b6d4',
     icon: 'mistOrb',
     iconKey: 'mistOrb',
     baseCost: 45,
     isSpecial: true,
-    dropSource: 'Kapal & Menara Sekte Kabut'
+    dropSource: 'Kapal & Menara Sekte Kabut',
+    dropSourceEn: 'Mist Sect Ships & Spires'
   },
   snowOrb: {
     id: 'snowOrb',
     name: 'Orb Salju Fjord',
+    nameEn: 'Fjord Snow Orb',
     category: 'Artefak Faksi',
+    categoryEn: 'Faction Artifact',
     rarity: 'Mistik',
+    rarityEn: 'Occult',
     desc: 'Kristal es abadi samudra utara. Membekukan dan melumpuhkan kecepatan kapal musuh.',
+    descEn: 'Eternal permafrost crystal. Freezes and paralyzes enemy vessel speed.',
     color: '#38bdf8',
     icon: 'snowOrb',
     iconKey: 'snowOrb',
     baseCost: 45,
     isSpecial: true,
-    dropSource: 'Drakkar & Ballista Viking'
+    dropSource: 'Drakkar & Ballista Viking',
+    dropSourceEn: 'Viking Drakkars & Ballistas'
   },
   firePowder: {
     id: 'firePowder',
     name: 'Bubuk Mesiu Api',
+    nameEn: 'Blazing Gunpowder',
     category: 'Artefak Faksi',
+    categoryEn: 'Faction Artifact',
     rarity: 'Eksotis',
+    rarityEn: 'Exotic',
     desc: 'Bubuk mesiu mesiu merah peledak. Menghasilkan ledakan beruntun roket salvo.',
+    descEn: 'Volatile red gunpowder. Unleashes concussive chain-explosions in rocket salvos.',
     color: '#f43f5e',
     icon: 'firePowder',
     iconKey: 'firePowder',
     baseCost: 30,
     isSpecial: true,
-    dropSource: 'Jung Meriam Wokou'
+    dropSource: 'Jung Meriam Wokou',
+    dropSourceEn: 'Wokou Fire Junks'
   },
   chitin: {
     id: 'chitin',
     name: 'Cangkang Kitin',
+    nameEn: 'Chitin Carapace',
     category: 'Artefak Abisal',
+    categoryEn: 'Abyssal Artifact',
     rarity: 'Abisal',
+    rarityEn: 'Abyssal',
     desc: 'Duri pelindung keras beracun. Menembakkan duri asam korosif penembus baja lambung.',
+    descEn: 'Spiked venomous carapace. Fires corrosive acidic barbs that pierce armor plating.',
     color: '#e11d48',
     icon: 'chitin',
     iconKey: 'chitin',
     baseCost: 25,
     isSpecial: true,
-    dropSource: 'Monster Palung Laut Darah'
+    dropSource: 'Monster Palung Laut Darah',
+    dropSourceEn: 'Blood Sea Trench Monsters'
+  },
+  sailCloth: {
+    id: 'sailCloth',
+    name: 'Kain Layar Sutra',
+    nameEn: 'Reinforced Sailcloth',
+    category: 'Bahan Baku',
+    categoryEn: 'Raw Material',
+    rarity: 'Biasa',
+    rarityEn: 'Standard',
+    desc: 'Lembaran kain layar serat sutra rami tahan badai. Bahan baku peningkatan layar kapal dan kamuflase kabut.',
+    descEn: 'Storm-resistant silk-hemp canvas fabric. Core material for sail speed and stealth camouflage.',
+    color: '#e2e8f0',
+    icon: 'sailCloth',
+    iconKey: 'sailCloth',
+    baseCost: 15,
+    dropSource: 'Kapal Batavia & Wokou, Peti Apung',
+    dropSourceEn: 'Batavia & Wokou Vessels, Floating Crates'
+  },
+  bronze: {
+    id: 'bronze',
+    name: 'Kuningan Perunggu',
+    nameEn: 'Forged Bronze Hardware',
+    category: 'Bahan Baku',
+    categoryEn: 'Raw Material',
+    rarity: 'Khusus',
+    rarityEn: 'Special',
+    desc: 'Logam cor kuningan tahan air asin. Komponen kunci bantalan roda meriam, pelat ranjau, dan taji haluan.',
+    descEn: 'Seawater-resistant forged bronze alloy. Essential for cannon carriages, naval mines, and prow rams.',
+    color: '#ca8a04',
+    icon: 'bronze',
+    iconKey: 'bronze',
+    baseCost: 20,
+    dropSource: 'Galleon Besi, Menara Bastion, Bangkai Kapal',
+    dropSourceEn: 'Iron Galleons, Bastion Towers, Shipwrecks'
+  },
+  krakenInk: {
+    id: 'krakenInk',
+    name: 'Tinta Cumi Abisal',
+    nameEn: 'Abyssal Kraken Ink',
+    category: 'Artefak Abisal',
+    categoryEn: 'Abyssal Artifact',
+    rarity: 'Abisal',
+    rarityEn: 'Abyssal',
+    desc: 'Cairan tinta hitam pekat dari monster gurita palung terdalam. Menghilangkan deteksi pandangan musuh seketika.',
+    descEn: 'Pitch-black abyssal ink drawn from deep-sea trench cephalopods. Completely baffles enemy detection grids.',
+    color: '#6366f1',
+    icon: 'krakenInk',
+    iconKey: 'krakenInk',
+    baseCost: 50,
+    isSpecial: true,
+    dropSource: 'Abyssal Kraken & Monster Palung Darah',
+    dropSourceEn: 'Abyssal Kraken & Blood Trench Horrors'
+  },
+  leviathanBone: {
+    id: 'leviathanBone',
+    name: 'Tulang Purba Lautan',
+    nameEn: 'Ancient Leviathan Bone',
+    category: 'Artefak Abisal',
+    categoryEn: 'Abyssal Artifact',
+    rarity: 'Legendaris',
+    rarityEn: 'Legendary',
+    desc: 'Serpihan tulang gading monster purba laut dalam. Memberikan kekokohan struktur mutlak dan memperkuat hisapan relik vampir.',
+    descEn: 'Ivory bone fragment of ancient oceanic leviathans. Grants absolute hull structural density and empowers relic vampirism.',
+    color: '#f1f5f9',
+    icon: 'leviathanBone',
+    iconKey: 'leviathanBone',
+    baseCost: 80,
+    isSpecial: true,
+    dropSource: 'Ancient Leviathan & Bangkai Kapal Kuno',
+    dropSourceEn: 'Ancient Leviathans & Sunken Relic Wrecks'
   }
 };
 
@@ -219,10 +1135,14 @@ const CANNON_TYPES = {
   standard: {
     id: 'standard',
     name: 'Meriam Besi Standar',
+    nameEn: 'Standard Iron Cannon',
     subtitle: 'Arsenil Angkatan Laut Klasik',
+    subtitleEn: 'Classic Naval Arsenal',
     factionName: 'Angkatan Laut',
+    factionNameEn: 'Navy',
     desc: 'Meriam peluru besi cor klasik. Handal, stabil, dan berdaya hancur fisik mantap.',
-    maxDurability: 90,
+    descEn: 'Classic cast iron cannon. Reliable, durable, and delivers solid physical impact.',
+    maxDurability: 180,
     damage: 22,
     projectileType: 'cannonball',
     color: '#94a3b8',
@@ -233,10 +1153,14 @@ const CANNON_TYPES = {
   mist: {
     id: 'mist',
     name: 'Meriam Arwah Kabut',
+    nameEn: 'Mist Soul Cannon',
     subtitle: 'Senjata Gaib Sekte Kabut',
+    subtitleEn: 'Occult Weapon of the Mist',
     factionName: 'Sekte Kabut',
+    factionNameEn: 'Mist Sect',
     desc: 'Meriam mistis bermahkota lentera toska. Menembakkan proyektil roh berpelacak otomatis (Homing Wisps).',
-    maxDurability: 70,
+    descEn: 'Mystic cannon crowned with a teal lantern. Fires auto-homing spiritual wisps.',
+    maxDurability: 140,
     damage: 24,
     projectileType: 'spirit',
     color: '#06b6d4',
@@ -247,10 +1171,14 @@ const CANNON_TYPES = {
   frost: {
     id: 'frost',
     name: 'Pelontar Es Viking',
+    nameEn: 'Viking Frost Hurler',
     subtitle: 'Artileri Badai Salju Norse',
+    subtitleEn: 'Norse Blizzard Artillery',
     factionName: 'Klan Viking',
+    factionNameEn: 'Viking Clan',
     desc: 'Pelontar berukir runik samudra utara. Menembakkan kapak es berputar yang memperlambat musuh (Slow 40%).',
-    maxDurability: 75,
+    descEn: 'Northern ocean runic hurler. Launches spinning frost axes that slow enemy ships by 40%.',
+    maxDurability: 150,
     damage: 26,
     projectileType: 'frost_axe',
     color: '#38bdf8',
@@ -261,12 +1189,16 @@ const CANNON_TYPES = {
   wokou: {
     id: 'wokou',
     name: 'Baterai Roket Bambu',
+    nameEn: 'Bamboo Rocket Battery',
     subtitle: 'Teknologi Api Timur Wokou',
+    subtitleEn: 'Eastern Firework Tech',
     factionName: 'Jung Wokou',
-    desc: 'Peluncur roket oriental berlapis bambu. Meluncurkan salvo 3 panah roket api beruntun dengan percikan membakar.',
-    maxDurability: 65,
-    damage: 20,
-    burstCount: 3,
+    factionNameEn: 'Wokou Fleet',
+    desc: 'Peluncur roket oriental berlapis bambu. Meluncurkan panah roket kembang api berdaya ledak tinggi dengan percikan membakar.',
+    descEn: 'Bamboo-clad rocket launcher. Discharges incendiary rocket arrows with high explosive splash.',
+    maxDurability: 130,
+    damage: 32,
+    burstCount: 1,
     projectileType: 'rocket_arrow',
     color: '#f43f5e',
     itemIconKey: 'cannon_wokou',
@@ -276,10 +1208,14 @@ const CANNON_TYPES = {
   chitin: {
     id: 'chitin',
     name: 'Penyembur Duri Kitin',
+    nameEn: 'Chitin Spike Spitter',
     subtitle: 'Organ Biologis Palung Darah',
+    subtitleEn: 'Blood Trench Bio-Weapon',
     factionName: 'Palung Abisal',
+    factionNameEn: 'Abyssal Trench',
     desc: 'Moncong organik berduri kitin tajam. Menembakkan duri beracun yang mengikis lambung musuh secara berkala.',
-    maxDurability: 80,
+    descEn: 'Organic spitter spiked with sharpened chitin. Shoots venomous barbs eroding enemy hull over time.',
+    maxDurability: 160,
     damage: 28,
     projectileType: 'spike',
     color: '#e11d48',
@@ -289,6 +1225,66 @@ const CANNON_TYPES = {
   }
 };
 
+// 5-Level Cannon Upgrade System (Enhances Durability & Attack Power)
+const CANNON_LEVELS = [
+  { level: 1, title: 'Tingkat I (Dasar)', titleEn: 'Tier I (Basic)', badge: 'Lv.1', stars: '★☆☆☆☆', dmgMult: 1.0, durMult: 1.0 },
+  { level: 2, title: 'Tingkat II (Tempa Baja)', titleEn: 'Tier II (Steel Forged)', badge: 'Lv.2', stars: '★★☆☆☆', dmgMult: 1.25, durMult: 1.35 },
+  { level: 3, title: 'Tingkat III (Laras Perunggu)', titleEn: 'Tier III (Bronze Barrel)', badge: 'Lv.3', stars: '★★★☆☆', dmgMult: 1.50, durMult: 1.75 },
+  { level: 4, title: 'Tingkat IV (Artileri Perwira)', titleEn: 'Tier IV (Officer Artillery)', badge: 'Lv.4', stars: '★★★★☆', dmgMult: 1.80, durMult: 2.25 },
+  { level: 5, title: 'Tingkat V (Mahakarya Abisal)', titleEn: 'Tier V (Abyssal Masterpiece)', badge: 'Lv.5', stars: '★★★★★', dmgMult: 2.20, durMult: 3.00 }
+];
+
+function getCannonLevelConfig(level = 1) {
+  const safeLvl = Math.max(1, Math.min(5, Math.floor(level || 1)));
+  return CANNON_LEVELS[safeLvl - 1] || CANNON_LEVELS[0];
+}
+
+function getCannonDamage(cannon) {
+  if (!cannon) return 22;
+  const conf = CANNON_TYPES[cannon.type] || CANNON_TYPES.standard;
+  const lvlCfg = getCannonLevelConfig(cannon.level || 1);
+  return Math.round(conf.damage * (lvlCfg.dmgMult || 1.0));
+}
+
+function getCannonMaxDurability(cannonType, level = 1) {
+  const conf = CANNON_TYPES[cannonType] || CANNON_TYPES.standard;
+  const lvlCfg = getCannonLevelConfig(level);
+  return Math.round(conf.maxDurability * (lvlCfg.durMult || 1.0));
+}
+
+// Upgrade cost progression (Balances finance: heavy gold investment required!)
+function getCannonUpgradeCost(cannon) {
+  if (!cannon || (cannon.level || 1) >= 5) return null;
+  const curLvl = cannon.level || 1;
+  const nextLvl = curLvl + 1;
+  const cType = cannon.type || 'standard';
+
+  switch (nextLvl) {
+    case 2:
+      return { gold: 250, wood: 6, iron: 4 };
+    case 3:
+      if (cType === 'mist') return { gold: 600, wood: 10, iron: 6, mistOrb: 1 };
+      if (cType === 'frost') return { gold: 600, wood: 10, iron: 6, snowOrb: 1 };
+      if (cType === 'wokou') return { gold: 600, bamboo: 12, iron: 6, firePowder: 1 };
+      if (cType === 'chitin') return { gold: 600, wood: 8, chitin: 6, bloodEssence: 3 };
+      return { gold: 500, wood: 10, iron: 8 }; // standard
+    case 4:
+      if (cType === 'mist') return { gold: 1200, wood: 14, iron: 10, mistOrb: 2 };
+      if (cType === 'frost') return { gold: 1200, wood: 14, iron: 10, snowOrb: 2 };
+      if (cType === 'wokou') return { gold: 1200, bamboo: 16, iron: 10, firePowder: 2 };
+      if (cType === 'chitin') return { gold: 1200, wood: 12, chitin: 10, bloodEssence: 6 };
+      return { gold: 1100, wood: 16, iron: 14 }; // standard
+    case 5:
+      if (cType === 'mist') return { gold: 2500, wood: 20, iron: 16, mistOrb: 3, bloodEssence: 6 };
+      if (cType === 'frost') return { gold: 2500, wood: 20, iron: 16, snowOrb: 3, bloodEssence: 6 };
+      if (cType === 'wokou') return { gold: 2500, bamboo: 24, iron: 16, firePowder: 3, bloodEssence: 6 };
+      if (cType === 'chitin') return { gold: 2500, wood: 16, chitin: 16, bloodEssence: 10 };
+      return { gold: 2400, wood: 24, iron: 20, bloodEssence: 5 }; // standard
+    default:
+      return null;
+  }
+}
+
 // Device platform detection for adaptive draw distance and spawning density
 function isMobileDevice() {
   if (typeof window === 'undefined') return false;
@@ -296,62 +1292,119 @@ function isMobileDevice() {
 }
 
 // Ship Upgrades Definition (6 branches, MAX 6 levels each = 36 levels total)
+// Pure Resource/Material Dependent Upgrades (100% Commodity-Based, Zero Gold)
 const UPGRADE_CONFIG = {
   hull: {
     name: "Lambung Kapal (Armor & HP)",
+    nameEn: "Hull Structure (Armor & HP)",
     iconKey: "hull",
     maxLevel: 6,
-    baseCost: 35,
-    costMult: 1.85,
-    bloodCostStart: 2, // Lv.3+ requires Blood Essence!
-    desc: "Meningkatkan ketahanan maksimum kapal dari tembakan dan tabrakan."
+    desc: "Meningkatkan ketahanan maksimum kapal dari tembakan dan tabrakan.",
+    descEn: "Increases maximum ship durability against incoming fire and ram impacts.",
+    costs: {
+      2: { wood: 8, iron: 4 },
+      3: { wood: 14, iron: 8, stone: 6 },
+      4: { wood: 22, iron: 14, stone: 10, chitin: 2 },
+      5: { wood: 32, iron: 20, stone: 15, chitin: 5 },
+      6: { wood: 45, iron: 28, stone: 20, chitin: 10, leviathanBone: 2 }
+    }
   },
   speed: {
     name: "Layar & Kemudi (Kecepatan)",
+    nameEn: "Sails & Rigging (Speed & Agility)",
     iconKey: "speed",
     maxLevel: 6,
-    baseCost: 30,
-    costMult: 1.8,
-    bloodCostStart: 3, // Lv.4+ requires Blood Essence
-    desc: "Menambah kelincahan putar kemudi dan laju kecepatan layar."
+    desc: "Menambah kelincahan putar kemudi dan laju kecepatan layar.",
+    descEn: "Increases rudder turning responsiveness and top sail velocity.",
+    costs: {
+      2: { rope: 6, wood: 6 },
+      3: { rope: 12, wood: 10, sailCloth: 4 },
+      4: { rope: 18, wood: 16, sailCloth: 8, bamboo: 6 },
+      5: { rope: 26, wood: 22, sailCloth: 14, bamboo: 12, mistOrb: 2 },
+      6: { rope: 36, wood: 30, sailCloth: 20, bamboo: 18, mistOrb: 4 }
+    }
   },
   cannons: {
     name: "Kapasitas Slot Meriam (Cannon Slots)",
+    nameEn: "Cannon Battery Deck (Broadside Ports)",
     iconKey: "cannons",
     maxLevel: 6,
-    baseCost: 45,
-    costMult: 1.9,
-    bloodCostStart: 2, // Lv.3+ requires Blood Essence!
-    desc: "Membuka slot tambahan untuk memasang meriam hasil kerajinan pada sisi kapal (Hingga 4 slot per sisi)."
+    desc: "Membuka slot tambahan untuk memasang meriam hasil kerajinan pada sisi kapal (Hingga 4 slot per sisi).",
+    descEn: "Unlocks extra cannon mounts for craftable naval artillery (Up to 4 ports per broadside).",
+    costs: {
+      2: { iron: 6, wood: 8, rope: 4 },
+      3: { iron: 12, wood: 14, rope: 8, bronze: 4 },
+      4: { iron: 20, wood: 20, rope: 12, bronze: 8, firePowder: 3 },
+      5: { iron: 28, wood: 28, rope: 16, bronze: 14, firePowder: 6 },
+      6: { iron: 38, wood: 36, rope: 22, bronze: 20, firePowder: 10, snowOrb: 3 }
+    }
   },
   rearDefense: {
     name: "Pertahanan Buritan & Ranjau (Blind Spot)",
+    nameEn: "Stern Castle & Mines (Blind Spot Defense)",
     iconKey: "rearDefense",
     maxLevel: 6,
-    baseCost: 40,
-    costMult: 1.85,
-    bloodCostStart: 2, // Lv.3+ requires Blood Essence!
-    desc: "Membuka meriam buritan & melepas ranjau mesiu terapung jika musuh mengekor."
+    desc: "Membuka meriam buritan & melepas ranjau mesiu terapung jika musuh mengekor.",
+    descEn: "Deploys rear-facing swivel guns and dropped naval mines for pursuers.",
+    costs: {
+      1: { firePowder: 2, iron: 6, wood: 8, rope: 4 },
+      2: { firePowder: 4, iron: 10, wood: 12, stone: 6 },
+      3: { firePowder: 7, iron: 16, wood: 18, stone: 10, bronze: 4 },
+      4: { firePowder: 11, iron: 22, wood: 24, stone: 14, bronze: 8 },
+      5: { firePowder: 16, iron: 30, wood: 30, chitin: 6, bronze: 12 },
+      6: { firePowder: 22, iron: 40, wood: 38, chitin: 10, snowOrb: 4 }
+    }
   },
   stealthCamo: {
     name: "Layar Siluman & Kamuflase (Stealth)",
+    nameEn: "Stealth Canvas & Camouflage (Stealth)",
     iconKey: "stealthCamo",
     maxLevel: 6,
-    baseCost: 35,
-    costMult: 1.8,
-    bloodCostStart: 3, // Lv.4+ requires Blood Essence
-    desc: "Mempersempit jarak pandang musuh & memperlambat meteran ketahuan hingga 70%."
+    desc: "Mempersempit jarak pandang musuh & memperlambat meteran ketahuan hingga 70%.",
+    descEn: "Narrows enemy vision cones and slows alert detection meters by up to 70%.",
+    costs: {
+      2: { rope: 6, bamboo: 6, mistOrb: 1 },
+      3: { rope: 10, bamboo: 12, mistOrb: 2, sailCloth: 4 },
+      4: { rope: 16, bamboo: 18, mistOrb: 4, sailCloth: 8, krakenInk: 2 },
+      5: { rope: 22, bamboo: 24, mistOrb: 6, sailCloth: 14, krakenInk: 4 },
+      6: { rope: 30, bamboo: 32, mistOrb: 9, sailCloth: 20, krakenInk: 8 }
+    }
   },
   relicSiphon: {
     name: "Lentera Vampirisme (Life Steal)",
+    nameEn: "Relic Siphon & Ram (Life Steal)",
     iconKey: "relicSiphon",
     maxLevel: 6,
-    baseCost: 55,
-    costMult: 2.1,
-    bloodCostStart: 2, // Lv.3+ requires Blood Essence!
-    desc: "Menghisap darah kapal atau monster lawan untuk memulihkan lambung."
+    desc: "Menghisap darah kapal atau monster lawan untuk memulihkan lambung saat menabrak.",
+    descEn: "Crushes enemy vessels with the prow ram and siphons vitality to heal the hull.",
+    costs: {
+      2: { iron: 8, stone: 6, chitin: 2 },
+      3: { iron: 14, stone: 10, chitin: 5, bronze: 4 },
+      4: { iron: 22, stone: 16, chitin: 9, bronze: 8, snowOrb: 2 },
+      5: { iron: 30, stone: 22, chitin: 14, bronze: 12, snowOrb: 4, leviathanBone: 2 },
+      6: { iron: 40, stone: 30, chitin: 20, bronze: 18, snowOrb: 6, leviathanBone: 5 }
+    }
   }
 };
+
+// Helper: Get resource costs for a specific compartment upgrade tier
+function getCompartmentUpgradeCost(compKey, targetLevel) {
+  const conf = UPGRADE_CONFIG[compKey];
+  if (!conf || !conf.costs || !conf.costs[targetLevel]) return null;
+  return conf.costs[targetLevel];
+}
+
+// Helper: Check if player has all required resources for an upgrade tier (Pure Material, No Gold)
+function checkCanAffordCompartmentUpgrade(compKey, targetLevel) {
+  const cost = getCompartmentUpgradeCost(compKey, targetLevel);
+  if (!cost) return false;
+  if (typeof playerState === 'undefined' || !playerState.resources) return false;
+  for (const [resKey, reqQty] of Object.entries(cost)) {
+    const curQty = playerState.resources[resKey] || 0;
+    if (curQty < reqQty) return false;
+  }
+  return true;
+}
 
 const FOG_SECTOR_SIZE = 1200;
 
@@ -359,38 +1412,46 @@ const MAP_UPGRADE_CONFIG = {
   1: {
     level: 1,
     name: "Peta Sketsa Nelayan",
+    nameEn: "Fisherman's Sketch Chart",
     cost: 0,
     maxRadius: 22000,
     fogClearanceRadius: 2400,
     showTiers: [4],
-    desc: "Bagan navigasi dasar mencatat Teluk Nusa Damai dan perairan senja awal (Ring 0 & 1)."
+    desc: "Bagan navigasi dasar mencatat Teluk Nusa Damai dan perairan senja awal (Ring 0 & 1).",
+    descEn: "Basic navigation chart mapping Peace Haven Bay and early twilight waters (Ring 0 & 1)."
   },
   2: {
     level: 2,
     name: "Peta Pandu Perwira",
+    nameEn: "Officer's Pilot Chart",
     cost: 150,
     maxRadius: 42000,
     fogClearanceRadius: 3600,
     showTiers: [3, 4],
-    desc: "Bagan laut perwira menembus Selat Karang Besi dan pangkalan armada tempur (Ring 2)."
+    desc: "Bagan laut perwira menembus Selat Karang Besi dan pangkalan armada tempur (Ring 2).",
+    descEn: "Officer's nautical chart piercing Iron Reef Strait and fleet naval bases (Ring 2)."
   },
   3: {
     level: 3,
     name: "Peta Samudra Kerajaan",
+    nameEn: "Royal Ocean Chart",
     cost: 400,
     maxRadius: 65000,
     fogClearanceRadius: 5200,
     showTiers: [2, 3, 4],
-    desc: "Bagan resmi kerajaan melacak konvoi niaga dan kepulauan Sekte Kabut (Ring 3)."
+    desc: "Bagan resmi kerajaan melacak konvoi niaga dan kepulauan Sekte Kabut (Ring 3).",
+    descEn: "Official royal chart tracking merchant convoys and Mist Clan archipelagos (Ring 3)."
   },
   4: {
     level: 4,
     name: "Peta Kartografi Abisal",
+    nameEn: "Abyssal Cartography Chart",
     cost: 850,
     maxRadius: 92000,
     fogClearanceRadius: 7500,
     showTiers: [1, 2, 3, 4],
-    desc: "Gulungan navigasi terlarang membuka seluruh batas Laut Merah dan Pulau Tengkorak (Ring 4 & 5)."
+    desc: "Gulungan navigasi terlarang membuka seluruh batas Laut Merah dan Pulau Tengkorak (Ring 4 & 5).",
+    descEn: "Forbidden navigation scroll uncovering all boundaries of the Crimson Sea and Skull Islands (Ring 4 & 5)."
   }
 };
 
@@ -417,89 +1478,152 @@ const CLAN_LORE = {
   gold: {
     id: 'gold',
     name: "Sindikat Emas Batavia",
+    nameEn: "Batavia Gold Syndicate",
     species: "Manusia (Tirani Niaga)",
+    speciesEn: "Human (Trade Tyranny)",
     badgeColor: "#d97706",
     bgClass: "from-amber-950/40 to-slate-900/80 border-amber-500/30",
     bulletColor: "#fbbf24",
     lore: "Kongsi dagang bengis yang memonopoli rempah dan emas. Mereka berpatroli di perairan pulau niaga dengan formasi kapal bersenjata kuningan presisi.",
+    loreEn: "A ruthless trading conglomerate monopolizing spices and bullion. They patrol merchant waterways with precision brass-armed fleet formations.",
     tiers: [
-      { level: 1, name: "Kolek Cukai", hp: 55, speed: 2.3, damage: 10, radius: 24, desc: "Sekoci ringan pemburu upeti dengan layar tunggal bercorak emas." },
-      { level: 2, name: "Korvet Pengawal Emas", hp: 140, speed: 2.5, damage: 18, radius: 30, desc: "Kapal perang lapis ganda dengan meriam samping kuningan dan patung singa emas." },
-      { level: 3, name: "Benteng Terapung Batavia", hp: 360, speed: 2.8, damage: 28, radius: 40, desc: "Dreadnought raksasa bermahkota kaisar emas yang sanggup meratakan armada seketika." }
+      { level: 1, name: "Kolek Cukai", nameEn: "Toll Sloop", hp: 55, speed: 2.3, damage: 10, radius: 24, desc: "Sekoci ringan pemburu upeti dengan layar tunggal bercorak emas.", descEn: "Light tribute-hunting skiff with single gold-patterned sail." },
+      { level: 2, name: "Korvet Pengawal Emas", nameEn: "Gold Escort Corvette", hp: 140, speed: 2.5, damage: 18, radius: 30, desc: "Kapal perang lapis ganda dengan meriam samping kuningan dan patung singa emas.", descEn: "Double-planked warship equipped with brass broadsides and golden lion figurehead." },
+      { level: 3, name: "Benteng Terapung Batavia", nameEn: "Batavia Floating Fortress", hp: 360, speed: 2.8, damage: 28, radius: 40, desc: "Dreadnought raksasa bermahkota kaisar emas yang sanggup meratakan armada seketika.", descEn: "Colossal dreadnought crowned in golden imperial crests, capable of leveling fleets." }
     ]
   },
   iron: {
     id: 'iron',
     name: "Pemburu Besi Hitam",
+    nameEn: "Black Iron Hunters",
     species: "Manusia (Pandai Besi Brutal)",
+    speciesEn: "Human (Brutal Blacksmiths)",
     badgeColor: "#ea580c",
     bgClass: "from-orange-950/40 to-slate-900/80 border-orange-500/30",
     bulletColor: "#78716c",
     lore: "Klan pandai besi laut pemakan batubara. Menjaga pulau peleburan dengan lambung lapis baja, taji penabrak depan, dan kepulan cerobong uap hitam.",
+    loreEn: "Coal-devouring naval blacksmith clan guarding foundry atolls with reinforced ironclad hulls, frontal rams, and billowing smokestacks.",
     tiers: [
-      { level: 1, name: "Sekoci Perisai Berduri", hp: 80, speed: 1.9, damage: 13, radius: 25, desc: "Perahu besi kusam dengan taji penusuk di haluan depan." },
-      { level: 2, name: "Pembelah Karang Baja", hp: 200, speed: 2.2, damage: 22, radius: 32, desc: "Kapal lapis pelat besi dengan cerobong asap tunggal yang mengepulkan jelaga." },
-      { level: 3, name: "Mesin Jagal Laut (Juggernaut)", hp: 460, speed: 2.4, damage: 34, radius: 42, desc: "Benteng besi raksasa dengan dua cerobong uap besar dan daya tahan tabrakan ekstrem." }
+      { level: 1, name: "Sekoci Perisai Berduri", nameEn: "Spiked Shield Skiff", hp: 80, speed: 1.9, damage: 13, radius: 25, desc: "Perahu besi kusam dengan taji penusuk di haluan depan.", descEn: "Tarnished iron skiff sporting a jagged prow ram." },
+      { level: 2, name: "Pembelah Karang Baja", nameEn: "Steel Reef Breaker", hp: 200, speed: 2.2, damage: 22, radius: 32, desc: "Kapal lapis pelat besi dengan cerobong asap tunggal yang mengepulkan jelaga.", descEn: "Armor-plated vessel with a single soot-belching smokestack." },
+      { level: 3, name: "Mesin Jagal Laut (Juggernaut)", nameEn: "Naval Juggernaut", hp: 460, speed: 2.4, damage: 34, radius: 42, desc: "Benteng besi raksasa dengan dua cerobong uap besar dan daya tahan tabrakan ekstrem.", descEn: "Massive iron fortress powered by twin steam engines with extreme ramming resilience." }
     ]
   },
   mist: {
     id: 'mist',
     name: "Sekte Kabut Kelabu",
+    nameEn: "Ashen Mist Sect",
     species: "Manusia (Pemuja Okultisme)",
+    speciesEn: "Human (Occult Cultists)",
     badgeColor: "#06b6d4",
     bgClass: "from-cyan-950/40 to-slate-900/80 border-cyan-500/30",
     bulletColor: "#22d3ee",
     lore: "Pemuja kutukan kabut yang menanggalkan nama mereka. Berpatroli di atol terpencil dengan lentera jiwa toska dan menembakkan orba arwah pelacak.",
+    loreEn: "Nameless devotees of the spectral mists patrolling cursed atolls with teal soul lanterns, launching auto-homing spirit orbs.",
     tiers: [
-      { level: 1, name: "Sekoci Sesaji", hp: 65, speed: 2.4, damage: 14, radius: 24, desc: "Perahu kayu kelabu berlayar sobek dengan satu lentera jiwa berpendar hijau toska." },
-      { level: 2, name: "Bahtera Arwah Gentayangan", hp: 165, speed: 2.7, damage: 24, radius: 31, desc: "Kapal bermastaka kerangka paus yang memancarkan kabut roh dingin di sekelilingnya." },
-      { level: 3, name: "Katedral Tenggelam (Cursed Cathedra)", hp: 410, speed: 3.0, damage: 36, radius: 42, desc: "Kuil terapung seram penuh rusuk tulang belulang dengan mata arwah kembar yang menembakkan kutukan abadi." }
+      { level: 1, name: "Sekoci Sesaji", nameEn: "Sacrificial Skiff", hp: 65, speed: 2.4, damage: 14, radius: 24, desc: "Perahu kayu kelabu berlayar sobek dengan satu lentera jiwa berpendar hijau toska.", descEn: "Ashen timber boat with tattered sails and a glowing teal spirit lantern." },
+      { level: 2, name: "Bahtera Arwah Gentayangan", nameEn: "Wraith Ark", hp: 165, speed: 2.7, damage: 24, radius: 31, desc: "Kapal bermastaka kerangka paus yang memancarkan kabut roh dingin di sekelilingnya.", descEn: "Vessel adorned with whale ribs radiating bone-chilling supernatural fog." },
+      { level: 3, name: "Katedral Tenggelam (Cursed Cathedra)", nameEn: "Sunken Cathedral", hp: 410, speed: 3.0, damage: 36, radius: 42, desc: "Kuil terapung seram penuh rusuk tulang belulang dengan mata arwah kembar yang menembakkan kutukan abadi.", descEn: "Eerie floating shrine crowned in skeletal arches and twin occult eyes projecting eternal curses." }
     ]
   },
   blood: {
     id: 'blood',
     name: "Legiun Palung Darah",
+    nameEn: "Blood Trench Legion",
     species: "BUKAN MANUSIA (Abyssal Eldritch)",
+    speciesEn: "NON-HUMAN (Abyssal Eldritch)",
     badgeColor: "#ef4444",
     bgClass: "from-red-950/60 to-slate-900/80 border-red-500/40",
     bulletColor: "#f43f5e",
     lore: "Organisme purba bukan manusia yang bangkit dari sarang pulau daging palung Laut Darah. Menyerang siapa saja dengan tentakel, duri kitin beracun, dan mulut raksasa.",
+    loreEn: "Ancient non-human organisms rising from flesh islands of the Crimson Sea. Assaulting intruders with thrashing tentacles, chitin barbs, and gaping maws.",
     tiers: [
-      { level: 1, name: "Larva Daging Pengintai", hp: 110, speed: 3.0, damage: 18, radius: 26, desc: "Kutu parasit laut merah berduri kitin yang melata lincah di permukaan air." },
-      { level: 2, name: "Ular Palung Daging (Hydra)", hp: 280, speed: 3.3, damage: 30, radius: 34, desc: "Monster bercabang tentakel dengan sirip berdarah dan duri penyemprot empedu beracun." },
-      { level: 3, name: "Sang Pemangsa Jiwa (Ancient Leviathan)", hp: 650, speed: 3.6, damage: 45, radius: 46, desc: "Dewa purba palung terdalam dengan 6 mata merah membara, taring melingkar raksasa, dan tentakel cambuk yang mematikan." }
+      { level: 1, name: "Larva Daging Pengintai", nameEn: "Flesh Scout Larva", hp: 110, speed: 3.0, damage: 18, radius: 26, desc: "Kutu parasit laut merah berduri kitin yang melata lincah di permukaan air.", descEn: "Crimson parasitic sea crawler skittering swiftly along the ocean surface." },
+      { level: 2, name: "Ular Palung Daging (Hydra)", nameEn: "Abyssal Hydra", hp: 280, speed: 3.3, damage: 30, radius: 34, desc: "Monster bercabang tentakel dengan sirip berdarah dan duri penyemprot empedu beracun.", descEn: "Multi-tentacled abomination armed with sanguine fins and venom-spewing spines." },
+      { level: 3, name: "Sang Pemangsa Jiwa (Ancient Leviathan)", nameEn: "Ancient Leviathan", hp: 650, speed: 3.6, damage: 45, radius: 46, desc: "Dewa purba palung terdalam dengan 6 mata merah membara, taring melingkar raksasa, dan tentakel cambuk yang mematikan.", descEn: "Primordial deep-trench god with 6 crimson eyes, circular jaws, and lethal whip-like tentacles." }
     ]
   },
   viking: {
     id: 'viking',
     name: "Klan Penakluk Viking",
+    nameEn: "Viking Conqueror Clan",
     species: "Manusia (Norse Ice Raiders)",
+    speciesEn: "Human (Norse Ice Raiders)",
     badgeColor: "#38bdf8",
     bgClass: "from-sky-950/40 to-slate-900/80 border-sky-500/30",
     bulletColor: "#7dd3fc",
     lore: "Pelaut tangguh dari samudra es utara yang mengarungi badai salju. Mereka menyerbu dengan drakkar berdayung cepat, benteng perisai kayu berlapis es, dan kapak es pembelah haluan.",
+    loreEn: "Hardened northern voyagers navigating blizzards in swift drakkars, armed with frost-bound shields and prow-cleaving battleaxes.",
     tiers: [
-      { level: 1, name: "Snekkja Salju", hp: 70, speed: 2.5, damage: 12, radius: 24, desc: "Perahu naga es ramping dengan 4 pasang dayung berirama dan haluan ukir kepala naga kayu." },
-      { level: 2, name: "Skeid Pembantai Fjord", hp: 175, speed: 2.7, damage: 20, radius: 31, desc: "Kapal perang fjord lapis perisai ganda dengan 6 pasang dayung, taji es depan, dan layar kotak bergaris." },
-      { level: 3, name: "Drakkar Jarl Raksasa", hp: 440, speed: 3.1, damage: 32, radius: 42, desc: "Drakkar perang legendaris sang Jarl dengan 8 pasang dayung, taring mammoth penusuk, dan kepala naga kembar bertanduk emas." }
+      { level: 1, name: "Snekkja Salju", nameEn: "Snow Snekkja", hp: 70, speed: 2.5, damage: 12, radius: 24, desc: "Perahu naga es ramping dengan 4 pasang dayung berirama dan haluan ukir kepala naga kayu.", descEn: "Slender ice dragon skiff with 4 oar pairs and a carved wooden dragonhead." },
+      { level: 2, name: "Skeid Pembantai Fjord", nameEn: "Fjord Skeid Raider", hp: 175, speed: 2.7, damage: 20, radius: 31, desc: "Kapal perang fjord lapis perisai ganda dengan 6 pasang dayung, taji es depan, dan layar kotak bergaris.", descEn: "Double-shielded fjord warship with 6 oar pairs, ice ram, and striped square sail." },
+      { level: 3, name: "Drakkar Jarl Raksasa", nameEn: "Great Jarl Drakkar", hp: 440, speed: 3.1, damage: 32, radius: 42, desc: "Drakkar perang legendaris sang Jarl dengan 8 pasang dayung, taring mammoth penusuk, dan kepala naga kembar bertanduk emas.", descEn: "Legendary royal flagship powered by 8 oar pairs, mammoth tusk rams, and twin gold-horned dragon crests." }
     ]
   },
   wokou: {
     id: 'wokou',
     name: "Perompak Jung Wokou",
+    nameEn: "Wokou Junk Pirates",
     species: "Manusia (Oriental Junk Pirates)",
+    speciesEn: "Human (Oriental Junk Pirates)",
     badgeColor: "#e11d48",
     bgClass: "from-rose-950/40 to-slate-900/80 border-rose-500/30",
     bulletColor: "#fb7185",
     lore: "Perompak samudra timur yang menguasai seni mesiu kembang api dan panah roket. Mereka bermanuver lincah menggunakan layar bertulang bambu dan melancarkan salvo roket yang membakar lautan.",
+    loreEn: "Eastern corsairs mastering firework gunpowder and rocket arrow batteries, maneuvering with battened bamboo sails.",
     tiers: [
-      { level: 1, name: "Sampan Roket Api", hp: 60, speed: 2.7, damage: 11, radius: 23, desc: "Sampan oriental bersayap tunggal layar batten bambu dengan peluncur panah roket haluan." },
-      { level: 2, name: "Jung Perang Wokou", hp: 155, speed: 2.6, damage: 19, radius: 30, desc: "Kapal perang bertiang dua dengan lentera merah berayun, geladak buritan tinggi, dan meriam mesiu samping." },
-      { level: 3, name: "Benteng Jung Kaisar Naga", hp: 400, speed: 2.9, damage: 30, radius: 41, desc: "Benteng terapung bertiang 3 bertingkat pagoda megah, berhaluan naga emas, dengan baterai roket kembar yang mematikan." }
+      { level: 1, name: "Sampan Roket Api", nameEn: "Fire Rocket Sampan", hp: 60, speed: 2.7, damage: 11, radius: 23, desc: "Sampan oriental bersayap tunggal layar batten bambu dengan peluncur panah roket haluan.", descEn: "Oriental sampan with batten sail and prow-mounted fire rocket launcher." },
+      { level: 2, name: "Jung Perang Wokou", nameEn: "Wokou War Junk", hp: 155, speed: 2.6, damage: 19, radius: 30, desc: "Kapal perang bertiang dua dengan lentera merah berayun, geladak buritan tinggi, dan meriam mesiu samping.", descEn: "Two-masted war junk with swaying lanterns, elevated stern castle, and broadside cannons." },
+      { level: 3, name: "Benteng Jung Kaisar Naga", nameEn: "Dragon Emperor Fortress Junk", hp: 400, speed: 2.9, damage: 30, radius: 41, desc: "Benteng terapung bertiang 3 bertingkat pagoda megah, berhaluan naga emas, dengan baterai roket kembar yang mematikan.", descEn: "Floating 3-masted pagoda fortress adorned with golden dragon prow and twin rocket batteries." }
+    ]
+  },
+  pirate: {
+    id: 'pirate',
+    name: "Bajak Laut Selat Liar",
+    nameEn: "Wild Strait Corsairs",
+    species: "Manusia (Perompak Samudra)",
+    speciesEn: "Human (Ocean Corsairs)",
+    badgeColor: "#ef4444",
+    bgClass: "from-zinc-950/70 to-slate-900/90 border-rose-500/40",
+    bulletColor: "#f97316",
+    lore: "Kawanan bajak laut pemberontak dan perompak buas yang bersarang di sekitar pulau-pulau karang terpencil tak berpenghuni. Berlayar dengan kapal bercat hitam kelam dan panji tengkorak merah, mereka menyergap pelaut yang melintas sendirian ataupun dalam armada serigala laut.",
+    loreEn: "Renegade buccaneers nesting in secluded uninhabited reef islets, sailing under black pitch hulls and crimson skull pennants.",
+    tiers: [
+      { level: 1, name: "Sekoci Penyamun", nameEn: "Raider Skiff", hp: 75, speed: 2.7, damage: 13, radius: 24, desc: "Sekoci gesit bercat hitam arang dengan layar robek bertengkorak dan haluan belati penusuk.", descEn: "Nimble charcoal-painted skiff with tattered skull sail and dagger ram." },
+      { level: 2, name: "Brigantin Bendera Tengkorak", nameEn: "Jolly Roger Brigantine", hp: 175, speed: 2.8, damage: 21, radius: 31, desc: "Kapal layar ganda hitam legam dengan lambang tengkorak putih, meriam besi tempa, dan taji penabrak.", descEn: "Twin-masted black vessel bearing skull emblems, forged iron broadsides, and a heavy ram." },
+      { level: 3, name: "Galleon Kutukan Badai", nameEn: "Storm Curse Galleon", hp: 430, speed: 3.0, damage: 33, radius: 42, desc: "Dreadnought bajak laut raksasa bertiang tiga dengan layar bertengkorak kembar, lambung baja hitam, dan deretan meriam broadside ganas.", descEn: "Three-masted dreadnought flagship bearing twin skull sails, black armor, and ferocious broadside batteries." }
     ]
   }
 };
 CLAN_LORE.batavia = CLAN_LORE.gold;
+
+// Unique individual Pirate Ship & Dread Captain Names
+const PIRATE_SHIP_NAMES = [
+  "Kapal 'Hantu Selat' (Kapt. Badai Hitam)",
+  "Kapal 'Mata Belati' (Kapt. Jack Gagak)",
+  "Kapal 'Gagak Bangkai' (Kapt. Siliwangi)",
+  "Kapal 'Darah Hitam' (Kapt. Redbeard)",
+  "Kapal 'Hiu Karang' (Kapt. Morgan)",
+  "Kapal 'Siluman Laut' (Kapt. Cakar Besi)",
+  "Kapal 'Bintang Hitam' (Kapt. Alap-Alap)",
+  "Kapal 'Bangkai Neraka' (Kapt. Moros)",
+  "Kapal 'Kutukan Malaka' (Kapt. Braja)",
+  "Kapal 'Belati Karang' (Kapt. Belang)",
+  "Kapal 'Tengkorak Baja' (Kapt. Raga)",
+  "Kapal 'Serigala Ombak' (Kapt. Duri Laut)",
+  "Kapal 'Pemberontak Senja' (Kapt. Malik)",
+  "Kapal 'Taring Buana' (Kapt. Baruna Hitam)",
+  "Kapal 'Maut Kelabu' (Kapt. Jagal)",
+  "Kapal 'Krakatoa Api' (Kapt. Keling)",
+  "Kapal 'Pembalas Dendam' (Kapt. Lautan)",
+  "Kapal 'Sayap Gagak' (Kapt. Ruyung)",
+  "Kapal 'Pedang Karang' (Kapt. Arung)",
+  "Kapal 'Badai Malam' (Kapt. Sembara)"
+];
+
+function getRandomPirateShipName() {
+  return PIRATE_SHIP_NAMES[Math.floor(Math.random() * PIRATE_SHIP_NAMES.length)];
+}
 
 // Island Conquest Reinforcement Parameters by Island Tier
 const CONQUEST_REINFORCEMENT_CONFIG = {
@@ -557,7 +1681,6 @@ const CONQUEST_REINFORCEMENT_CONFIG = {
   }
 };
 
-const WORLD_GEN_KEY = 'BLOOD_SEA_WORLD_GEN_v1';
 let currentWorldGenSeed = 104928;
 let currentWorldGenNumber = 1;
 
@@ -645,6 +1768,69 @@ function getIslandPalette(isl) {
   if (isl.id === 'haven') return ISLAND_PALETTES.haven;
   if (isl.isShopIsland) return ISLAND_PALETTES.merchant;
   return ISLAND_PALETTES[isl.clan] || ISLAND_PALETTES.neutral;
+}
+
+// Fast hex to [r, g, b] parser
+function parseHexColor(hex) {
+  if (!hex || typeof hex !== 'string' || hex[0] !== '#') return [128, 128, 128];
+  if (hex.length === 4) {
+    return [
+      parseInt(hex[1] + hex[1], 16),
+      parseInt(hex[2] + hex[2], 16),
+      parseInt(hex[3] + hex[3], 16)
+    ];
+  }
+  return [
+    parseInt(hex.slice(1, 3), 16),
+    parseInt(hex.slice(3, 5), 16),
+    parseInt(hex.slice(5, 7), 16)
+  ];
+}
+
+// Modulate island colors with day/night celestial lighting
+function modulateIslandColor(hex, dnState) {
+  if (!dnState || typeof dnState.ambientMult !== 'number') return hex;
+  const [r, g, b] = parseHexColor(hex);
+  const amb = dnState.ambientMult;
+  const ambRGB = Array.isArray(dnState.ambientRGB) ? dnState.ambientRGB : [255, 255, 255];
+  const tr = ambRGB[0] / 255;
+  const tg = ambRGB[1] / 255;
+  const tb = ambRGB[2] / 255;
+
+  let finalR, finalG, finalB;
+  if (dnState.isDay) {
+    // Daytime / Golden hour: blend base color scaled by ambient luminance with atmospheric tint
+    finalR = Math.round(Math.min(255, Math.max(15, r * (amb * 0.65 + 0.35 * tr))));
+    finalG = Math.round(Math.min(255, Math.max(20, g * (amb * 0.65 + 0.35 * tg))));
+    finalB = Math.round(Math.min(255, Math.max(25, b * (amb * 0.65 + 0.35 * tb))));
+  } else {
+    // Nocturnal / Moonlight: cool silvery-slate desaturation with ambient floor
+    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+    const nightAmb = Math.max(0.32, amb * 1.15); // keep island readable (32% - 40% luminance)
+    finalR = Math.round(Math.min(255, Math.max(12, (r * 0.42 + lum * 0.38 + ambRGB[0] * 0.20) * nightAmb)));
+    finalG = Math.round(Math.min(255, Math.max(18, (g * 0.42 + lum * 0.38 + ambRGB[1] * 0.20) * nightAmb)));
+    finalB = Math.round(Math.min(255, Math.max(28, (b * 0.42 + lum * 0.38 + ambRGB[2] * 0.20) * nightAmb)));
+  }
+
+  return `rgb(${finalR}, ${finalG}, ${finalB})`;
+}
+
+function getModulatedIslandPalette(isl, dnState) {
+  const base = getIslandPalette(isl);
+  if (!dnState || typeof dnState.ambientMult !== 'number') return base;
+  
+  const isNight = !dnState.isDay;
+  const surfAlpha = isNight ? 0.42 : 0.85;
+  const reefAlpha = isNight ? 0.18 : 0.35;
+  
+  return {
+    sand: modulateIslandColor(base.sand, dnState),
+    lowland: modulateIslandColor(base.lowland, dnState),
+    highland: modulateIslandColor(base.highland, dnState),
+    reef: isNight ? `rgba(15, 76, 92, ${reefAlpha})` : base.reef,
+    surf: `rgba(255, 255, 255, ${surfAlpha})`,
+    propType: base.propType
+  };
 }
 
 // Organic Archipelago Islands: Procedurally Generated per World Generation
@@ -1106,18 +2292,18 @@ function generateGenerationalWorld(seed, genNumber) {
     desc: "Makam keramat tempat kapal-kapal karam masa lampau dipuja oleh kultus kabut."
   }, 25000, 33000, -Math.PI * 0.05, Math.PI * 0.8);
 
-  // Blood Coral Shallows (Blood Clan, Tier 3)
+  // Karang Besi Shallows (Iron Clan, Tier 3) - Ring 2
   placeIsland({
-    id: 'blood_coral_shallows',
-    name: "Dangkal Karang Berdarah",
-    clan: 'blood',
+    id: 'iron_coral_shallows',
+    name: "Dangkal Karang Besi",
+    clan: 'iron',
     tier: 3,
     minRadius: 290,
     maxRadius: 350,
-    color: '#4c0519',
-    sandColor: '#f43f5e',
-    isFlesh: true,
-    desc: "Gugusan karang berduri berdenyut merah di ambang selat dalam."
+    color: '#334155',
+    sandColor: '#94a3b8',
+    hasFortress: true,
+    desc: "Gugusan karang cadas berlapis bijih besi kokoh di ambang selat badai."
   }, 34000, 41000, rng() * Math.PI * 2, Math.PI * 0.85);
 
   // 4. RING 3: Perairan Kutukan Sekte Kabut (42000 - 62000m)
@@ -1310,6 +2496,20 @@ function generateGenerationalWorld(seed, genNumber) {
     desc: "Tonjolan daging karang abisal berdenyut di kedalaman samudra darah."
   }, 70000, 76000, rng() * Math.PI * 2, Math.PI * 0.8);
 
+  // Blood Coral Shallows (Blood Clan, Tier 2) - Exclusively in Laut Darah
+  placeIsland({
+    id: 'blood_coral_shallows',
+    name: "Dangkal Karang Berdarah",
+    clan: 'blood',
+    tier: 2,
+    minRadius: 320,
+    maxRadius: 380,
+    color: '#4c0519',
+    sandColor: '#f43f5e',
+    isFlesh: true,
+    desc: "Sarang organisme monster berdenyut merah pekat di dalam samudra darah abisal."
+  }, 71000, 75500, rng() * Math.PI * 2, Math.PI * 0.85);
+
   // SKULL ISLAND (Tier 1) - PUSAT LAUT MERAH (78000m)
   placeIsland({
     id: 'skull_island',
@@ -1410,12 +2610,12 @@ let activeTreasureHint = null; // { x, y, name }
 let hasEnteredBloodSeaThisRun = false;
 
 const BIOME_STOPS = [
-  { dist: 0,     name: "Laut Tenang - Teluk Nusa Damai",  waterA: [16, 85, 130], waterB: [10, 48, 90],  isBlood: false },
-  { dist: 8000,  name: "Perairan Senja Berombak",        waterA: [14, 62, 105], waterB: [8, 34, 72],   isBlood: false },
-  { dist: 22000, name: "Selat Badai Karang Besi",        waterA: [12, 38, 75],  waterB: [6, 20, 48],   isBlood: false },
-  { dist: 42000, name: "Perairan Kutukan Sekte Kabut",   waterA: [46, 18, 70],  waterB: [22, 8, 42],   isBlood: false },
-  { dist: 62000, name: "Gerbang Palung Neraka",          waterA: [105, 14, 38], waterB: [45, 6, 22],   isBlood: false },
-  { dist: 75000, name: "LAUT MERAH (LAUT DARAH ABISAL)",  waterA: [155, 8, 24],  waterB: [72, 4, 16],   isBlood: true  }
+  { dist: 0,     name: "Laut Tenang - Teluk Nusa Damai", nameEn: "Calm Seas - Peace Bay",        waterA: [16, 85, 130], waterB: [10, 48, 90],  isBlood: false },
+  { dist: 8000,  name: "Perairan Senja Berombak",       nameEn: "Choppy Twilight Waters",       waterA: [14, 62, 105], waterB: [8, 34, 72],   isBlood: false },
+  { dist: 22000, name: "Selat Badai Karang Besi",       nameEn: "Iron Reef Storm Strait",       waterA: [12, 38, 75],  waterB: [6, 20, 48],   isBlood: false },
+  { dist: 42000, name: "Perairan Kutukan Sekte Kabut",  nameEn: "Mist Sect Cursed Waters",      waterA: [46, 18, 70],  waterB: [22, 8, 42],   isBlood: false },
+  { dist: 62000, name: "Gerbang Palung Neraka",         nameEn: "Gates of the Abyssal Trench",  waterA: [105, 14, 38], waterB: [45, 6, 22],   isBlood: false },
+  { dist: 75000, name: "LAUT MERAH (LAUT DARAH ABISAL)", nameEn: "RED SEA (ABYSSAL BLOOD SEA)", waterA: [155, 8, 24],  waterB: [72, 4, 16],   isBlood: true  }
 ];
 
 const _biomeColorA = [0, 0, 0];
@@ -1430,11 +2630,15 @@ function lerpColorOut(out, c1, c2, t) {
 
 let _cachedBiomeInfo = null;
 let _cachedBiomeDist = -1;
+let _cachedBiomeLang = '';
 
 function getBiomeInfo(dist) {
+  const isEn = (typeof currentLanguage !== 'undefined' && currentLanguage === 'en');
   const quantizedDist = Math.floor(dist / 50);
-  if (quantizedDist === _cachedBiomeDist && _cachedBiomeInfo) return _cachedBiomeInfo;
+  const langKey = isEn ? 'en' : 'id';
+  if (quantizedDist === _cachedBiomeDist && _cachedBiomeInfo && _cachedBiomeLang === langKey) return _cachedBiomeInfo;
   _cachedBiomeDist = quantizedDist;
+  _cachedBiomeLang = langKey;
 
   let idx = 0;
   for (let i = 0; i < BIOME_STOPS.length; i++) {
@@ -1458,9 +2662,12 @@ function getBiomeInfo(dist) {
   const isBloodSea = dist >= 75000;
   const bloodRatio = Math.max(0, Math.min(1, (dist - 62000) / 13000));
 
-  let displayName = curr.name;
+  const currName = (isEn && curr.nameEn) ? curr.nameEn : curr.name;
+  const nextName = (isEn && next.nameEn) ? next.nameEn : next.name;
+
+  let displayName = currName;
   if (t > 0.6 && curr !== next) {
-    displayName = `Menuju ${next.name}`;
+    displayName = isEn ? `Towards ${nextName}` : `Menuju ${nextName}`;
   }
 
   // To truly avoid creating objects on EVERY call, 
@@ -1499,7 +2706,9 @@ const WEATHER_CONFIGS = {
   clear: {
     id: 'clear',
     name: 'Laut Tenang',
+    nameEn: 'Calm Seas',
     subtext: 'Angin sepoi-sepoi dan perairan bersahabat',
+    subtextEn: 'Gentle breeze and friendly waters',
     compassStatus: 'normal',
     color: '#38bdf8',
     rainDensity: 0,
@@ -1508,13 +2717,15 @@ const WEATHER_CONFIGS = {
     hasLightning: false,
     hasBloodCorrosion: false,
     denseFog: false,
-    calmCooldownMin: 30,
-    calmCooldownMax: 45
+    calmCooldownMin: 100,
+    calmCooldownMax: 200
   },
   overcast: {
     id: 'overcast',
     name: 'Langit Berawan',
+    nameEn: 'Overcast Skies',
     subtext: 'Awan tebal meredupkan cakrawala samudra',
+    subtextEn: 'Thick clouds darken the ocean horizon',
     compassStatus: 'normal',
     color: '#94a3b8',
     rainDensity: 0,
@@ -1529,7 +2740,9 @@ const WEATHER_CONFIGS = {
   rain: {
     id: 'rain',
     name: 'Hujan Samudra',
+    nameEn: 'Ocean Rain',
     subtext: 'Rintik hujan membasahi geladak, pengereman licin',
+    subtextEn: 'Rain drenches the deck, slippery braking',
     compassStatus: 'normal',
     color: '#60a5fa',
     rainDensity: 1.0,
@@ -1544,7 +2757,9 @@ const WEATHER_CONFIGS = {
   gale: {
     id: 'gale',
     name: 'Angin Kencang',
+    nameEn: 'Gale Winds',
     subtext: 'Hembusan angin kencang menyeret haluan kapal',
+    subtextEn: 'Strong wind gusts dragging the prow',
     compassStatus: 'normal',
     color: '#a7f3d0',
     rainDensity: 0.2,
@@ -1559,7 +2774,9 @@ const WEATHER_CONFIGS = {
   storm: {
     id: 'storm',
     name: 'Badai Gelombang',
+    nameEn: 'Storm Seas',
     subtext: 'Ombak ganas bergulung dan hempasan angin liar',
+    subtextEn: 'Fierce rolling waves and wild wind bursts',
     compassStatus: 'normal',
     color: '#38bdf8',
     rainDensity: 1.6,
@@ -1574,7 +2791,9 @@ const WEATHER_CONFIGS = {
   thunderstorm: {
     id: 'thunderstorm',
     name: 'Badai Petir Maut',
+    nameEn: 'Thunderstorm',
     subtext: 'Kilat membelah langit, interferensi kompas terjadi',
+    subtextEn: 'Lightning splits the sky, compass interference occurs',
     compassStatus: 'jitter',
     color: '#fef08a',
     rainDensity: 2.2,
@@ -1589,7 +2808,9 @@ const WEATHER_CONFIGS = {
   mist: {
     id: 'mist',
     name: 'Kabut Halimun',
+    nameEn: 'Mystic Mist',
     subtext: 'Kabut mistis perairan kutukan menyelimuti laut',
+    subtextEn: 'Mystic fog shrouds the cursed waters',
     compassStatus: 'normal',
     color: '#c084fc',
     rainDensity: 0.1,
@@ -1604,7 +2825,9 @@ const WEATHER_CONFIGS = {
   dense_fog: {
     id: 'dense_fog',
     name: 'Kabut Padat Abisal',
+    nameEn: 'Dense Abyssal Fog',
     subtext: 'Pandangan tertutup pekat, musuh terselubung misteri',
+    subtextEn: 'Heavy zero visibility, enemies cloaked in mystery',
     compassStatus: 'blind',
     color: '#e2e8f0',
     rainDensity: 0,
@@ -1619,7 +2842,9 @@ const WEATHER_CONFIGS = {
   blood_tempest: {
     id: 'blood_tempest',
     name: 'Prahara Darah Neraka',
+    nameEn: 'Blood Tempest',
     subtext: 'Hujan darah korosif dan petir abisal merah',
+    subtextEn: 'Corrosive blood rain and abyssal crimson lightning',
     compassStatus: 'corrupted',
     color: '#ef4444',
     rainDensity: 2.8,
@@ -1651,4 +2876,155 @@ function getAvailableWeathersForDistance(dist) {
   }
   return ['blood_tempest'];
 }
+
+/* ==========================================================================
+   DAY / NIGHT CELESTIAL ASTRONOMY & OCEAN LIGHTING CONFIGURATION
+   20-minute real-time full 24h cycle (1200 sec) with 60 FPS frame cache
+   ========================================================================== */
+
+const DAY_NIGHT_CONFIG = {
+  durationSec: 1200, // 20 minutes real-time for full 24h day
+  keyframes: [
+    { time: 0.0,   id: 'midnight',  name: 'Tengah Malam', nameEn: 'Midnight',  ambientMult: 0.28, ambientRGB: [32, 48, 86],   waterTint: [-4, -2, 10],   skyRGB: [6, 12, 28],    altitude: -75, shadowLen: 12, shadowAlpha: 0.22, glintColor: [186, 230, 253], isDay: false, celestial: 'moon', bioLum: 1.0 },
+    { time: 4.25,  id: 'predawn',   name: 'Fajar Awal',   nameEn: 'Twilight',  ambientMult: 0.35, ambientRGB: [48, 62, 105],  waterTint: [-3, -1, 6],    skyRGB: [14, 22, 48],   altitude: -15, shadowLen: 16, shadowAlpha: 0.20, glintColor: [196, 181, 253], isDay: false, celestial: 'moon', bioLum: 0.8 },
+    { time: 5.5,   id: 'dawn',      name: 'Subuh',        nameEn: 'Dawn',      ambientMult: 0.60, ambientRGB: [240, 180, 160], waterTint: [10, 2, -4],    skyRGB: [65, 48, 78],   altitude: 8,   shadowLen: 30, shadowAlpha: 0.38, glintColor: [253, 186, 116], isDay: true,  celestial: 'sun',  bioLum: 0.2 },
+    { time: 7.0,   id: 'morning',   name: 'Pagi',         nameEn: 'Morning',   ambientMult: 0.85, ambientRGB: [255, 238, 210], waterTint: [3, 3, 4],      skyRGB: [115, 155, 205],altitude: 28,  shadowLen: 18, shadowAlpha: 0.42, glintColor: [254, 240, 138], isDay: true,  celestial: 'sun',  bioLum: 0.0 },
+    { time: 12.0,  id: 'noon',      name: 'Siang',        nameEn: 'Midday',    ambientMult: 1.00, ambientRGB: [255, 255, 255], waterTint: [0, 0, 2],      skyRGB: [135, 206, 235],altitude: 75,  shadowLen: 6,  shadowAlpha: 0.46, glintColor: [255, 255, 255], isDay: true,  celestial: 'sun',  bioLum: 0.0 },
+    { time: 16.0,  id: 'afternoon', name: 'Sore',         nameEn: 'Afternoon', ambientMult: 0.92, ambientRGB: [255, 226, 182], waterTint: [6, 2, -2],     skyRGB: [180, 160, 150],altitude: 42,  shadowLen: 16, shadowAlpha: 0.44, glintColor: [254, 240, 138], isDay: true,  celestial: 'sun',  bioLum: 0.0 },
+    { time: 17.75, id: 'sunset',    name: 'Senja',        nameEn: 'Sunset',    ambientMult: 0.68, ambientRGB: [255, 138, 72],  waterTint: [18, -2, -10],  skyRGB: [125, 42, 52],  altitude: 10,  shadowLen: 32, shadowAlpha: 0.42, glintColor: [251, 146, 60],  isDay: true,  celestial: 'sun',  bioLum: 0.2 },
+    { time: 19.25, id: 'dusk',      name: 'Lembayung',    nameEn: 'Dusk',      ambientMult: 0.48, ambientRGB: [92, 82, 142],   waterTint: [6, -4, 10],    skyRGB: [30, 22, 58],   altitude: -8,  shadowLen: 18, shadowAlpha: 0.25, glintColor: [196, 181, 253], isDay: false, celestial: 'moon', bioLum: 0.6 },
+    { time: 21.0,  id: 'night',     name: 'Malam',        nameEn: 'Night',     ambientMult: 0.32, ambientRGB: [38, 56, 96],    waterTint: [-4, -2, 10],   skyRGB: [8, 16, 36],   altitude: -45, shadowLen: 14, shadowAlpha: 0.24, glintColor: [186, 230, 253], isDay: false, celestial: 'moon', bioLum: 0.9 },
+    { time: 24.0,  id: 'midnight',  name: 'Tengah Malam', nameEn: 'Midnight',  ambientMult: 0.28, ambientRGB: [32, 48, 86],   waterTint: [-4, -2, 10],   skyRGB: [6, 12, 28],    altitude: -75, shadowLen: 12, shadowAlpha: 0.22, glintColor: [186, 230, 253], isDay: false, celestial: 'moon', bioLum: 1.0 }
+  ]
+};
+
+/* ==========================================================================
+   RARE CELESTIAL PHENOMENA (Laut Kaca Bimasakti / Cosmic Milky Way Mirror)
+   ========================================================================== */
+const CELESTIAL_EVENTS = {
+  cosmic_mirror: {
+    id: 'cosmic_mirror',
+    name: 'Laut Kaca Bimasakti',
+    nameEn: 'Mirror of the Cosmos',
+    subtitle: 'Permukaan samudra tenang bak cermin kristal, memantulkan kemegahan Galaksi Bimasakti.',
+    subtitleEn: 'Ocean surface turns glassy mirror-still, reflecting the majestic Milky Way and starfield.',
+    minHour: 21.0,
+    maxHour: 3.8,
+    waterA: [18, 10, 36],       // Cosmic ultraviolet-indigo deep sea
+    waterB: [8, 16, 42],        // Royal sapphire deep sea
+    ambientRGB: [88, 56, 120],   // Luminous nebula ambient tint
+    milkyWayColors: ['#7c3aed', '#c026d3', '#38bdf8', '#fde047'],
+    ambientMult: 0.38,
+    specularIntensity: 0.65,
+    glintColor: [224, 231, 255]
+  }
+};
+
+function calculateCelestialLighting(timeHours) {
+  const normTime = ((timeHours % 24) + 24) % 24;
+  const kfs = DAY_NIGHT_CONFIG.keyframes;
+  
+  // Find surrounding keyframes
+  let idx = 0;
+  for (let i = 0; i < kfs.length - 1; i++) {
+    if (normTime >= kfs[i].time && normTime < kfs[i + 1].time) {
+      idx = i;
+      break;
+    }
+  }
+  const k1 = kfs[idx];
+  const k2 = kfs[idx + 1];
+  const span = k2.time - k1.time;
+  const rawT = span > 0 ? (normTime - k1.time) / span : 0;
+  // Smoothstep interpolation
+  const t = rawT * rawT * (3 - 2 * rawT);
+
+  // Interpolated properties
+  const ambientMult = k1.ambientMult + (k2.ambientMult - k1.ambientMult) * t;
+  const ambientRGB = [
+    Math.round(k1.ambientRGB[0] + (k2.ambientRGB[0] - k1.ambientRGB[0]) * t),
+    Math.round(k1.ambientRGB[1] + (k2.ambientRGB[1] - k1.ambientRGB[1]) * t),
+    Math.round(k1.ambientRGB[2] + (k2.ambientRGB[2] - k1.ambientRGB[2]) * t)
+  ];
+  const waterTint = [
+    Math.round(k1.waterTint[0] + (k2.waterTint[0] - k1.waterTint[0]) * t),
+    Math.round(k1.waterTint[1] + (k2.waterTint[1] - k1.waterTint[1]) * t),
+    Math.round(k1.waterTint[2] + (k2.waterTint[2] - k1.waterTint[2]) * t)
+  ];
+  const shadowLen = k1.shadowLen + (k2.shadowLen - k1.shadowLen) * t;
+  const shadowAlpha = k1.shadowAlpha + (k2.shadowAlpha - k1.shadowAlpha) * t;
+  const bioLum = k1.bioLum + (k2.bioLum - k1.bioLum) * t;
+
+  const glintColor = [
+    Math.round(k1.glintColor[0] + (k2.glintColor[0] - k1.glintColor[0]) * t),
+    Math.round(k1.glintColor[1] + (k2.glintColor[1] - k1.glintColor[1]) * t),
+    Math.round(k1.glintColor[2] + (k2.glintColor[2] - k1.glintColor[2]) * t)
+  ];
+
+  // Solar & Lunar celestial vectors
+  const isDay = normTime >= 5.25 && normTime < 18.75;
+  const activeCelestial = isDay ? 'sun' : 'moon';
+
+  let celestialAngle = 0;
+  let celestialAlt = 0;
+
+  if (isDay) {
+    // Sun arcs East (X>0) -> Overhead Zenith (Y<0) -> West (X<0)
+    const dayProgress = (normTime - 5.25) / 13.5; // 0 to 1
+    celestialAngle = Math.PI - dayProgress * Math.PI; // PI (East) to 0 (West)
+    celestialAlt = Math.sin(dayProgress * Math.PI) * 75;
+  } else {
+    // Moon arcs East (X>0) -> Zenith -> West (X<0)
+    const nightTime = normTime >= 18.75 ? normTime - 18.75 : normTime + 5.25;
+    const nightProgress = nightTime / 10.5; // 0 to 1
+    celestialAngle = Math.PI - nightProgress * Math.PI;
+    celestialAlt = Math.sin(nightProgress * Math.PI) * 65;
+  }
+
+  // Directional shadow vector (opposite to celestial body)
+  const lightDirX = Math.cos(celestialAngle);
+  const lightDirY = -Math.sin(celestialAngle);
+  const shadowDirX = -lightDirX;
+  const shadowDirY = -lightDirY;
+  const sVecX = shadowDirX * shadowLen;
+  const sVecY = shadowDirY * shadowLen;
+  const specularIntensity = isDay ? (ambientMult * 0.7) : (bioLum * 0.35);
+
+  return {
+    time: normTime,
+    phaseId: k1.id,
+    phaseName: k1.name,
+    phaseNameEn: k1.nameEn,
+    isDay,
+    activeCelestial,
+    celestialAngle,
+    celestialAlt,
+    lightDirX,
+    lightDirY,
+    shadowDirX,
+    shadowDirY,
+    shadowVecX: sVecX,
+    shadowVecY: sVecY,
+    shadowOffsetX: sVecX,
+    shadowOffsetY: sVecY,
+    shadowLen,
+    shadowAlpha,
+    ambientMult,
+    ambientRGB,
+    waterTint,
+    glintColor,
+    specularIntensity,
+    bioLum
+  };
+}
+
+if (typeof window !== 'undefined') {
+  window.DAY_NIGHT_CONFIG = DAY_NIGHT_CONFIG;
+  window.CELESTIAL_EVENTS = CELESTIAL_EVENTS;
+  window.calculateCelestialLighting = calculateCelestialLighting;
+  window.getIslandPalette = getIslandPalette;
+  window.getModulatedIslandPalette = getModulatedIslandPalette;
+  window.modulateIslandColor = modulateIslandColor;
+}
+
 

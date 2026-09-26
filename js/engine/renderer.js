@@ -19,9 +19,25 @@ function isVisible(x, y, margin) {
       && y > viewTop - margin && y < viewBottom + margin;
 }
 
+let graphicsQuality = localStorage.getItem('BLOOD_SEA_GRAPHICS_QUALITY') || 'high';
+
+function setGraphicsQuality(quality) {
+  graphicsQuality = quality;
+  localStorage.setItem('BLOOD_SEA_GRAPHICS_QUALITY', quality);
+  resizeCanvas();
+}
+window.setGraphicsQuality = setGraphicsQuality;
+window.getGraphicsQuality = () => graphicsQuality;
+
 function resizeCanvas() {
   const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || window.innerWidth < 1024;
-  dpr = Math.min(window.devicePixelRatio || 1, isMobile ? 1.5 : 2.0);
+  if (graphicsQuality === 'low') {
+    dpr = 1.0;
+  } else if (graphicsQuality === 'med') {
+    dpr = Math.min(window.devicePixelRatio || 1, 1.25);
+  } else {
+    dpr = Math.min(window.devicePixelRatio || 1, isMobile ? 1.5 : 2.0);
+  }
   width = window.innerWidth;
   height = window.innerHeight;
   canvas.width = Math.floor(width * dpr);
@@ -286,13 +302,15 @@ function getIslandCachedData(isl) {
 // Render Natural Organic Coastlines & Multi-Layer Procedural Terrain (Phase 3)
 function drawWorldIsland(ctx, isl) {
   getIslandCachedData(isl);
-  const palette = (typeof getIslandPalette === 'function') ? getIslandPalette(isl) : {
-    sand: '#ca8a04',
-    lowland: '#166534',
-    highland: '#14532d',
-    reef: 'rgba(20, 184, 166, 0.32)',
-    surf: 'rgba(255, 255, 255, 0.85)'
-  };
+  const palette = (typeof getModulatedIslandPalette === 'function' && typeof dayNightState !== 'undefined')
+    ? getModulatedIslandPalette(isl, dayNightState)
+    : ((typeof getIslandPalette === 'function') ? getIslandPalette(isl) : {
+        sand: '#ca8a04',
+        lowland: '#166534',
+        highland: '#14532d',
+        reef: 'rgba(20, 184, 166, 0.32)',
+        surf: 'rgba(255, 255, 255, 0.85)'
+      });
 
   const reefPoints = isl._cachedReef;
   const outerPoints = isl._cachedOuter;
@@ -301,6 +319,31 @@ function drawWorldIsland(ctx, isl) {
 
   ctx.save();
   ctx.translate(isl.x, isl.y);
+
+  // -------------------------------------------------------------
+  // LAYER -1: Subtle Coastal Drop Shadow
+  // -------------------------------------------------------------
+  if (typeof dayNightState !== 'undefined' && dayNightState.shadowAlpha > 0.05 && outerPoints && outerPoints.length > 0) {
+    const sDirX = (typeof dayNightState.shadowDirX === 'number' && !isNaN(dayNightState.shadowDirX)) ? dayNightState.shadowDirX : 0.7;
+    const sDirY = (typeof dayNightState.shadowDirY === 'number' && !isNaN(dayNightState.shadowDirY)) ? dayNightState.shadowDirY : 0.7;
+    const sX = sDirX * 4.5;
+    const sY = sDirY * 4.5;
+    ctx.save();
+    ctx.translate(sX, sY);
+    ctx.fillStyle = `rgba(0, 0, 0, ${(dayNightState.shadowAlpha * 0.16).toFixed(3)})`;
+    ctx.beginPath();
+    ctx.moveTo(outerPoints[0].x, outerPoints[0].y);
+    for (let i = 1; i < outerPoints.length; i++) {
+      const prev = outerPoints[i - 1];
+      const curr = outerPoints[i];
+      const mx = (prev.x + curr.x) * 0.5;
+      const my = (prev.y + curr.y) * 0.5;
+      ctx.quadraticCurveTo(prev.x, prev.y, mx, my);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
 
   // -------------------------------------------------------------
   // LAYER 0: Shallow Reef Waters & Animated Foaming Surf
@@ -340,7 +383,7 @@ function drawWorldIsland(ctx, isl) {
   // LAYER 1: Sandy Beach / Rock Face (Organic Spline Contour)
   // -------------------------------------------------------------
   if (isl.isRockOnly) {
-    ctx.fillStyle = isl.color || '#334155';
+    ctx.fillStyle = (typeof modulateIslandColor === 'function' && typeof dayNightState !== 'undefined') ? modulateIslandColor(isl.color || '#334155', dayNightState) : (isl.color || '#334155');
   } else {
     ctx.fillStyle = palette.sand || isl.sandColor || '#ca8a04';
   }
@@ -376,7 +419,9 @@ function drawWorldIsland(ctx, isl) {
   // LAYER 2: Main Lowland Terrain (Lush / Basalt / Swamp) - Skipped for Sand-Only Islets
   // -------------------------------------------------------------
   if (!isl.isSandOnly) {
-    ctx.fillStyle = isl.isRockOnly ? '#1e293b' : (palette.lowland || isl.color || '#166534');
+    ctx.fillStyle = isl.isRockOnly 
+      ? ((typeof modulateIslandColor === 'function' && typeof dayNightState !== 'undefined') ? modulateIslandColor('#1e293b', dayNightState) : '#1e293b')
+      : (palette.lowland || isl.color || '#166534');
     ctx.beginPath();
     ctx.moveTo(innerPoints[0].x, innerPoints[0].y);
     for (let i = 1; i < innerPoints.length; i++) {
@@ -394,25 +439,34 @@ function drawWorldIsland(ctx, isl) {
     ctx.stroke();
 
     // -------------------------------------------------------------
-    // LAYER 3: Central Hill Plateau & 3D Cliff Drop-Shadow
+    // LAYER 3: Central Hill Plateau & Dynamic 3D Cliff Drop-Shadow
     // -------------------------------------------------------------
     if (hillPoints && hillPoints.length > 0 && !isl.isFlesh) {
-      // 3a. Cliff Drop-Shadow (Cast towards south-east: +6, +8)
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.32)';
+      // 3a. Cliff Drop-Shadow (Cast dynamically based on celestial sun/moon position)
+      const cShadowLen = (typeof dayNightState !== 'undefined' && typeof dayNightState.shadowLen === 'number') ? dayNightState.shadowLen : 6;
+      const cDirX = (typeof dayNightState !== 'undefined' && typeof dayNightState.shadowDirX === 'number' && !isNaN(dayNightState.shadowDirX)) ? dayNightState.shadowDirX : 0.6;
+      const cDirY = (typeof dayNightState !== 'undefined' && typeof dayNightState.shadowDirY === 'number' && !isNaN(dayNightState.shadowDirY)) ? dayNightState.shadowDirY : 0.8;
+      const cliffOffX = cDirX * Math.min(10, cShadowLen * 0.4);
+      const cliffOffY = cDirY * Math.min(10, cShadowLen * 0.4);
+      const cliffShadowAlpha = (typeof dayNightState !== 'undefined' && typeof dayNightState.shadowAlpha === 'number') ? (dayNightState.shadowAlpha * 0.75).toFixed(3) : 0.32;
+
+      ctx.fillStyle = `rgba(0, 0, 0, ${cliffShadowAlpha})`;
       ctx.beginPath();
-      ctx.moveTo(hillPoints[0].x + 6, hillPoints[0].y + 8);
+      ctx.moveTo(hillPoints[0].x + cliffOffX, hillPoints[0].y + cliffOffY);
       for (let i = 1; i < hillPoints.length; i++) {
         const prev = hillPoints[i - 1];
         const curr = hillPoints[i];
-        const mx = (prev.x + curr.x) * 0.5 + 6;
-        const my = (prev.y + curr.y) * 0.5 + 8;
-        ctx.quadraticCurveTo(prev.x + 6, prev.y + 8, mx, my);
+        const mx = (prev.x + curr.x) * 0.5 + cliffOffX;
+        const my = (prev.y + curr.y) * 0.5 + cliffOffY;
+        ctx.quadraticCurveTo(prev.x + cliffOffX, prev.y + cliffOffY, mx, my);
       }
       ctx.closePath();
       ctx.fill();
 
       // 3b. Highland Plateau Face
-      ctx.fillStyle = isl.isRockOnly ? '#0f172a' : (palette.highland || '#14532d');
+      ctx.fillStyle = isl.isRockOnly 
+        ? ((typeof modulateIslandColor === 'function' && typeof dayNightState !== 'undefined') ? modulateIslandColor('#0f172a', dayNightState) : '#0f172a')
+        : (palette.highland || '#14532d');
       ctx.beginPath();
       ctx.moveTo(hillPoints[0].x, hillPoints[0].y);
       for (let i = 1; i < hillPoints.length; i++) {
@@ -425,9 +479,15 @@ function drawWorldIsland(ctx, isl) {
       ctx.closePath();
       ctx.fill();
 
-      // 3c. Cliff top highlight rim
-      ctx.strokeStyle = isl.isRockOnly ? 'rgba(148, 163, 184, 0.25)' : 'rgba(255, 255, 255, 0.12)';
-      ctx.lineWidth = 1.2;
+      // 3c. Cliff top highlight rim with directional celestial glint
+      let rimColor = 'rgba(255, 255, 255, 0.12)';
+      if (typeof dayNightState !== 'undefined' && Array.isArray(dayNightState.glintColor)) {
+        const gc = dayNightState.glintColor;
+        const ra = dayNightState.isDay ? 0.22 : 0.10;
+        rimColor = `rgba(${gc[0]}, ${gc[1]}, ${gc[2]}, ${ra})`;
+      }
+      ctx.strokeStyle = isl.isRockOnly ? 'rgba(148, 163, 184, 0.25)' : rimColor;
+      ctx.lineWidth = 1.3;
       ctx.stroke();
     }
   }
@@ -477,10 +537,13 @@ function drawWorldIsland(ctx, isl) {
         ctx.save();
         ctx.translate(p.x, p.y);
         
-        // Tree ground shadow
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+        // Tree ground shadow with dynamic directional offset
+        const treeShadowX = (typeof dayNightState !== 'undefined' && typeof dayNightState.shadowVecX === 'number' && !isNaN(dayNightState.shadowVecX)) ? (dayNightState.shadowVecX * 0.35 * p.scale) : 3;
+        const treeShadowY = (typeof dayNightState !== 'undefined' && typeof dayNightState.shadowVecY === 'number' && !isNaN(dayNightState.shadowVecY)) ? (dayNightState.shadowVecY * 0.35 * p.scale) : 3;
+        const treeShadowA = (typeof dayNightState !== 'undefined' && typeof dayNightState.shadowAlpha === 'number' && !isNaN(dayNightState.shadowAlpha)) ? (dayNightState.shadowAlpha * 0.72) : 0.25;
+        ctx.fillStyle = `rgba(0, 0, 0, ${treeShadowA.toFixed(3)})`;
         ctx.beginPath();
-        ctx.ellipse(3, 3, 6 * p.scale, 3.5 * p.scale, 0, 0, Math.PI * 2);
+        ctx.ellipse(treeShadowX, treeShadowY, 6 * p.scale, 3.5 * p.scale, 0, 0, Math.PI * 2);
         ctx.fill();
 
         // Curved brown trunk
@@ -621,9 +684,12 @@ function drawWorldIsland(ctx, isl) {
         // Viking Snow Spruce Pine
         ctx.save();
         ctx.translate(p.x, p.y);
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+        const pineShadowX = (typeof dayNightState !== 'undefined' && typeof dayNightState.shadowVecX === 'number' && !isNaN(dayNightState.shadowVecX)) ? (dayNightState.shadowVecX * 0.35 * p.scale) : 2;
+        const pineShadowY = (typeof dayNightState !== 'undefined' && typeof dayNightState.shadowVecY === 'number' && !isNaN(dayNightState.shadowVecY)) ? (dayNightState.shadowVecY * 0.35 * p.scale) : 2;
+        const pineShadowA = (typeof dayNightState !== 'undefined' && typeof dayNightState.shadowAlpha === 'number' && !isNaN(dayNightState.shadowAlpha)) ? (dayNightState.shadowAlpha * 0.72) : 0.25;
+        ctx.fillStyle = `rgba(0, 0, 0, ${pineShadowA.toFixed(3)})`;
         ctx.beginPath();
-        ctx.ellipse(2, 2, 7 * p.scale, 4 * p.scale, 0, 0, Math.PI * 2);
+        ctx.ellipse(pineShadowX, pineShadowY, 7 * p.scale, 4 * p.scale, 0, 0, Math.PI * 2);
         ctx.fill();
 
         // 3-tiered triangular spruce foliage
@@ -995,6 +1061,44 @@ function drawWorldIsland(ctx, isl) {
   }
 
   // -------------------------------------------------------------
+  // LAYER 6.5: Diurnal Atmospheric Island Light Wash & Moon Rim
+  // -------------------------------------------------------------
+  if (typeof dayNightState !== 'undefined' && outerPoints && outerPoints.length > 0) {
+    if (!dayNightState.isDay) {
+      // Moonlight cool tint wash across terrain and props
+      const nightWashAlpha = Math.min(0.24, Math.max(0, (1 - dayNightState.ambientMult) * 0.28)).toFixed(3);
+      ctx.save();
+      ctx.fillStyle = `rgba(15, 23, 42, ${nightWashAlpha})`;
+      ctx.beginPath();
+      ctx.moveTo(outerPoints[0].x, outerPoints[0].y);
+      for (let i = 1; i < outerPoints.length; i++) {
+        const prev = outerPoints[i - 1];
+        const curr = outerPoints[i];
+        ctx.quadraticCurveTo(prev.x, prev.y, (prev.x + curr.x) * 0.5, (prev.y + curr.y) * 0.5);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    } else if (dayNightState.phaseId === 'sunset' || dayNightState.phaseId === 'dawn') {
+      // Golden Hour / Dawn warm atmospheric wash
+      const warmWashAlpha = (dayNightState.phaseId === 'sunset' ? 0.12 : 0.08);
+      const warmRGB = (dayNightState.phaseId === 'sunset' ? '251, 146, 60' : '253, 186, 116');
+      ctx.save();
+      ctx.fillStyle = `rgba(${warmRGB}, ${warmWashAlpha})`;
+      ctx.beginPath();
+      ctx.moveTo(outerPoints[0].x, outerPoints[0].y);
+      for (let i = 1; i < outerPoints.length; i++) {
+        const prev = outerPoints[i - 1];
+        const curr = outerPoints[i];
+        ctx.quadraticCurveTo(prev.x, prev.y, (prev.x + curr.x) * 0.5, (prev.y + curr.y) * 0.5);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // -------------------------------------------------------------
   // LAYER 7: Island Name Plaque & Clan Crest
   // -------------------------------------------------------------
   ctx.font = 'bold 12px "Cinzel", serif';
@@ -1050,43 +1154,52 @@ function drawVectorShip(ctx, ship, isPlayer = false, tier = 1) {
     ? (joystickState.active && joystickState.magnitude > 0.1) 
     : Boolean(ship.isMoving);
 
-  // Dynamic Ship Lantern Glow
+  // Dynamic Ship Lantern Glow with Natural Diurnal Adaptation
+  const isNight = (typeof dayNightState !== 'undefined') && !dayNightState.isDay;
   if (isPlayer) {
-    const lanternGrad = ctx.createRadialGradient(0, 0, 10, 0, 0, 75 + tier * 5);
-    lanternGrad.addColorStop(0, 'rgba(251, 191, 36, 0.18)');
-    lanternGrad.addColorStop(0.6, 'rgba(217, 119, 6, 0.08)');
+    const lanternRadius = isNight ? (105 + tier * 8) : (75 + tier * 5);
+    const alphaInner = isNight ? 0.36 : 0.18;
+    const alphaMid = isNight ? 0.14 : 0.08;
+    const lanternGrad = ctx.createRadialGradient(0, 0, 10, 0, 0, lanternRadius);
+    lanternGrad.addColorStop(0, `rgba(251, 191, 36, ${alphaInner})`);
+    lanternGrad.addColorStop(0.6, `rgba(217, 119, 6, ${alphaMid})`);
     lanternGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
     ctx.fillStyle = lanternGrad;
     ctx.beginPath();
-    ctx.arc(0, 0, 75 + tier * 5, 0, Math.PI * 2);
+    ctx.arc(0, 0, lanternRadius, 0, Math.PI * 2);
     ctx.fill();
   } else {
     const clan = ship.clan || 'gold';
-    let glowColorInner = 'rgba(251, 191, 36, 0.14)';
-    let glowColorOuter = 'rgba(217, 119, 6, 0.04)';
+    const boost = isNight ? 1.5 : 1.0;
+    let glowColorInner = `rgba(251, 191, 36, ${(0.14 * boost).toFixed(2)})`;
+    let glowColorOuter = `rgba(217, 119, 6, ${(0.04 * boost).toFixed(2)})`;
     if (clan === 'iron') {
-      glowColorInner = 'rgba(234, 88, 12, 0.18)';
-      glowColorOuter = 'rgba(194, 65, 12, 0.04)';
+      glowColorInner = `rgba(234, 88, 12, ${(0.18 * boost).toFixed(2)})`;
+      glowColorOuter = `rgba(194, 65, 12, ${(0.04 * boost).toFixed(2)})`;
     } else if (clan === 'mist') {
-      glowColorInner = 'rgba(34, 211, 238, 0.22)';
-      glowColorOuter = 'rgba(6, 182, 212, 0.05)';
+      glowColorInner = `rgba(34, 211, 238, ${(0.22 * boost).toFixed(2)})`;
+      glowColorOuter = `rgba(6, 182, 212, ${(0.05 * boost).toFixed(2)})`;
     } else if (clan === 'viking') {
-      glowColorInner = 'rgba(56, 189, 248, 0.22)';
-      glowColorOuter = 'rgba(14, 165, 233, 0.05)';
+      glowColorInner = `rgba(56, 189, 248, ${(0.22 * boost).toFixed(2)})`;
+      glowColorOuter = `rgba(14, 165, 233, ${(0.05 * boost).toFixed(2)})`;
     } else if (clan === 'wokou') {
-      glowColorInner = 'rgba(244, 63, 94, 0.22)';
-      glowColorOuter = 'rgba(225, 29, 72, 0.05)';
+      glowColorInner = `rgba(244, 63, 94, ${(0.22 * boost).toFixed(2)})`;
+      glowColorOuter = `rgba(225, 29, 72, ${(0.05 * boost).toFixed(2)})`;
     } else if (clan === 'blood') {
-      glowColorInner = 'rgba(244, 63, 94, 0.25)';
-      glowColorOuter = 'rgba(190, 18, 60, 0.06)';
+      glowColorInner = `rgba(244, 63, 94, ${(0.25 * boost).toFixed(2)})`;
+      glowColorOuter = `rgba(190, 18, 60, ${(0.06 * boost).toFixed(2)})`;
+    } else if (clan === 'pirate') {
+      glowColorInner = `rgba(249, 115, 22, ${(0.22 * boost).toFixed(2)})`;
+      glowColorOuter = `rgba(194, 65, 12, ${(0.05 * boost).toFixed(2)})`;
     }
-    const enemyGlow = ctx.createRadialGradient(0, 0, 8, 0, 0, 55 + (ship.radius || 20));
+    const enemyGlowRad = (55 + (ship.radius || 20)) * (isNight ? 1.25 : 1.0);
+    const enemyGlow = ctx.createRadialGradient(0, 0, 8, 0, 0, enemyGlowRad);
     enemyGlow.addColorStop(0, glowColorInner);
     enemyGlow.addColorStop(0.65, glowColorOuter);
     enemyGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
     ctx.fillStyle = enemyGlow;
     ctx.beginPath();
-    ctx.arc(0, 0, 55 + (ship.radius || 20), 0, Math.PI * 2);
+    ctx.arc(0, 0, enemyGlowRad, 0, Math.PI * 2);
     ctx.fill();
   }
 
@@ -1142,11 +1255,49 @@ function drawVectorShip(ctx, ship, isPlayer = false, tier = 1) {
     const hullLength = 34 + tier * 3.8;
     const hullWidth = 16 + tier * 1.8;
 
-    // 1. Ship Shadow
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+    // 1. Dynamic Directional Ship Shadow & Low-Sun Mast Projection
+    const sLen = (typeof dayNightState !== 'undefined' && typeof dayNightState.shadowLen === 'number') ? dayNightState.shadowLen : 6;
+    const sDirX = (typeof dayNightState !== 'undefined' && typeof dayNightState.shadowDirX === 'number' && !isNaN(dayNightState.shadowDirX)) ? dayNightState.shadowDirX : -0.4;
+    const sDirY = (typeof dayNightState !== 'undefined' && typeof dayNightState.shadowDirY === 'number' && !isNaN(dayNightState.shadowDirY)) ? dayNightState.shadowDirY : 0.8;
+    const pWorldShadowX = sDirX * Math.min(8, sLen * 0.35);
+    const pWorldShadowY = sDirY * Math.min(8, sLen * 0.35);
+    const pShadowAlpha = (typeof dayNightState !== 'undefined' && typeof dayNightState.shadowAlpha === 'number') ? dayNightState.shadowAlpha : 0.35;
+
+    // Transform world shadow offset into ship local coordinate space
+    const pShipHeading = ship.angle + bobAngle;
+    const pCosH = Math.cos(-pShipHeading);
+    const pSinH = Math.sin(-pShipHeading);
+    const pLocalShadowX = pWorldShadowX * pCosH - pWorldShadowY * pSinH;
+    const pLocalShadowY = pWorldShadowX * pSinH + pWorldShadowY * pCosH;
+
+    ctx.fillStyle = `rgba(0, 0, 0, ${pShadowAlpha})`;
     ctx.beginPath();
-    ctx.ellipse(-2, 4, hullLength / 2, hullWidth / 2, 0, 0, Math.PI * 2);
+    ctx.ellipse(pLocalShadowX, pLocalShadowY, hullLength / 2, hullWidth / 2, 0, 0, Math.PI * 2);
     ctx.fill();
+
+    // Projected Mast & Yardarm Cast Shadow when celestial body is near horizon (Dawn/Sunset/Low Moon)
+    if (sLen > 14 && pShadowAlpha > 0.05) {
+      ctx.save();
+      ctx.strokeStyle = `rgba(0, 0, 0, ${(pShadowAlpha * 0.42).toFixed(3)})`;
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(-2, 0);
+      ctx.lineTo(-2 + pLocalShadowX * 1.6, pLocalShadowY * 1.6);
+      ctx.stroke();
+
+      // Yardarm cross shadow
+      const sDist = Math.hypot(pLocalShadowX, pLocalShadowY) || 1;
+      const perpX = (-pLocalShadowY / sDist) * (hullWidth * 0.4);
+      const perpY = (pLocalShadowX / sDist) * (hullWidth * 0.4);
+      const tipX = -2 + pLocalShadowX * 1.2;
+      const tipY = pLocalShadowY * 1.2;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(tipX - perpX, tipY - perpY);
+      ctx.lineTo(tipX + perpX, tipY + perpY);
+      ctx.stroke();
+      ctx.restore();
+    }
 
     // 2. Wooden Hull with Armored Reinforcement based on Hull Level
     ctx.fillStyle = tier >= 4 ? '#381d11' : (hullLvl >= 4 ? '#451a03' : '#6b4226');
@@ -1390,6 +1541,39 @@ function drawVectorShip(ctx, ship, isPlayer = false, tier = 1) {
       ctx.beginPath();
       ctx.moveTo(0, 0);
       ctx.lineTo(Math.cos(sweepAng) * searchR, Math.sin(sweepAng) * searchR);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Dynamic Directional Enemy Ship Shadow & Mast Projection
+    const eLen = (typeof dayNightState !== 'undefined' && typeof dayNightState.shadowLen === 'number') ? dayNightState.shadowLen : 6;
+    const esDirX = (typeof dayNightState !== 'undefined' && typeof dayNightState.shadowDirX === 'number' && !isNaN(dayNightState.shadowDirX)) ? dayNightState.shadowDirX : -0.4;
+    const esDirY = (typeof dayNightState !== 'undefined' && typeof dayNightState.shadowDirY === 'number' && !isNaN(dayNightState.shadowDirY)) ? dayNightState.shadowDirY : 0.8;
+    const eWorldShadowX = esDirX * Math.min(8, eLen * 0.35);
+    const eWorldShadowY = esDirY * Math.min(8, eLen * 0.35);
+    const eShadowAlpha = (typeof dayNightState !== 'undefined' && typeof dayNightState.shadowAlpha === 'number' && !isNaN(dayNightState.shadowAlpha)) ? (dayNightState.shadowAlpha * 0.88) : 0.32;
+
+    const eShipHeading = ship.angle + bobAngle;
+    const eCosH = Math.cos(-eShipHeading);
+    const eSinH = Math.sin(-eShipHeading);
+    const eLocalShadowX = eWorldShadowX * eCosH - eWorldShadowY * eSinH;
+    const eLocalShadowY = eWorldShadowX * eSinH + eWorldShadowY * eCosH;
+
+    const baseELen = t === 1 ? 28 : (t === 2 ? 38 : 50);
+    const baseEWid = t === 1 ? 14 : (t === 2 ? 18 : 24);
+
+    ctx.fillStyle = `rgba(0, 0, 0, ${eShadowAlpha})`;
+    ctx.beginPath();
+    ctx.ellipse(eLocalShadowX, eLocalShadowY, baseELen * 0.5, baseEWid * 0.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    if (eLen > 14 && eShadowAlpha > 0.05) {
+      ctx.save();
+      ctx.strokeStyle = `rgba(0, 0, 0, ${(eShadowAlpha * 0.45).toFixed(3)})`;
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(eLocalShadowX * 1.6, eLocalShadowY * 1.6);
       ctx.stroke();
       ctx.restore();
     }
@@ -2289,13 +2473,274 @@ function drawVectorShip(ctx, ship, isPlayer = false, tier = 1) {
         ctx.quadraticCurveTo(-14, 18, -20, 12);
         ctx.stroke();
       }
+
+    } else if (clan === 'pirate') {
+      // PIRATES (BAJAK LAUT): Sekoci Penyamun (T1), Brigantin Bendera Tengkorak (T2), Galleon Kutukan Badai (T3)
+      if (t === 1) {
+        // Tier 1: Sekoci Penyamun (Fast corsair skiff with charred oak hull and skull sail)
+        const len = 28, wid = 13;
+        ctx.fillStyle = '#1c1917';
+        ctx.strokeStyle = '#f97316';
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.moveTo(len / 2 + 4, 0); // Spiked ramming prow
+        ctx.bezierCurveTo(len * 0.35, -wid / 2, -len * 0.35, -wid / 2, -len / 2, -wid * 0.3);
+        ctx.lineTo(-len / 2, wid * 0.3);
+        ctx.bezierCurveTo(-len * 0.35, wid / 2, len * 0.35, wid / 2, len / 2 + 4, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Blood-red deck planking
+        ctx.fillStyle = '#450a0a';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, len * 0.38, wid * 0.32, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Broadside swivel cannons
+        ctx.fillStyle = '#475569';
+        ctx.fillRect(-2, -wid / 2 - 3, 4, 3);
+        ctx.fillRect(-2, wid / 2, 4, 3);
+
+        // Mast & Boom
+        ctx.strokeStyle = '#78350f';
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.moveTo(-1, 0);
+        ctx.lineTo(-1, -wid * 0.85);
+        ctx.stroke();
+
+        // Tattered Black Sail
+        ctx.fillStyle = '#09090b';
+        ctx.strokeStyle = '#dc2626';
+        ctx.lineWidth = 1.0;
+        ctx.beginPath();
+        ctx.moveTo(-3, -wid * 0.8);
+        ctx.quadraticCurveTo(len * 0.22, 0, -3, wid * 0.8);
+        ctx.lineTo(-6, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Vector Skull stencil on sail
+        ctx.fillStyle = '#f8fafc';
+        ctx.beginPath();
+        ctx.arc(-1, 0, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillRect(-1.8, 1.4, 1.6, 1.2);
+        ctx.fillStyle = '#09090b';
+        ctx.fillRect(-1.6, -0.4, 0.9, 0.9);
+        ctx.fillRect(-0.4, -0.4, 0.9, 0.9);
+
+        // Stern Red Pennant
+        ctx.fillStyle = '#ef4444';
+        ctx.beginPath();
+        ctx.moveTo(-len / 2, 0);
+        ctx.lineTo(-len / 2 - 8, -3.5);
+        ctx.lineTo(-len / 2 - 8, 3.5);
+        ctx.closePath();
+        ctx.fill();
+
+      } else if (t === 2) {
+        // Tier 2: Brigantin Bendera Tengkorak (Double-masted corsair brigantine)
+        const len = 42, wid = 18;
+        ctx.fillStyle = '#18181b';
+        ctx.strokeStyle = '#f97316';
+        ctx.lineWidth = 2.0;
+        ctx.beginPath();
+        ctx.moveTo(len / 2 + 7, 0); // Heavy ram bowsprit
+        ctx.quadraticCurveTo(len * 0.35, -wid / 2, -len / 2, -wid * 0.35);
+        ctx.lineTo(-len / 2, wid * 0.35);
+        ctx.quadraticCurveTo(len * 0.35, wid / 2, len / 2 + 7, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Scorched timber deck & hatch
+        ctx.fillStyle = '#27272a';
+        ctx.beginPath();
+        ctx.ellipse(len * 0.05, 0, len * 0.36, wid * 0.32, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#7f1d1d';
+        ctx.fillRect(-4, -wid * 0.22, 8, wid * 0.44);
+
+        // 4 Broadside Cannon Ports (2 Port, 2 Starboard)
+        ctx.fillStyle = '#0f172a';
+        [-len * 0.18, len * 0.12].forEach(cx => {
+          ctx.fillRect(cx - 2, -wid / 2 - 3.5, 4, 3.5);
+          ctx.fillRect(cx - 2, wid / 2, 4, 3.5);
+        });
+
+        // Twin Masts (Foremast & Mainmast)
+        [-len * 0.15, len * 0.15].forEach((mx, mIdx) => {
+          const sW = wid * (mIdx === 0 ? 0.95 : 0.85);
+          // Dark square sail
+          ctx.fillStyle = '#09090b';
+          ctx.strokeStyle = '#b91c1c';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.moveTo(mx - 4, -sW);
+          ctx.quadraticCurveTo(mx + 7, 0, mx - 4, sW);
+          ctx.lineTo(mx - 7, 0);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+
+          // Mainmast gets large vector Skull & Bones emblem
+          if (mIdx === 0) {
+            ctx.fillStyle = '#f8fafc';
+            ctx.beginPath();
+            ctx.arc(mx, 0, 3.2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillRect(mx - 1.2, 2.2, 2.4, 1.6);
+            ctx.fillStyle = '#09090b';
+            ctx.fillRect(mx - 1.8, -0.6, 1.2, 1.2);
+            ctx.fillRect(mx + 0.6, -0.6, 1.2, 1.2);
+
+            // Crossed bones
+            ctx.strokeStyle = '#f8fafc';
+            ctx.lineWidth = 1.3;
+            ctx.beginPath();
+            ctx.moveTo(mx - 4.5, -4); ctx.lineTo(mx + 4.5, 4);
+            ctx.moveTo(mx - 4.5, 4); ctx.lineTo(mx + 4.5, -4);
+            ctx.stroke();
+          }
+        });
+
+        // Fiery Deck Lantern
+        ctx.fillStyle = '#f97316';
+        ctx.beginPath();
+        ctx.arc(-len * 0.35, 0, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Stern Battle Pennant
+        ctx.fillStyle = '#dc2626';
+        ctx.beginPath();
+        ctx.moveTo(-len / 2, 0);
+        ctx.lineTo(-len / 2 - 11, -5);
+        ctx.lineTo(-len / 2 - 11, 5);
+        ctx.closePath();
+        ctx.fill();
+
+      } else {
+        // Tier 3: Galleon Kutukan Badai (Heavy 3-masted corsair war-galleon)
+        const len = 54, wid = 24;
+        ctx.fillStyle = '#09090b';
+        ctx.strokeStyle = '#ea580c';
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.moveTo(len / 2 + 10, 0); // Reinforced iron ram
+        ctx.quadraticCurveTo(len * 0.4, -wid / 2, -len / 2, -wid * 0.4);
+        ctx.lineTo(-len / 2, wid * 0.4);
+        ctx.quadraticCurveTo(len * 0.4, wid / 2, len / 2 + 10, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Elevated Sterncastle & Gundeck Planking
+        ctx.fillStyle = '#1c1917';
+        ctx.beginPath();
+        ctx.ellipse(len * 0.05, 0, len * 0.38, wid * 0.34, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Sterncastle high deck
+        ctx.fillStyle = '#450a0a';
+        ctx.fillRect(-len / 2, -wid * 0.35, len * 0.28, wid * 0.7);
+        ctx.strokeStyle = '#f97316';
+        ctx.lineWidth = 1.2;
+        ctx.strokeRect(-len / 2, -wid * 0.35, len * 0.28, wid * 0.7);
+
+        // 6 Heavy Broadside Cannons (3 Port, 3 Starboard)
+        ctx.fillStyle = '#0f172a';
+        [-len * 0.25, -len * 0.05, len * 0.15].forEach(cx => {
+          ctx.fillRect(cx - 2, -wid / 2 - 4.5, 4, 4.5);
+          ctx.fillRect(cx - 2, wid / 2, 4, 4.5);
+        });
+
+        // Triple Masts (Mizzen, Main, Fore)
+        [-len * 0.22, 0, len * 0.22].forEach((mx, mIdx) => {
+          const sW = wid * (mIdx === 1 ? 1.05 : (mIdx === 2 ? 0.85 : 0.75));
+          ctx.fillStyle = '#18181b';
+          ctx.strokeStyle = '#dc2626';
+          ctx.lineWidth = 1.4;
+          ctx.beginPath();
+          ctx.moveTo(mx - 5, -sW);
+          ctx.quadraticCurveTo(mx + 9, 0, mx - 5, sW);
+          ctx.lineTo(mx - 8, 0);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+
+          // Giant Mainmast Skull Heraldry with Eye Patch & Crossed Swords
+          if (mIdx === 1) {
+            ctx.fillStyle = '#f8fafc';
+            ctx.beginPath();
+            ctx.arc(mx, 0, 4.0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillRect(mx - 1.8, 2.8, 3.6, 2.0);
+            ctx.fillStyle = '#09090b';
+            ctx.fillRect(mx - 2.2, -1.0, 1.5, 1.5);
+            ctx.fillRect(mx + 0.7, -1.0, 1.5, 1.5);
+
+            // Crossed Sabers
+            ctx.strokeStyle = '#fbbf24';
+            ctx.lineWidth = 1.6;
+            ctx.beginPath();
+            ctx.moveTo(mx - 6, -5.5); ctx.lineTo(mx + 6, 5.5);
+            ctx.moveTo(mx - 6, 5.5); ctx.lineTo(mx + 6, -5.5);
+            ctx.stroke();
+          }
+        });
+
+        // Triple Stern Lanterns (Crimson Glow)
+        [-wid * 0.25, 0, wid * 0.25].forEach(ly => {
+          ctx.fillStyle = '#f97316';
+          ctx.beginPath();
+          ctx.arc(-len / 2 - 2, ly, 2.2, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        // Twin Crimson Battle Pennants
+        ctx.fillStyle = '#ef4444';
+        ctx.beginPath();
+        ctx.moveTo(-len / 2, -wid * 0.2);
+        ctx.lineTo(-len / 2 - 14, -wid * 0.35);
+        ctx.lineTo(-len / 2 - 10, -wid * 0.2);
+        ctx.lineTo(-len / 2 - 14, -wid * 0.05);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+    } else {
+      // Robust Fallback Hull (Guarantees zero invisible ships under any clan configuration)
+      const len = 30, wid = 14;
+      ctx.fillStyle = '#334155';
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(len / 2, 0);
+      ctx.bezierCurveTo(len * 0.3, -wid / 2, -len * 0.3, -wid / 2, -len / 2, -wid * 0.3);
+      ctx.lineTo(-len / 2, wid * 0.3);
+      ctx.bezierCurveTo(-len * 0.3, wid / 2, len * 0.3, wid / 2, len / 2, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#e2e8f0';
+      ctx.beginPath();
+      ctx.moveTo(-2, -wid * 0.7);
+      ctx.quadraticCurveTo(len * 0.15, 0, -2, wid * 0.7);
+      ctx.lineTo(-5, 0);
+      ctx.closePath();
+      ctx.fill();
     }
 
     // Flagship Command Pennant for Convoy Leaders
     if (ship.formationRole === 'leader' && !ship.isMonster) {
       ctx.save();
       const mastX = -ship.radius * 0.15;
-      const pennantColor = clan === 'iron' ? '#94a3b8' : (clan === 'mist' ? '#22d3ee' : (clan === 'viking' ? '#38bdf8' : (clan === 'wokou' ? '#fb7185' : '#f59e0b')));
+      const pennantColor = clan === 'iron' ? '#94a3b8' : (clan === 'mist' ? '#22d3ee' : (clan === 'viking' ? '#38bdf8' : (clan === 'wokou' ? '#fb7185' : (clan === 'pirate' ? '#f97316' : '#f59e0b'))));
       ctx.fillStyle = pennantColor;
       ctx.strokeStyle = '#0f172a';
       ctx.lineWidth = 1;
@@ -2402,10 +2847,17 @@ function drawSunkenShip(ctx, wreck) {
 
   const time = _now * 0.003;
 
-  // Murky underwater seabed silhouette
+  // Murky underwater seabed silhouette with subtle directional seabed shadow
+  const wreckCos = Math.cos(-wreck.angle);
+  const wreckSin = Math.sin(-wreck.angle);
+  const wWorldSX = (typeof dayNightState !== 'undefined' && typeof dayNightState.shadowVecX === 'number' && !isNaN(dayNightState.shadowVecX)) ? dayNightState.shadowVecX : 0;
+  const wWorldSY = (typeof dayNightState !== 'undefined' && typeof dayNightState.shadowVecY === 'number' && !isNaN(dayNightState.shadowVecY)) ? dayNightState.shadowVecY : 0;
+  const wLocalSX = (wWorldSX * wreckCos - wWorldSY * wreckSin) * 0.35;
+  const wLocalSY = (wWorldSX * wreckSin + wWorldSY * wreckCos) * 0.35;
+
   ctx.fillStyle = wreck.isAbyssal ? 'rgba(153, 27, 27, 0.35)' : 'rgba(15, 23, 42, 0.5)';
   ctx.beginPath();
-  ctx.ellipse(0, 0, 42, 22, 0, 0, Math.PI * 2);
+  ctx.ellipse(wLocalSX, wLocalSY, 42, 22, 0, 0, Math.PI * 2);
   ctx.fill();
 
   // Fractured Keel - Main Hull Section
@@ -2526,6 +2978,15 @@ function drawSpikedMine(ctx, sm) {
     ctx.lineTo(Math.cos(sAng) * 14, Math.sin(sAng) * 14);
     ctx.stroke();
   }
+
+  // Water surface directional shadow
+  const smShadowX = (typeof dayNightState !== 'undefined' && typeof dayNightState.shadowVecX === 'number' && !isNaN(dayNightState.shadowVecX)) ? (dayNightState.shadowVecX * 0.28) : 0;
+  const smShadowY = (typeof dayNightState !== 'undefined' && typeof dayNightState.shadowVecY === 'number' && !isNaN(dayNightState.shadowVecY)) ? (dayNightState.shadowVecY * 0.28) : 3;
+  const smShadowA = (typeof dayNightState !== 'undefined' && typeof dayNightState.shadowAlpha === 'number' && !isNaN(dayNightState.shadowAlpha)) ? (dayNightState.shadowAlpha * 0.65) : 0.35;
+  ctx.fillStyle = `rgba(0, 0, 0, ${smShadowA.toFixed(3)})`;
+  ctx.beginPath();
+  ctx.ellipse(smShadowX, smShadowY, sm.radius * 0.95, sm.radius * 0.65, 0, 0, Math.PI * 2);
+  ctx.fill();
 
   // Heavy Spiked Iron Sphere Body
   const mineGrad = ctx.createRadialGradient(-3, -3, 1, 0, 0, sm.radius);
@@ -3448,10 +3909,33 @@ function drawMerchantShip(ctx, m) {
   const len = isCargo ? 32 : 28;
   const wid = isCargo ? 18 : 14;
 
-  // Water displacement / shadow
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
+  // Dynamic Merchant Ship Lantern at Night
+  if (typeof dayNightState !== 'undefined' && !dayNightState.isDay) {
+    const mLantern = ctx.createRadialGradient(0, 0, 4, 0, 0, 52);
+    mLantern.addColorStop(0, 'rgba(251, 191, 36, 0.24)');
+    mLantern.addColorStop(0.65, 'rgba(217, 119, 6, 0.06)');
+    mLantern.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = mLantern;
+    ctx.beginPath();
+    ctx.arc(0, 0, 52, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Dynamic Directional Water displacement & shadow
+  const msLen = (typeof dayNightState !== 'undefined' && typeof dayNightState.shadowLen === 'number') ? dayNightState.shadowLen : 6;
+  const msDirX = (typeof dayNightState !== 'undefined' && typeof dayNightState.shadowDirX === 'number' && !isNaN(dayNightState.shadowDirX)) ? dayNightState.shadowDirX : -0.4;
+  const msDirY = (typeof dayNightState !== 'undefined' && typeof dayNightState.shadowDirY === 'number' && !isNaN(dayNightState.shadowDirY)) ? dayNightState.shadowDirY : 0.8;
+  const mWorldShadowX = msDirX * Math.min(8, msLen * 0.35);
+  const mWorldShadowY = msDirY * Math.min(8, msLen * 0.35);
+  const mShadowAlpha = (typeof dayNightState !== 'undefined' && typeof dayNightState.shadowAlpha === 'number' && !isNaN(dayNightState.shadowAlpha)) ? (dayNightState.shadowAlpha * 0.8) : 0.28;
+  const mCosH = Math.cos(-m.angle);
+  const mSinH = Math.sin(-m.angle);
+  const mLocalShadowX = mWorldShadowX * mCosH - mWorldShadowY * mSinH;
+  const mLocalShadowY = mWorldShadowX * mSinH + mWorldShadowY * mCosH;
+
+  ctx.fillStyle = `rgba(0, 0, 0, ${mShadowAlpha})`;
   ctx.beginPath();
-  ctx.ellipse(1.5, 2.5, len * 0.5, wid * 0.5, 0, 0, Math.PI * 2);
+  ctx.ellipse(mLocalShadowX, mLocalShadowY, len * 0.5, wid * 0.5, 0, 0, Math.PI * 2);
   ctx.fill();
 
   if (isCargo) {
@@ -3645,16 +4129,24 @@ function drawSeagull(ctx, s) {
   const bodyColor = isCarrion ? '#0f172a' : '#f8fafc';
   const beakColor = isCarrion ? '#475569' : '#f59e0b';
 
-  // 1. Soft Shadow cast on Sea Water or Ship Deck
+  // 1. Dynamic Directional Soft Shadow cast on Sea Water or Ship Deck
   ctx.save();
-  ctx.fillStyle = 'rgba(15, 23, 42, 0.22)';
+  const seagullShadowAlpha = (typeof dayNightState !== 'undefined' && typeof dayNightState.shadowAlpha === 'number' && !isNaN(dayNightState.shadowAlpha)) ? (dayNightState.shadowAlpha * 0.6) : 0.22;
+  ctx.fillStyle = `rgba(15, 23, 42, ${seagullShadowAlpha.toFixed(3)})`;
+  const sWorldVecX = (typeof dayNightState !== 'undefined' && typeof dayNightState.shadowVecX === 'number' && !isNaN(dayNightState.shadowVecX)) ? dayNightState.shadowVecX : 0;
+  const sWorldVecY = (typeof dayNightState !== 'undefined' && typeof dayNightState.shadowVecY === 'number' && !isNaN(dayNightState.shadowVecY)) ? dayNightState.shadowVecY : 2;
   if (isPerched) {
+    const sOffX = sWorldVecX * 0.15;
+    const sOffY = sWorldVecY * 0.15;
     ctx.rotate(s.heading);
     ctx.beginPath();
-    ctx.ellipse(0, 1.2, 4.5, 2.0, 0, 0, Math.PI * 2);
+    ctx.ellipse(sOffX, sOffY, 4.5, 2.0, 0, 0, Math.PI * 2);
     ctx.fill();
   } else {
-    ctx.translate(0, s.altitude || 20);
+    const alt = s.altitude || 20;
+    const sOffX = sWorldVecX * (alt / 18);
+    const sOffY = sWorldVecY * (alt / 18);
+    ctx.translate(sOffX, sOffY);
     ctx.rotate(s.heading);
     ctx.beginPath();
     ctx.ellipse(0, 0, 6, 2.5, 0, 0, Math.PI * 2);
@@ -3930,14 +4422,172 @@ function render() {
   const biome = getBiomeInfo(playerDist);
   const time = _perfNow;
 
-  // Hardware-accelerated linear gradient for mobile GPU fill rate efficiency
-  const [r1, g1, b1] = biome.waterA;
-  const [r2, g2, b2] = biome.waterB;
+  // Modulate base ocean colors with day/night ambient lighting and atmospheric water tint
+  const dnAmbient = (typeof dayNightState !== 'undefined' && typeof dayNightState.ambientMult === 'number') ? dayNightState.ambientMult : 1.0;
+  const dnTint = (typeof dayNightState !== 'undefined' && Array.isArray(dayNightState.waterTint)) ? dayNightState.waterTint : [0, 0, 0];
+  
+  // Night floor clamp ensures ocean is never pitch black (minimum visibility floor guaranteed)
+  const r1 = Math.round(Math.min(255, Math.max(10, biome.waterA[0] * dnAmbient + dnTint[0])));
+  const g1 = Math.round(Math.min(255, Math.max(16, biome.waterA[1] * dnAmbient + dnTint[1])));
+  const b1 = Math.round(Math.min(255, Math.max(26, biome.waterA[2] * dnAmbient + dnTint[2])));
+
+  const r2 = Math.round(Math.min(255, Math.max(8, biome.waterB[0] * dnAmbient + dnTint[0])));
+  const g2 = Math.round(Math.min(255, Math.max(12, biome.waterB[1] * dnAmbient + dnTint[1])));
+  const b2 = Math.round(Math.min(255, Math.max(22, biome.waterB[2] * dnAmbient + dnTint[2])));
+
   const oceanGrad = ctx.createLinearGradient(0, 0, 0, height);
   oceanGrad.addColorStop(0, `rgb(${r1}, ${g1}, ${b1})`);
   oceanGrad.addColorStop(1, `rgb(${r2}, ${g2}, ${b2})`);
   ctx.fillStyle = oceanGrad;
   ctx.fillRect(0, 0, width, height);
+
+  // Specular Solar / Lunar Ocean Glint & Zenith Dome (Kilau Surya / Rembulan di Permukaan Samudera)
+  if (typeof dayNightState !== 'undefined' && typeof dayNightState.specularIntensity === 'number' && dayNightState.specularIntensity > 0.04) {
+    const glintCfg = (Array.isArray(dayNightState.glintColor)) ? dayNightState.glintColor : [255, 255, 255];
+    const glintInt = dayNightState.specularIntensity;
+    const lDirX = (typeof dayNightState.lightDirX === 'number' && !isNaN(dayNightState.lightDirX)) ? dayNightState.lightDirX : 1;
+    const lDirY = (typeof dayNightState.lightDirY === 'number' && !isNaN(dayNightState.lightDirY)) ? dayNightState.lightDirY : 0;
+    const lightAngle = Math.atan2(lDirY, lDirX);
+    const cAlt = typeof dayNightState.celestialAlt === 'number' ? dayNightState.celestialAlt : 45;
+
+    // 1. Zenith Sun Specular Dome (Overhead sunlight reflection as seen in high-sun ocean photography)
+    if (dayNightState.isDay && cAlt > 20) {
+      const altFactor = Math.min(1.0, (cAlt - 20) / 45); // 0 at 20 deg, 1.0 at 65+ deg
+      const domeCenterX = width * 0.5 - lDirX * (width * 0.12);
+      const domeCenterY = height * 0.45 - lDirY * (height * 0.12);
+      const domeR = Math.max(width, height) * (0.42 + altFactor * 0.28);
+      const domeGrad = ctx.createRadialGradient(domeCenterX, domeCenterY, 0, domeCenterX, domeCenterY, domeR);
+      const coreA = (glintInt * altFactor * 0.18).toFixed(3);
+      const midA = (glintInt * altFactor * 0.07).toFixed(3);
+      domeGrad.addColorStop(0, `rgba(${glintCfg[0]}, ${glintCfg[1]}, ${glintCfg[2]}, ${coreA})`);
+      domeGrad.addColorStop(0.5, `rgba(${glintCfg[0]}, ${glintCfg[1]}, ${glintCfg[2]}, ${midA})`);
+      domeGrad.addColorStop(1, `rgba(${glintCfg[0]}, ${glintCfg[1]}, ${glintCfg[2]}, 0)`);
+      ctx.fillStyle = domeGrad;
+      ctx.fillRect(0, 0, width, height);
+    }
+
+    // 2. Low-Sun / Lunar Directional Specular Swath (Elongated reflective band along celestial vector)
+    if (cAlt <= 55 || !dayNightState.isDay) {
+      const swathWeight = !dayNightState.isDay ? 1.0 : Math.max(0, 1 - (cAlt - 20) / 35);
+      ctx.save();
+      ctx.translate(width * 0.5, height * 0.5);
+      ctx.rotate(lightAngle);
+      
+      const laneW = Math.max(width, height) * 1.6;
+      const laneH = Math.min(width, height) * (0.35 + swathWeight * 0.15);
+      const glintGrad = ctx.createLinearGradient(0, -laneH * 0.5, 0, laneH * 0.5);
+      const glintAlpha = Math.min(0.20, Math.max(0, glintInt * 0.14 * swathWeight)).toFixed(3);
+      glintGrad.addColorStop(0, `rgba(${glintCfg[0]}, ${glintCfg[1]}, ${glintCfg[2]}, 0)`);
+      glintGrad.addColorStop(0.5, `rgba(${glintCfg[0]}, ${glintCfg[1]}, ${glintCfg[2]}, ${glintAlpha})`);
+      glintGrad.addColorStop(1, `rgba(${glintCfg[0]}, ${glintCfg[1]}, ${glintCfg[2]}, 0)`);
+      ctx.fillStyle = glintGrad;
+      ctx.fillRect(-laneW * 0.5, -laneH * 0.5, laneW, laneH);
+      ctx.restore();
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // Nocturnal Sky & Cosmic Milky Way Ribbon Reflection (Laut Kaca Bimasakti)
+  // --------------------------------------------------------------------------
+  if (typeof dayNightState !== 'undefined' && !dayNightState.isDay && (typeof weatherState === 'undefined' || weatherState.type === 'clear' || weatherState.type === 'mist')) {
+    const starAlpha = Math.min(1.0, (-dayNightState.altitude) * 2.2) * (1 - ((typeof weatherState !== 'undefined' && weatherState.intensity) || 0) * 0.6);
+    const cosmicInt = dayNightState.cosmicIntensity || 0;
+
+    if (starAlpha > 0.05 || cosmicInt > 0.05) {
+      ctx.save();
+
+      // 1. The Glowing Milky Way Ribbon (Pita Galaksi Bimasakti)
+      if (cosmicInt > 0.02) {
+        ctx.save();
+        ctx.translate(width * 0.5, height * 0.5);
+        ctx.rotate(-0.52); // Majestic diagonal galactic tilt
+
+        const mwW = Math.max(width, height) * 1.8;
+        const mwH = Math.min(width, height) * 0.65;
+        
+        // Deep Violet / Magenta Cosmic Dust Core
+        const mwGrad = ctx.createLinearGradient(0, -mwH * 0.5, 0, mwH * 0.5);
+        const coreAlpha = (0.28 * cosmicInt).toFixed(3);
+        const midAlpha = (0.16 * cosmicInt).toFixed(3);
+        const cyanAlpha = (0.12 * cosmicInt).toFixed(3);
+
+        mwGrad.addColorStop(0, 'rgba(12, 10, 32, 0)');
+        mwGrad.addColorStop(0.25, `rgba(76, 29, 149, ${cyanAlpha})`);
+        mwGrad.addColorStop(0.42, `rgba(139, 92, 246, ${midAlpha})`);
+        mwGrad.addColorStop(0.50, `rgba(217, 70, 239, ${coreAlpha})`);
+        mwGrad.addColorStop(0.58, `rgba(56, 189, 248, ${midAlpha})`);
+        mwGrad.addColorStop(0.75, `rgba(30, 58, 138, ${cyanAlpha})`);
+        mwGrad.addColorStop(1, 'rgba(12, 10, 32, 0)');
+
+        ctx.fillStyle = mwGrad;
+        ctx.fillRect(-mwW * 0.5, -mwH * 0.5, mwW, mwH);
+
+        // Billowing Organic Nebula Clusters drifting in the galactic dust
+        for (let n = 0; n < 8; n++) {
+          const nx = (n * 240 - mwW * 0.42 + Math.sin(time * 0.2 + n) * 35);
+          const ny = Math.sin(n * 1.8 + time * 0.15) * 45;
+          const nr = 75 + (n % 4) * 30;
+          const nebGrad = ctx.createRadialGradient(nx, ny, 0, nx, ny, nr);
+          const nebColor = (n % 3 === 0) ? '168, 85, 247' : ((n % 3 === 1) ? '56, 189, 248' : '236, 72, 153');
+          const nAlpha = (0.14 * cosmicInt).toFixed(3);
+          nebGrad.addColorStop(0, `rgba(${nebColor}, ${nAlpha})`);
+          nebGrad.addColorStop(0.6, `rgba(${nebColor}, ${(nAlpha * 0.4).toFixed(3)})`);
+          nebGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          ctx.fillStyle = nebGrad;
+          ctx.beginPath();
+          ctx.arc(nx, ny, nr, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      // 2. Cosmic Starfield & Constellations (140+ Spectral Stars)
+      const numStars = cosmicInt > 0.2 ? 144 : 36;
+      for (let s = 0; s < numStars; s++) {
+        const sx = ((s * 179.3) % width);
+        const sy = ((s * 313.7) % height);
+        const twinkle = 0.35 + Math.sin(time * 2.5 + s * 1.7) * 0.35;
+        const totalA = Math.min(1.0, (starAlpha * 0.35 + cosmicInt * 0.65) * twinkle);
+        if (totalA < 0.04) continue;
+
+        // Spectral Star Types
+        let starR = 1.0;
+        let starCol = '224, 242, 254';
+        if (s % 5 === 0) {
+          starCol = '254, 240, 138'; // Golden star (Capella/Arcturus)
+          starR = 1.5;
+        } else if (s % 7 === 0) {
+          starCol = '192, 132, 252'; // Violet-blue nebula star
+          starR = 1.8;
+        } else if (s % 11 === 0) {
+          starCol = '244, 114, 182'; // Rose-red giant (Betelgeuse)
+          starR = 1.6;
+        } else if (s % 3 === 0) {
+          starCol = '255, 255, 255'; // Brilliant white star
+          starR = 1.4;
+        }
+
+        ctx.fillStyle = `rgba(${starCol}, ${totalA.toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(sx, sy, starR, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Diamond 4-point diffraction spike on prominent stars
+        if (cosmicInt > 0.3 && (s % 7 === 0 || s % 11 === 0) && totalA > 0.4) {
+          const spikeLen = starR * 3.8;
+          ctx.strokeStyle = `rgba(${starCol}, ${(totalA * 0.45).toFixed(3)})`;
+          ctx.lineWidth = 0.8;
+          ctx.beginPath();
+          ctx.moveTo(sx - spikeLen, sy);
+          ctx.lineTo(sx + spikeLen, sy);
+          ctx.moveTo(sx, sy - spikeLen);
+          ctx.lineTo(sx, sy + spikeLen);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
+  }
 
   ctx.save();
 
@@ -3949,42 +4599,73 @@ function render() {
   }
 
   // Adaptive Camera Zoom:
-  // On PC / wide screens, cameraZoom is 1.0.
+  // On PC / wide screens, base zoom is 1.0.
   // On mobile portrait, zoom is tuned (~0.88x - 0.90x) so ship is close and prominent without feeling cramped.
+  // When Spyglass mode is active, zoom expands by ~42% for wide ocean reconnaissance!
   const isMobile = isMobileDevice() || width < 1024;
-  const cameraZoom = isMobile ? Math.min(1.0, Math.max(0.85, width / 520)) : 1.0;
+  let targetCameraZoom = isMobile ? Math.min(1.0, Math.max(0.85, width / 520)) : 1.0;
+  if (typeof isSpyglassActive !== 'undefined' && isSpyglassActive) {
+    targetCameraZoom *= 0.58;
+  }
+  if (typeof currentRenderZoom === 'undefined') currentRenderZoom = targetCameraZoom;
+  currentRenderZoom += (targetCameraZoom - currentRenderZoom) * 0.14;
+  const cameraZoom = currentRenderZoom;
+
+  // Camera focal center: supports cinematic camera tracking override
+  const camX = (window.cameraState && window.cameraState.overrideActive) ? window.cameraState.x : playerState.x;
+  const camY = (window.cameraState && window.cameraState.overrideActive) ? window.cameraState.y : playerState.y;
 
   // True Centering Transform:
-  // Center world coordinates at (width/2, height/2), apply zoom, then translate to player
+  // Center world coordinates at (width/2, height/2), apply zoom, then translate to camera focal center
   ctx.translate(width / 2, height / 2);
   ctx.scale(cameraZoom, cameraZoom);
-  ctx.translate(-playerState.x + shakeX, -playerState.y + shakeY);
+  ctx.translate(-camX + shakeX, -camY + shakeY);
 
   const drawMargin = isMobile ? 100 : 180;
   const halfViewW = (width / 2) / cameraZoom;
   const halfViewH = (height / 2) / cameraZoom;
-  viewLeft = playerState.x - halfViewW - drawMargin;
-  viewRight = playerState.x + halfViewW + drawMargin;
-  viewTop = playerState.y - halfViewH - drawMargin;
-  viewBottom = playerState.y + halfViewH + drawMargin;
+  viewLeft = camX - halfViewW - drawMargin;
+  viewRight = camX + halfViewW + drawMargin;
+  viewTop = camY - halfViewH - drawMargin;
+  viewBottom = camY + halfViewH + drawMargin;
 
-  // Ocean Wave Ribbons (Optimized step and spacing to cut trig calls and stroke paths)
+  // Ocean Wave Ribbons with Dynamic Solar/Lunar Specular Glint & Nocturnal Bioluminescence
   const waveSpacing = 135;
   const startWaveY = Math.floor(viewTop / waveSpacing) * waveSpacing;
   const endWaveY = viewBottom + waveSpacing;
 
+  const bioLum = (typeof dayNightState !== 'undefined' && typeof dayNightState.bioLum === 'number') ? dayNightState.bioLum : 0;
+  const glintCol = (typeof dayNightState !== 'undefined' && Array.isArray(dayNightState.glintColor)) ? dayNightState.glintColor : [255, 255, 255];
+  const glintInt = (typeof dayNightState !== 'undefined' && typeof dayNightState.specularIntensity === 'number') ? dayNightState.specularIntensity : 0.5;
+
   ctx.lineWidth = 1.6;
   for (let wy = startWaveY; wy < endWaveY; wy += waveSpacing) {
     ctx.beginPath();
-    const waveColor = biome.isBloodSea 
-      ? `rgba(255, 60, 60, ${0.12 + Math.sin(time + wy * 0.02) * 0.04})` 
-      : `rgba(255, 255, 255, ${0.08 + Math.sin(time + wy * 0.02) * 0.03})`;
+    let waveColor;
+    if (biome.isBloodSea) {
+      waveColor = `rgba(255, 60, 60, ${(0.12 + Math.sin(time + wy * 0.02) * 0.04).toFixed(3)})`;
+    } else if (typeof dayNightState !== 'undefined' && dayNightState.cosmicIntensity > 0.15) {
+      // Cosmic Starlight Reflective Wavelets during Milky Way Mirror event
+      const ci = dayNightState.cosmicIntensity;
+      const cAlpha = Math.min(0.22, (0.05 + Math.sin(time * 1.6 + wy * 0.025) * 0.03 + glintInt * 0.04) * ci).toFixed(3);
+      waveColor = `rgba(196, 181, 253, ${cAlpha})`;
+    } else if (bioLum > 0.15) {
+      // Bioluminescent Plankton Foam in nocturnal wave troughs
+      const bAlpha = Math.min(0.25, Math.max(0.04, bioLum * (0.10 + Math.sin(time * 1.8 + wy * 0.03) * 0.04))).toFixed(3);
+      waveColor = `rgba(45, 212, 191, ${bAlpha})`;
+    } else {
+      // Celestial crest highlight (golden at sunset/dawn, silver/white at noon/dusk)
+      const baseAlpha = Math.min(0.18, Math.max(0.04, 0.06 + Math.sin(time + wy * 0.02) * 0.025 + glintInt * 0.04)).toFixed(3);
+      waveColor = `rgba(${glintCol[0]}, ${glintCol[1]}, ${glintCol[2]}, ${baseAlpha})`;
+    }
     ctx.strokeStyle = waveColor;
 
+    // Glassy calm ocean surface damping when cosmic mirror is active
+    const damp = (typeof dayNightState !== 'undefined' && dayNightState.cosmicIntensity > 0) ? (1 - dayNightState.cosmicIntensity * 0.72) : 1.0;
     const stepX = 65;
     for (let wx = viewLeft; wx <= viewRight; wx += stepX) {
-      const swellOffset = Math.sin(wx * 0.012 + time * 1.4 + wy * 0.02) * 12 
-                        + Math.cos(wx * 0.024 - time * 0.8) * 6;
+      const swellOffset = (Math.sin(wx * 0.012 + time * 1.4 + wy * 0.02) * 12 
+                        + Math.cos(wx * 0.024 - time * 0.8) * 6) * damp;
       if (wx === viewLeft) {
         ctx.moveTo(wx, wy + swellOffset);
       } else {
@@ -3992,6 +4673,124 @@ function render() {
       }
     }
     ctx.stroke();
+  }
+
+  // --------------------------------------------------------------------------
+  // AAA-Style Ocean Specular Sun Glitter & Microfacet Ripple Highlights
+  // Procedural Dancing Wave Sparkles reflecting Solar / Lunar light (Glistening Sea)
+  // --------------------------------------------------------------------------
+  if (typeof dayNightState !== 'undefined' && typeof dayNightState.specularIntensity === 'number' && dayNightState.specularIntensity > 0.04) {
+    const glintCfg = Array.isArray(dayNightState.glintColor) ? dayNightState.glintColor : [255, 255, 255];
+    const sInt = dayNightState.specularIntensity;
+    const isDay = dayNightState.isDay;
+    const cAlt = typeof dayNightState.celestialAlt === 'number' ? dayNightState.celestialAlt : 45;
+
+    // Weather attenuation (cloud cover and rain soften direct glints)
+    let weatherAtten = 1.0;
+    if (typeof weatherState !== 'undefined') {
+      if (weatherState.type === 'rain') weatherAtten = 0.35;
+      else if (weatherState.type === 'storm') weatherAtten = 0.15;
+      else if (weatherState.type === 'mist') weatherAtten = 0.65;
+    }
+
+    const activeGlintPower = sInt * weatherAtten;
+    if (activeGlintPower > 0.03) {
+      // Determine reflection focal center in world space
+      // When celestial body is high, reflection is centered near the player / camera
+      // When low, reflection shifts toward the light horizon
+      const shiftDist = (1 - Math.min(1.0, Math.max(0, cAlt / 70))) * (halfViewW * 0.45);
+      const lDirX = (typeof dayNightState.lightDirX === 'number' && !isNaN(dayNightState.lightDirX)) ? dayNightState.lightDirX : 1;
+      const lDirY = (typeof dayNightState.lightDirY === 'number' && !isNaN(dayNightState.lightDirY)) ? dayNightState.lightDirY : 0;
+      const reflCenterX = playerState.x - lDirX * shiftDist;
+      const reflCenterY = playerState.y - lDirY * shiftDist;
+      const zoneRadiusX = halfViewW * (cAlt > 25 ? 1.25 : 0.90);
+      const zoneRadiusY = halfViewH * (cAlt > 25 ? 1.25 : 0.90);
+
+      const glintSpacing = 50;
+      const startGX = Math.floor(viewLeft / glintSpacing) * glintSpacing;
+      const endGX = viewRight + glintSpacing;
+      const startGY = Math.floor(viewTop / glintSpacing) * glintSpacing;
+      const endGY = viewBottom + glintSpacing;
+
+      ctx.save();
+      for (let gy = startGY; gy < endGY; gy += glintSpacing) {
+        for (let gx = startGX; gx < endGX; gx += glintSpacing) {
+          // Deterministic pseudo-jitter to mimic natural oceanic ripple distribution
+          const jx = Math.sin(gx * 0.041 + gy * 0.073) * 18;
+          const jy = Math.cos(gx * 0.067 - gy * 0.039) * 18;
+          const px = gx + jx;
+          const py = gy + jy;
+
+          // Distance falloff from specular reflection center
+          const dX = (px - reflCenterX) / zoneRadiusX;
+          const dY = (py - reflCenterY) / zoneRadiusY;
+          const distSq = dX * dX + dY * dY;
+          if (distSq > 1.35) continue;
+          const zoneFalloff = 1 - distSq / 1.35;
+
+          // Dual-harmonic ocean wave facet simulation
+          const waveA = Math.sin(px * 0.024 + py * 0.016 + time * 2.2);
+          const waveB = Math.cos(px * 0.015 - py * 0.028 + time * 1.7);
+          const facetTilt = (waveA + waveB) * 0.5;
+          if (facetTilt <= 0.40) continue;
+
+          const flare = (facetTilt - 0.40) / 0.60;
+          const glintP = Math.pow(flare, 2.2) * zoneFalloff * activeGlintPower;
+          if (glintP < 0.035) continue;
+
+          // Render glistening diamond/droplet ripple highlight
+          const glintW = 4.5 + glintP * 14;
+          const glintH = 1.8 + glintP * 3.2;
+          const alpha = Math.min(0.48, glintP * (isDay ? 0.52 : 0.38)).toFixed(3);
+
+          ctx.fillStyle = `rgba(${glintCfg[0]}, ${glintCfg[1]}, ${glintCfg[2]}, ${alpha})`;
+          ctx.beginPath();
+          ctx.ellipse(px, py, glintW, glintH, -0.28, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Brilliant diamond spark at peak specular facets
+          if (glintP > 0.22 && isDay) {
+            const coreAlpha = Math.min(0.75, glintP * 0.85).toFixed(3);
+            ctx.fillStyle = `rgba(255, 255, 255, ${coreAlpha})`;
+            ctx.beginPath();
+            ctx.arc(px, py, Math.min(2.2, glintP * 2.8), 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+      }
+      ctx.restore();
+    }
+  }
+
+  // Render Cosmic Meteors / Shooting Stars across Mirror Ocean
+  if (typeof dayNightState !== 'undefined' && dayNightState.cosmicMeteors && dayNightState.cosmicMeteors.length > 0) {
+    ctx.save();
+    for (let m = 0; m < dayNightState.cosmicMeteors.length; m++) {
+      const met = dayNightState.cosmicMeteors[m];
+      const prog = met.life / met.maxLife; // 1 to 0
+      const a = (Math.sin(prog * Math.PI) * 0.88).toFixed(3);
+      const angle = Math.atan2(met.vy, met.vx);
+      const cosA = Math.cos(angle);
+      const sinA = Math.sin(angle);
+      
+      // Meteor Head Glow
+      ctx.fillStyle = `rgba(255, 255, 255, ${a})`;
+      ctx.beginPath();
+      ctx.arc(met.x, met.y, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Radiant Star Trail
+      const grad = ctx.createLinearGradient(met.x, met.y, met.x - cosA * met.len, met.y - sinA * met.len);
+      grad.addColorStop(0, `${met.color}${a})`);
+      grad.addColorStop(1, `${met.color}0)`);
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.moveTo(met.x, met.y);
+      ctx.lineTo(met.x - cosA * met.len, met.y - sinA * met.len);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   // Render Drifting Ambient Sea Fog Clouds using pre-rendered texture sprite
@@ -4113,14 +4912,45 @@ function render() {
     ctx.fill();
   });
 
-  // Render Floating Loots & Message Bottles
+  // Render Floating Loots, Cargo Crates, Mystic Orbs & Message Bottles
   entities.floatingLoots.forEach(loot => {
     if (!isVisible(loot.x, loot.y, 50)) return;
-    if (loot.type === 'bottle') {
-      ctx.save();
-      ctx.translate(loot.x, loot.y);
-      ctx.rotate(Math.sin(_now * 0.003 + (loot.bobOffset || 0)) * 0.25);
 
+    // Sinking / Despawn warning blink
+    let alpha = 1.0;
+    if (loot.life !== undefined && loot.life < 8) {
+      alpha = Math.sin(loot.life * 8) > 0 ? 0.95 : 0.35;
+    }
+
+    const waveAnim = _now * 0.003 + (loot.bobOffset || 0);
+    const bob = Math.sin(waveAnim) * 2.8;
+    const tilt = Math.sin(waveAnim * 0.75) * 0.12;
+
+    ctx.save();
+    ctx.translate(loot.x, loot.y);
+    ctx.globalAlpha = alpha;
+
+    // 1. Water displacement froth ring & ambient ocean shadow
+    const frothRadius = 11 + Math.sin(waveAnim * 1.6) * 2.2;
+    ctx.strokeStyle = 'rgba(224, 242, 254, 0.32)';
+    ctx.lineWidth = 1.3;
+    ctx.beginPath();
+    ctx.ellipse(0, 4.5, frothRadius, frothRadius * 0.44, 0, 0, Math.PI * 2);
+    ctx.stroke();
+
+    const lootShadowX = (typeof dayNightState !== 'undefined' && typeof dayNightState.shadowVecX === 'number' && !isNaN(dayNightState.shadowVecX)) ? (dayNightState.shadowVecX * 0.3) : 0;
+    const lootShadowY = (typeof dayNightState !== 'undefined' && typeof dayNightState.shadowVecY === 'number' && !isNaN(dayNightState.shadowVecY)) ? (dayNightState.shadowVecY * 0.3) : 3;
+    const lootShadowA = (typeof dayNightState !== 'undefined' && typeof dayNightState.shadowAlpha === 'number' && !isNaN(dayNightState.shadowAlpha)) ? (dayNightState.shadowAlpha * 0.85) : 0.45;
+    ctx.fillStyle = `rgba(2, 6, 23, ${lootShadowA.toFixed(3)})`;
+    ctx.beginPath();
+    ctx.ellipse(lootShadowX, lootShadowY, 8.5, 4, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Apply vertical buoyant wave bob and roll tilt
+    ctx.translate(0, bob);
+    ctx.rotate(tilt + ((loot.rot || 0) * 0.05));
+
+    if (loot.type === 'bottle') {
       // Glass bottle body
       ctx.fillStyle = 'rgba(56, 189, 248, 0.45)';
       ctx.strokeStyle = '#0284c7';
@@ -4143,66 +4973,207 @@ function render() {
       ctx.strokeStyle = '#ca8a04';
       ctx.lineWidth = 0.8;
       ctx.strokeRect(-2, 0, 4, 7);
-
-      ctx.restore();
     } else if (loot.type === 'chest') {
-      ctx.save();
-      ctx.translate(loot.x, loot.y);
-      const bob = Math.sin(_now * 0.0035 + (loot.bobOffset || 0)) * 2.5;
-      ctx.translate(0, bob);
-
-      // Chest shadow
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
-      ctx.beginPath();
-      ctx.ellipse(1, 6, 9, 4.5, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Ornate Batavia Mahogany Chest Box
+      // Ornate Batavia Mahogany Chest
       ctx.fillStyle = '#78350f';
       ctx.strokeStyle = '#451a03';
       ctx.lineWidth = 1.3;
-      ctx.fillRect(-7.5, -4, 15, 9);
-      ctx.strokeRect(-7.5, -4, 15, 9);
+      ctx.fillRect(-8.5, -4, 17, 10);
+      ctx.strokeRect(-8.5, -4, 17, 10);
 
       // Domed Rounded Lid
       ctx.fillStyle = '#9a3412';
       ctx.beginPath();
-      ctx.ellipse(0, -4, 7.5, 3.8, 0, Math.PI, Math.PI * 2);
+      ctx.ellipse(0, -4, 8.5, 4.2, 0, Math.PI, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
 
-      // Gold Brass Strips
+      // Polished Gold Brass Strips
       ctx.fillStyle = '#f59e0b';
-      ctx.fillRect(-5.5, -7.5, 2.2, 12.5);
-      ctx.fillRect(3.3, -7.5, 2.2, 12.5);
+      ctx.fillRect(-6.5, -8, 2.4, 14);
+      ctx.fillRect(4.1, -8, 2.4, 14);
 
-      // Golden Lock Clasp
+      // Golden Lock Clasp & Keyhole
       ctx.fillStyle = '#fde047';
       ctx.beginPath();
-      ctx.arc(0, 0, 1.8, 0, Math.PI * 2);
+      ctx.arc(0, 0.5, 2.2, 0, Math.PI * 2);
       ctx.fill();
+      ctx.fillStyle = '#451a03';
+      ctx.fillRect(-0.5, 0, 1, 1.8);
 
-      // Shimmering Golden Sparkle
+      // Shimmering Golden Sparkles
       const sparkle = (Math.sin(_now * 0.006 + (loot.bobOffset || 0)) + 1) * 0.5;
       ctx.fillStyle = `rgba(254, 240, 138, ${0.4 + sparkle * 0.6})`;
       ctx.beginPath();
-      ctx.arc(4.5, -5.5, 1.2 + sparkle * 1.2, 0, Math.PI * 2);
+      ctx.arc(5, -6, 1.2 + sparkle * 1.4, 0, Math.PI * 2);
+      ctx.arc(-5, 4, 1.0 + sparkle * 1.0, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (loot.type === 'gold') {
+      // Leather Coin Purse / Gold Pouch with Gilded Strings
+      ctx.fillStyle = '#854d0e';
+      ctx.strokeStyle = '#451a03';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.ellipse(0, 1, 7.5, 6.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Pouch neck ruffle
+      ctx.beginPath();
+      ctx.moveTo(-4, -5);
+      ctx.lineTo(4, -5);
+      ctx.lineTo(5.5, -9);
+      ctx.lineTo(-5.5, -9);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Gold drawstring
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(-4.5, -5);
+      ctx.lineTo(4.5, -5);
+      ctx.stroke();
+
+      // Gilded Coin Emblem
+      ctx.fillStyle = '#fbbf24';
+      ctx.beginPath();
+      ctx.arc(0, 1.5, 2.6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#d97706';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+    } else if (['mistOrb', 'snowOrb', 'firePowder', 'chitin', 'krakenInk', 'leviathanBone'].includes(loot.type)) {
+      // Faction Special Relic Crate with Ethereal Elemental Aura
+      let auraColor = 'rgba(6, 182, 212, 0.4)';
+      let coreColor = '#0891b2';
+      let runeSymbol = '✦';
+
+      if (loot.type === 'snowOrb') {
+        auraColor = 'rgba(56, 189, 248, 0.45)';
+        coreColor = '#0284c7';
+        runeSymbol = '❄';
+      } else if (loot.type === 'firePowder') {
+        auraColor = 'rgba(244, 63, 94, 0.45)';
+        coreColor = '#e11d48';
+        runeSymbol = '▲';
+      } else if (loot.type === 'chitin') {
+        auraColor = 'rgba(225, 29, 72, 0.5)';
+        coreColor = '#9f1239';
+        runeSymbol = '◆';
+      } else if (loot.type === 'krakenInk') {
+        auraColor = 'rgba(99, 102, 241, 0.55)';
+        coreColor = '#4f46e5';
+        runeSymbol = '✦';
+      } else if (loot.type === 'leviathanBone') {
+        auraColor = 'rgba(241, 245, 249, 0.65)';
+        coreColor = '#94a3b8';
+        runeSymbol = '◈';
+      }
+
+      // Pulsing outer elemental aura
+      const auraPulse = (Math.sin(_now * 0.005 + (loot.bobOffset || 0)) + 1) * 0.5;
+      ctx.fillStyle = auraColor;
+      ctx.beginPath();
+      ctx.arc(0, 0, 11 + auraPulse * 4, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.restore();
+      // Dark reinforced runic crate
+      ctx.fillStyle = '#1e1b4b';
+      ctx.strokeStyle = coreColor;
+      ctx.lineWidth = 1.5;
+      ctx.fillRect(-7.5, -7.5, 15, 15);
+      ctx.strokeRect(-7.5, -7.5, 15, 15);
+
+      // Glowing corner runes
+      ctx.fillStyle = coreColor;
+      ctx.fillRect(-6.5, -6.5, 3, 3);
+      ctx.fillRect(3.5, -6.5, 3, 3);
+      ctx.fillRect(-6.5, 3.5, 3, 3);
+      ctx.fillRect(3.5, 3.5, 3, 3);
+
+      // Central glowing elemental glyph
+      ctx.font = 'bold 9px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(runeSymbol, 0, 0.5);
     } else {
-      ctx.fillStyle = loot.type === 'repair' ? '#b45309' : '#fbbf24';
-      ctx.beginPath();
-      if (typeof ctx.roundRect === 'function') {
-        ctx.roundRect(loot.x - 7, loot.y - 7, 14, 14, 3);
-      } else {
-        ctx.rect(loot.x - 7, loot.y - 7, 14, 14);
+      // Sturdy Nautical Cargo Timber Crate (Wood, Iron, Rope, Bamboo, Repair, Sailcloth, Bronze)
+      let crateBase = '#78350f'; // Oak planks
+      let bandColor = '#334155'; // Iron straps
+      let symbolColor = '#fde68a';
+
+      if (loot.type === 'bamboo') {
+        crateBase = '#3f6212'; // Bamboo greenish weave
+        bandColor = '#14532d';
+        symbolColor = '#bef264';
+      } else if (loot.type === 'iron') {
+        crateBase = '#475569'; // Steel reinforced
+        bandColor = '#0f172a';
+        symbolColor = '#cbd5e1';
+      } else if (loot.type === 'bronze') {
+        crateBase = '#92400e'; // Forged bronze alloy
+        bandColor = '#78350f';
+        symbolColor = '#fde047';
+      } else if (loot.type === 'sailCloth') {
+        crateBase = '#cbd5e1'; // Canvas cloth bale
+        bandColor = '#64748b';
+        symbolColor = '#0284c7';
+      } else if (loot.type === 'rope') {
+        crateBase = '#713f12';
+        bandColor = '#b45309';
+        symbolColor = '#fef08a';
+      } else if (loot.type === 'repair') {
+        crateBase = '#065f46'; // Emergency field repair
+        bandColor = '#022c22';
+        symbolColor = '#34d399';
       }
-      ctx.fill();
-      ctx.strokeStyle = '#000';
-      ctx.lineWidth = 1.2;
+
+      // Main wooden crate body
+      ctx.fillStyle = crateBase;
+      ctx.strokeStyle = '#1c1917';
+      ctx.lineWidth = 1.3;
+      ctx.fillRect(-7.5, -7.5, 15, 15);
+      ctx.strokeRect(-7.5, -7.5, 15, 15);
+
+      // Horizontal plank separation lines
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(-7, -2.5);
+      ctx.lineTo(7, -2.5);
+      ctx.moveTo(-7, 2.5);
+      ctx.lineTo(7, 2.5);
       ctx.stroke();
+
+      // Iron / Hemp cross-bracing straps
+      ctx.strokeStyle = bandColor;
+      ctx.lineWidth = 1.6;
+      ctx.strokeRect(-7.5, -7.5, 15, 15);
+      ctx.beginPath();
+      ctx.moveTo(-7.5, -7.5);
+      ctx.lineTo(7.5, 7.5);
+      ctx.moveTo(7.5, -7.5);
+      ctx.lineTo(-7.5, 7.5);
+      ctx.stroke();
+
+      // Corner rivet dots
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillRect(-6.5, -6.5, 1.5, 1.5);
+      ctx.fillRect(5, -6.5, 1.5, 1.5);
+      ctx.fillRect(-6.5, 5, 1.5, 1.5);
+      ctx.fillRect(5, 5, 1.5, 1.5);
+
+      // Center resource identifier badge
+      ctx.fillStyle = symbolColor;
+      ctx.beginPath();
+      ctx.arc(0, 0, 2, 0, Math.PI * 2);
+      ctx.fill();
     }
+
+    ctx.restore();
   });
 
   // Render Sea Ripples & Water Trails
@@ -4569,8 +5540,13 @@ function render() {
   if (entities.seagulls) {
     entities.seagulls.forEach(s => {
       if (!isVisible(s.x, s.y, 100)) return;
-      drawSeagull(ctx, s)
+      drawSeagull(ctx, s);
     });
+  }
+
+  // Render Cinematic Seagull if active flight sequence
+  if (window.cinematicFlightState && window.cinematicFlightState.active && window.cinematicFlightState.seagull) {
+    drawSeagull(ctx, window.cinematicFlightState.seagull);
   }
 
   // Render Rolling Cloud Shadows across All Weather Events (100% Pop-Free & Mobile-Optimized)
