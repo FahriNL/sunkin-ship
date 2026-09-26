@@ -135,8 +135,8 @@ const TRANSLATIONS = {
     diffHardDesc: "Kutukan Palung: Kerusakan diterima +35%, musuh lebih tangguh & agresif, hadiah Koin & Darah +50%.",
 
     // Help & Lore
-    loreModalTitle: "KODEX 4 KLAN LAUT",
-    loreModalSubtitle: "Peta kekuasaan faksi bajak laut & teror palung abisal",
+    loreModalTitle: "KODEX 6 TINGKAT ANCAMAN SAMUDRA",
+    loreModalSubtitle: "Hierarki faksi laut & teror palung abisal dari yang termudah hingga apex predator",
     helpModalTitle: "PANDUAN KONTROL BAHARI PC",
     helpModalSubtitle: "Kemudi kapal, laju layar, dan persenjataan keyboard & mouse",
     helpCloseEsc: "Tekan Esc untuk menutup panduan",
@@ -507,8 +507,8 @@ const TRANSLATIONS = {
     diffHardDesc: "Trench Curse: Damage received +35%, tougher & aggressive enemies, rewards +50%.",
 
     // Help & Lore
-    loreModalTitle: "OCEAN CLAN CODEX",
-    loreModalSubtitle: "Pirate faction territories & abyssal trench horrors",
+    loreModalTitle: "CODEX: 6 SEAFARING THREAT TIERS",
+    loreModalSubtitle: "Naval faction hierarchy from easiest foes to primordial abyssal apex terrors",
     helpModalTitle: "PC NAVAL CONTROLS GUIDE",
     helpModalSubtitle: "Ship steering, sail speeds, keyboard & mouse controls",
     helpCloseEsc: "Press Esc to close guide",
@@ -1477,117 +1477,138 @@ const MERCHANT_CONFIG = {
 const CLAN_LORE = {
   gold: {
     id: 'gold',
-    name: "Sindikat Emas Batavia",
-    nameEn: "Batavia Gold Syndicate",
-    species: "Manusia (Tirani Niaga)",
-    speciesEn: "Human (Trade Tyranny)",
+    name: "Kesultanan Emas Al-Zahab",
+    nameEn: "Al-Zahab Gold Sultanate",
+    species: "Sultan Malik Al-Zahab",
+    speciesEn: "Sultan Malik Al-Zahab",
+    threatLevel: 1,
+    threatLabel: "TINGKAT ANCAMAN I • PALING MUDAH",
+    threatLabelEn: "THREAT TIER I • EASIEST",
     badgeColor: "#d97706",
     bgClass: "from-amber-950/40 to-slate-900/80 border-amber-500/30",
     bulletColor: "#fbbf24",
-    lore: "Kongsi dagang bengis yang memonopoli rempah dan emas. Mereka berpatroli di perairan pulau niaga dengan formasi kapal bersenjata kuningan presisi.",
-    loreEn: "A ruthless trading conglomerate monopolizing spices and bullion. They patrol merchant waterways with precision brass-armed fleet formations.",
+    lore: "Meskipun secara menyeluruh adalah faksi paling kaya raya, kehidupan hedon para elit tidak seimbang dengan pengembangan teknologi senjata, membuat mereka menjadi musuh paling mudah ditaklukkan. Dipimpin oleh Sultan Malik Al-Zahab yang menguasai banyak laut dan memelihara bajak laut bayaran, mereka mengutamakan perdagangan dibanding peperangan. Ketamakan para penguasa membuat kekayaan besar hanya dinikmati segelintir elit sementara rakyatnya menderita di bawah tirani upeti.",
+    loreEn: "Although the wealthiest faction across the realm, their hedonistic lifestyle neglected weapon technology, making them the easiest foes to conquer. Commanded by Sultan Malik Al-Zahab who controls maritime trade routes and pays off corsairs, they prioritize commerce over warfare. Ruthless greed concentrates immense wealth among ruling elites while heavily oppressing their subjects.",
     tiers: [
-      { level: 1, name: "Kolek Cukai", nameEn: "Toll Sloop", hp: 55, speed: 2.3, damage: 10, radius: 24, desc: "Sekoci ringan pemburu upeti dengan layar tunggal bercorak emas.", descEn: "Light tribute-hunting skiff with single gold-patterned sail." },
-      { level: 2, name: "Korvet Pengawal Emas", nameEn: "Gold Escort Corvette", hp: 140, speed: 2.5, damage: 18, radius: 30, desc: "Kapal perang lapis ganda dengan meriam samping kuningan dan patung singa emas.", descEn: "Double-planked warship equipped with brass broadsides and golden lion figurehead." },
-      { level: 3, name: "Benteng Terapung Batavia", nameEn: "Batavia Floating Fortress", hp: 360, speed: 2.8, damage: 28, radius: 40, desc: "Dreadnought raksasa bermahkota kaisar emas yang sanggup meratakan armada seketika.", descEn: "Colossal dreadnought crowned in golden imperial crests, capable of leveling fleets." }
-    ]
-  },
-  iron: {
-    id: 'iron',
-    name: "Pemburu Besi Hitam",
-    nameEn: "Black Iron Hunters",
-    species: "Manusia (Pandai Besi Brutal)",
-    speciesEn: "Human (Brutal Blacksmiths)",
-    badgeColor: "#ea580c",
-    bgClass: "from-orange-950/40 to-slate-900/80 border-orange-500/30",
-    bulletColor: "#78716c",
-    lore: "Klan pandai besi laut pemakan batubara. Menjaga pulau peleburan dengan lambung lapis baja, taji penabrak depan, dan kepulan cerobong uap hitam.",
-    loreEn: "Coal-devouring naval blacksmith clan guarding foundry atolls with reinforced ironclad hulls, frontal rams, and billowing smokestacks.",
-    tiers: [
-      { level: 1, name: "Sekoci Perisai Berduri", nameEn: "Spiked Shield Skiff", hp: 80, speed: 1.9, damage: 13, radius: 25, desc: "Perahu besi kusam dengan taji penusuk di haluan depan.", descEn: "Tarnished iron skiff sporting a jagged prow ram." },
-      { level: 2, name: "Pembelah Karang Baja", nameEn: "Steel Reef Breaker", hp: 200, speed: 2.2, damage: 22, radius: 32, desc: "Kapal lapis pelat besi dengan cerobong asap tunggal yang mengepulkan jelaga.", descEn: "Armor-plated vessel with a single soot-belching smokestack." },
-      { level: 3, name: "Mesin Jagal Laut (Juggernaut)", nameEn: "Naval Juggernaut", hp: 460, speed: 2.4, damage: 34, radius: 42, desc: "Benteng besi raksasa dengan dua cerobong uap besar dan daya tahan tabrakan ekstrem.", descEn: "Massive iron fortress powered by twin steam engines with extreme ramming resilience." }
-    ]
-  },
-  mist: {
-    id: 'mist',
-    name: "Sekte Kabut Kelabu",
-    nameEn: "Ashen Mist Sect",
-    species: "Manusia (Pemuja Okultisme)",
-    speciesEn: "Human (Occult Cultists)",
-    badgeColor: "#06b6d4",
-    bgClass: "from-cyan-950/40 to-slate-900/80 border-cyan-500/30",
-    bulletColor: "#22d3ee",
-    lore: "Pemuja kutukan kabut yang menanggalkan nama mereka. Berpatroli di atol terpencil dengan lentera jiwa toska dan menembakkan orba arwah pelacak.",
-    loreEn: "Nameless devotees of the spectral mists patrolling cursed atolls with teal soul lanterns, launching auto-homing spirit orbs.",
-    tiers: [
-      { level: 1, name: "Sekoci Sesaji", nameEn: "Sacrificial Skiff", hp: 65, speed: 2.4, damage: 14, radius: 24, desc: "Perahu kayu kelabu berlayar sobek dengan satu lentera jiwa berpendar hijau toska.", descEn: "Ashen timber boat with tattered sails and a glowing teal spirit lantern." },
-      { level: 2, name: "Bahtera Arwah Gentayangan", nameEn: "Wraith Ark", hp: 165, speed: 2.7, damage: 24, radius: 31, desc: "Kapal bermastaka kerangka paus yang memancarkan kabut roh dingin di sekelilingnya.", descEn: "Vessel adorned with whale ribs radiating bone-chilling supernatural fog." },
-      { level: 3, name: "Katedral Tenggelam (Cursed Cathedra)", nameEn: "Sunken Cathedral", hp: 410, speed: 3.0, damage: 36, radius: 42, desc: "Kuil terapung seram penuh rusuk tulang belulang dengan mata arwah kembar yang menembakkan kutukan abadi.", descEn: "Eerie floating shrine crowned in skeletal arches and twin occult eyes projecting eternal curses." }
-    ]
-  },
-  blood: {
-    id: 'blood',
-    name: "Legiun Palung Darah",
-    nameEn: "Blood Trench Legion",
-    species: "BUKAN MANUSIA (Abyssal Eldritch)",
-    speciesEn: "NON-HUMAN (Abyssal Eldritch)",
-    badgeColor: "#ef4444",
-    bgClass: "from-red-950/60 to-slate-900/80 border-red-500/40",
-    bulletColor: "#f43f5e",
-    lore: "Organisme purba bukan manusia yang bangkit dari sarang pulau daging palung Laut Darah. Menyerang siapa saja dengan tentakel, duri kitin beracun, dan mulut raksasa.",
-    loreEn: "Ancient non-human organisms rising from flesh islands of the Crimson Sea. Assaulting intruders with thrashing tentacles, chitin barbs, and gaping maws.",
-    tiers: [
-      { level: 1, name: "Larva Daging Pengintai", nameEn: "Flesh Scout Larva", hp: 110, speed: 3.0, damage: 18, radius: 26, desc: "Kutu parasit laut merah berduri kitin yang melata lincah di permukaan air.", descEn: "Crimson parasitic sea crawler skittering swiftly along the ocean surface." },
-      { level: 2, name: "Ular Palung Daging (Hydra)", nameEn: "Abyssal Hydra", hp: 280, speed: 3.3, damage: 30, radius: 34, desc: "Monster bercabang tentakel dengan sirip berdarah dan duri penyemprot empedu beracun.", descEn: "Multi-tentacled abomination armed with sanguine fins and venom-spewing spines." },
-      { level: 3, name: "Sang Pemangsa Jiwa (Ancient Leviathan)", nameEn: "Ancient Leviathan", hp: 650, speed: 3.6, damage: 45, radius: 46, desc: "Dewa purba palung terdalam dengan 6 mata merah membara, taring melingkar raksasa, dan tentakel cambuk yang mematikan.", descEn: "Primordial deep-trench god with 6 crimson eyes, circular jaws, and lethal whip-like tentacles." }
-    ]
-  },
-  viking: {
-    id: 'viking',
-    name: "Klan Penakluk Viking",
-    nameEn: "Viking Conqueror Clan",
-    species: "Manusia (Norse Ice Raiders)",
-    speciesEn: "Human (Norse Ice Raiders)",
-    badgeColor: "#38bdf8",
-    bgClass: "from-sky-950/40 to-slate-900/80 border-sky-500/30",
-    bulletColor: "#7dd3fc",
-    lore: "Pelaut tangguh dari samudra es utara yang mengarungi badai salju. Mereka menyerbu dengan drakkar berdayung cepat, benteng perisai kayu berlapis es, dan kapak es pembelah haluan.",
-    loreEn: "Hardened northern voyagers navigating blizzards in swift drakkars, armed with frost-bound shields and prow-cleaving battleaxes.",
-    tiers: [
-      { level: 1, name: "Snekkja Salju", nameEn: "Snow Snekkja", hp: 70, speed: 2.5, damage: 12, radius: 24, desc: "Perahu naga es ramping dengan 4 pasang dayung berirama dan haluan ukir kepala naga kayu.", descEn: "Slender ice dragon skiff with 4 oar pairs and a carved wooden dragonhead." },
-      { level: 2, name: "Skeid Pembantai Fjord", nameEn: "Fjord Skeid Raider", hp: 175, speed: 2.7, damage: 20, radius: 31, desc: "Kapal perang fjord lapis perisai ganda dengan 6 pasang dayung, taji es depan, dan layar kotak bergaris.", descEn: "Double-shielded fjord warship with 6 oar pairs, ice ram, and striped square sail." },
-      { level: 3, name: "Drakkar Jarl Raksasa", nameEn: "Great Jarl Drakkar", hp: 440, speed: 3.1, damage: 32, radius: 42, desc: "Drakkar perang legendaris sang Jarl dengan 8 pasang dayung, taring mammoth penusuk, dan kepala naga kembar bertanduk emas.", descEn: "Legendary royal flagship powered by 8 oar pairs, mammoth tusk rams, and twin gold-horned dragon crests." }
+      { level: 1, name: "Kolek Cukai Al-Zahab", nameEn: "Al-Zahab Toll Sloop", hp: 45, speed: 2.3, damage: 8, radius: 24, desc: "Sekoci pemungut upeti berbalut sutra kuning gading dengan meriam kuningan ringkih.", descEn: "Tribute-collecting skiff lined with ivory-gold silk and frail brass cannons." },
+      { level: 2, name: "Korvet Pengawal Emas", nameEn: "Gold Escort Corvette", hp: 110, speed: 2.4, damage: 14, radius: 30, desc: "Kapal niaga berlapis kayu jati ganda dengan patung singa emas dan pengawal bayaran.", descEn: "Double-hulled teak merchant vessel adorned with golden lion figurehead and hired guards." },
+      { level: 3, name: "Galleon Kas Diraja Al-Zahab", nameEn: "Al-Zahab Royal Treasury Galleon", hp: 260, speed: 2.6, damage: 22, radius: 40, desc: "Bahtera megah lambang kemewahan Sultan, sarat timbunan peti emas koin melimpah namun rapuh terhadap serangan artileri terarah.", descEn: "Opulent flagship symbolizing the Sultan's luxury, laden with overflowing gold chests yet structurally fragile against focused artillery." }
     ]
   },
   wokou: {
     id: 'wokou',
-    name: "Perompak Jung Wokou",
-    nameEn: "Wokou Junk Pirates",
-    species: "Manusia (Oriental Junk Pirates)",
-    speciesEn: "Human (Oriental Junk Pirates)",
+    name: "Sindikat Penyelundup Wokou",
+    nameEn: "Wokou Smuggler Syndicate",
+    species: "Sindikat Bajak Laut Terbesar",
+    speciesEn: "Largest Pirate Syndicate",
+    threatLevel: 2,
+    threatLabel: "TINGKAT ANCAMAN II • MENENGAH",
+    threatLabelEn: "THREAT TIER II • INTERMEDIATE",
     badgeColor: "#e11d48",
     bgClass: "from-rose-950/40 to-slate-900/80 border-rose-500/30",
     bulletColor: "#fb7185",
-    lore: "Perompak samudra timur yang menguasai seni mesiu kembang api dan panah roket. Mereka bermanuver lincah menggunakan layar bertulang bambu dan melancarkan salvo roket yang membakar lautan.",
-    loreEn: "Eastern corsairs mastering firework gunpowder and rocket arrow batteries, maneuvering with battened bamboo sails.",
+    lore: "Alih-alih suatu negara, mereka adalah kelompok bajak laut terbesar di samudra ini. Berawal dari perintis di bawah naungan Kesultanan Gold, pengalaman tempur lapangan yang panjang membuat strategi dan persenjataan mereka jauh lebih berkembang dibanding mantan majikan mereka. Terkenal atas kebrutalan, kelicikan perang laut, penjarahan tanpa ampun, dan penguasaan rute penyelundupan ilegal menggunakan salvo panah roket mesiu.",
+    loreEn: "Rather than a sovereign nation, they are the largest pirate syndicate in this ocean. Originally rising under Gold's payroll, extensive frontline combat experience propelled their strategies and rocket weaponry far beyond their former masters. Infamous for naval brutality, cunning tactics, merciless looting, and iron-fisted control over contraband smuggling routes.",
     tiers: [
-      { level: 1, name: "Sampan Roket Api", nameEn: "Fire Rocket Sampan", hp: 60, speed: 2.7, damage: 11, radius: 23, desc: "Sampan oriental bersayap tunggal layar batten bambu dengan peluncur panah roket haluan.", descEn: "Oriental sampan with batten sail and prow-mounted fire rocket launcher." },
-      { level: 2, name: "Jung Perang Wokou", nameEn: "Wokou War Junk", hp: 155, speed: 2.6, damage: 19, radius: 30, desc: "Kapal perang bertiang dua dengan lentera merah berayun, geladak buritan tinggi, dan meriam mesiu samping.", descEn: "Two-masted war junk with swaying lanterns, elevated stern castle, and broadside cannons." },
-      { level: 3, name: "Benteng Jung Kaisar Naga", nameEn: "Dragon Emperor Fortress Junk", hp: 400, speed: 2.9, damage: 30, radius: 41, desc: "Benteng terapung bertiang 3 bertingkat pagoda megah, berhaluan naga emas, dengan baterai roket kembar yang mematikan.", descEn: "Floating 3-masted pagoda fortress adorned with golden dragon prow and twin rocket batteries." }
+      { level: 1, name: "Sampan Roket Api", nameEn: "Fire Rocket Sampan", hp: 65, speed: 2.8, damage: 12, radius: 23, desc: "Sampan oriental bersayap tunggal layar batten bambu dengan peluncur panah roket haluan.", descEn: "Oriental sampan with batten sail and prow-mounted fire rocket launcher." },
+      { level: 2, name: "Jung Perang Wokou", nameEn: "Wokou War Junk", hp: 150, speed: 2.8, damage: 20, radius: 30, desc: "Kapal perang bertiang dua dengan lentera merah berayun, geladak buritan tinggi, dan meriam mesiu samping.", descEn: "Two-masted war junk with swaying lanterns, elevated stern castle, and broadside cannons." },
+      { level: 3, name: "Benteng Jung Kaisar Naga", nameEn: "Dragon Emperor Fortress Junk", hp: 340, speed: 3.0, damage: 30, radius: 41, desc: "Benteng terapung bertiang 3 bertingkat pagoda megah, berhaluan naga emas, dengan baterai roket kembar yang mematikan.", descEn: "Floating 3-masted pagoda fortress adorned with golden dragon prow and twin rocket batteries." }
+    ]
+  },
+  iron: {
+    id: 'iron',
+    name: "Rezim Militer Besi Hitam",
+    nameEn: "Black Iron Military Regime",
+    species: "High Marshal Valerius von Eisenhardt",
+    speciesEn: "High Marshal Valerius von Eisenhardt",
+    threatLevel: 3,
+    threatLabel: "TINGKAT ANCAMAN III • TANGGUH",
+    threatLabelEn: "THREAT TIER III • FORMIDABLE",
+    badgeColor: "#ea580c",
+    bgClass: "from-orange-950/40 to-slate-900/80 border-orange-500/30",
+    bulletColor: "#78716c",
+    lore: "Rezim totaliter militeristik yang dipimpin oleh High Marshal Valerius von Eisenhardt. Mengubah setiap pulau taklukan menjadi tambang kerja paksa dan galangan kapal perang berlapis pelat baja uap tebal. Mereka memiliki ambisi perang paling ekspansif di samudra, memagari wilayah kekuasaan dengan ranjau berduri dan meluncurkan taji penabrak bertenaga uap jelaga.",
+    loreEn: "A totalitarian militaristic regime commanded by High Marshal Valerius von Eisenhardt. Transforming every conquered island into forced-labor mine shafts and steam ironclad shipyards. Possessing the most aggressive expansionist war ambitions, ringing their waters with spiked sea mines and devastating steam-boosted prow rams.",
+    tiers: [
+      { level: 1, name: "Sekoci Perisai Berduri", nameEn: "Spiked Shield Skiff", hp: 90, speed: 2.0, damage: 15, radius: 25, desc: "Perahu besi kusam dengan taji penusuk di haluan depan dan perisai baja samping.", descEn: "Tarnished iron skiff sporting a jagged prow ram and armored bulwarks." },
+      { level: 2, name: "Pembelah Karang Baja", nameEn: "Steel Reef Breaker", hp: 220, speed: 2.2, damage: 25, radius: 32, desc: "Kapal perang lapis pelat baja tebal dengan cerobong asap tunggal yang mengepulkan jelaga hitam pekat.", descEn: "Armor-plated vessel with a single soot-belching smokestack." },
+      { level: 3, name: "Mesin Jagal Laut Valerius", nameEn: "Valerius Naval Juggernaut", hp: 480, speed: 2.4, damage: 36, radius: 42, desc: "Benteng besi uap raksasa kebanggaan High Marshal dengan ketahanan tabrakan ekstrem dan meriam baja tempa berat.", descEn: "Massive iron steam fortress of the High Marshal with extreme ramming resilience and heavy forged cannons." }
+    ]
+  },
+  viking: {
+    id: 'viking',
+    name: "Klan Penakluk Es Viking",
+    nameEn: "Frost-Weaver Viking Raiders",
+    species: "Jarl Ragnvaldr Frost-Weaver",
+    speciesEn: "Jarl Ragnvaldr Frost-Weaver",
+    threatLevel: 4,
+    threatLabel: "TINGKAT ANCAMAN IV • BERBAHAYA",
+    threatLabelEn: "THREAT TIER IV • DANGEROUS",
+    badgeColor: "#38bdf8",
+    bgClass: "from-sky-950/40 to-slate-900/80 border-sky-500/30",
+    bulletColor: "#7dd3fc",
+    lore: "Dipimpin oleh Jarl Ragnvaldr Frost-Weaver, bangsa utara tangguh yang menjunjung persaudaraan internal namun memperlakukan orang luar sebagai budak atau korban jarahan tanpa ampun. Mewarisi sihir es purba yang sanggup membekukan ombak samudra, melumpuhkan laju kemudi musuh dengan ballista pembeku, dan menyulut amukan tempur lewat tiupan sangkakala perang.",
+    loreEn: "Led by Jarl Ragnvaldr Frost-Weaver, hardened northern raiders bound by fierce internal brotherhood who enslave or plunder all outsiders without mercy. Wielding ancient preserved Frost magic to freeze ocean swells, cripple enemy rudders with frost ballistas, and ignite battle frenzies with roaring war horns.",
+    tiers: [
+      { level: 1, name: "Snekkja Salju", nameEn: "Snow Snekkja", hp: 80, speed: 2.6, damage: 16, radius: 24, desc: "Perahu naga es ramping dengan dayung berirama, balutan rune beku, dan haluan ukir kepala naga kayu.", descEn: "Slender ice dragon skiff with rhythmic oars, frozen runes, and a carved wooden dragonhead." },
+      { level: 2, name: "Skeid Pembantai Fjord", nameEn: "Fjord Skeid Raider", hp: 210, speed: 2.8, damage: 26, radius: 31, desc: "Kapal perang fjord lapis perisai ganda dengan taji es depan, dayung cepat, dan peluncur tombak es.", descEn: "Double-shielded fjord warship with ice prow ram, swift oars, and frost spear ballista." },
+      { level: 3, name: "Drakkar Kerajaan Frost-Weaver", nameEn: "Frost-Weaver Royal Drakkar", hp: 490, speed: 3.2, damage: 38, radius: 42, desc: "Drakkar perang legendaris sang Jarl bertaring mammoth purba, kepala naga kembar bertanduk emas, dan aura sihir es pembeku samudra.", descEn: "Legendary royal flagship of the Jarl armed with mammoth tusk rams, gold-horned dragon crests, and ocean-freezing frost magic." }
+    ]
+  },
+  mist: {
+    id: 'mist',
+    name: "Kultus Kabut Terkutuk",
+    nameEn: "Accursed Mist Cult",
+    species: "Cendekiawan & Ilmuwan Pembelot",
+    speciesEn: "Apostate Scholars & Cultists",
+    threatLevel: 5,
+    threatLabel: "TINGKAT ANCAMAN V • MEMATIKAN",
+    threatLabelEn: "THREAT TIER V • LETHAL",
+    badgeColor: "#06b6d4",
+    bgClass: "from-cyan-950/40 to-slate-900/80 border-cyan-500/30",
+    bulletColor: "#22d3ee",
+    lore: "Kelompok ilmuwan dan cendekiawan elit yang awalnya didanai oleh Kesultanan Gold untuk meneliti anomali di balik kabut tebal. Di sana mereka menemukan Laut Darah yang terus meluas menelan bumi, pulau-pulau dari daging dan tulang purba, serta manuskrip ramalan kiamat. Didorong kegilaan atas kepunahan dunia yang tak terhindarkan, mereka membelot dari Gold dan membentuk sekte okultis menyambut datangnya kiamat dengan lentera jiwa toska dan orba arwah pelacak.",
+    loreEn: "An elite enclave of scientists and scholars originally funded by Gold to investigate anomalies beyond the thick mists. There they discovered the expanding Blood Sea swallowing the globe, fleshy bone islands, and apocalyptic prophecies. Driven to insanity by the unavoidable doom of mankind, they abandoned Gold to form an occult sect welcoming the apocalypse with teal soul lanterns and homing spirit orbs.",
+    tiers: [
+      { level: 1, name: "Sekoci Sesaji Kabut", nameEn: "Mist Sacrificial Skiff", hp: 85, speed: 2.8, damage: 18, radius: 24, desc: "Perahu kayu kelabu berlayar sobek dengan lentera jiwa berpendar toska yang menembakkan arwah.", descEn: "Ashen timber boat with tattered sails and a glowing teal spirit lantern launching ghostly embers." },
+      { level: 2, name: "Bahtera Arwah Gentayangan", nameEn: "Wraith Ark", hp: 230, speed: 3.0, damage: 30, radius: 31, desc: "Kapal bermastaka kerangka paus raksasa yang memancarkan kabut roh dingin dan anomali navigasi.", descEn: "Vessel adorned with colossal whale ribs radiating supernatural chilling fog and navigational anomalies." },
+      { level: 3, name: "Katedral Kiamat Tenggelam", nameEn: "Sunken Cataclysm Cathedral", hp: 520, speed: 3.3, damage: 44, radius: 42, desc: "Kuil terapung seram penuh rusuk tulang belulang dengan mata okultis kembar yang meluncurkan kutukan kepunahan abadi.", descEn: "Eerie floating cathedral framed by ribcage pillars and twin occult eyes projecting eternal extinction curses." }
+    ]
+  },
+  blood: {
+    id: 'blood',
+    name: "Teror Palung Laut Darah (Leviathan)",
+    nameEn: "Abyssal Blood Sea Leviathans",
+    species: "Monster Neraka Purba (Bukan Manusia)",
+    speciesEn: "Primordial Hell Abominations (Non-Human)",
+    threatLevel: 6,
+    threatLabel: "TINGKAT ANCAMAN VI • APEX ABISAL",
+    threatLabelEn: "THREAT TIER VI • ABYSSAL APEX",
+    badgeColor: "#ef4444",
+    bgClass: "from-red-950/60 to-slate-900/80 border-red-500/40",
+    bulletColor: "#f43f5e",
+    lore: "Monster neraka purba yang bangkit dari palung terdalam Laut Darah, mendiami bekas reruntuhan peradaban manusia kuno yang tenggelam. Merupakan manifestasi siklus evolusi neraka tergelap yang memangsa segala bentuk kehidupan. Menyerang kapal pengembara dengan tentakel raksasa pengoyak lambung, semburan empedu korosif beracun, dan mulut melingkar raksasa pemangsa samudra.",
+    loreEn: "Primordial hell monsters rising from the deepest trenches of the Blood Sea, inhabiting the sunken ruins of drowned human civilizations. Dark evolutionary apex terrors hunting all living forms with hull-cleaving colossal tentacles, venomous corrosive bile, and ocean-swallowing circular jaws.",
+    tiers: [
+      { level: 1, name: "Larva Daging Pengintai", nameEn: "Flesh Scout Larva", hp: 140, speed: 3.2, damage: 22, radius: 26, desc: "Kutu parasit laut merah berduri kitin yang melata lincah di permukaan air memangsa sisa bangkai kapal.", descEn: "Crimson parasitic sea crawler skittering swiftly along the ocean surface scavenging shipwrecks." },
+      { level: 2, name: "Hydra Palung Abisal", nameEn: "Abyssal Hydra", hp: 360, speed: 3.4, damage: 36, radius: 34, desc: "Monster bercabang tentakel dengan sirip berdarah, taji kitin pembelah kapal, dan semprotan empedu korosif.", descEn: "Multi-tentacled abomination armed with sanguine fins, chitin rams, and corrosive bile venom." },
+      { level: 3, name: "Sang Pemangsa Jiwa (Ancient Leviathan)", nameEn: "Ancient Leviathan (Deep-Trench Apex)", hp: 800, speed: 3.6, damage: 52, radius: 46, desc: "Bencana hidup palung abisal dengan 6 mata merah membara, pusaran air maut, taring melingkar raksasa, dan tentakel pencabut nyawa.", descEn: "Living cataclysm of the abyssal deep with 6 crimson eyes, maelstrom vortexes, circular jaws, and lethal whip tentacles." }
     ]
   },
   pirate: {
     id: 'pirate',
     name: "Bajak Laut Selat Liar",
     nameEn: "Wild Strait Corsairs",
-    species: "Manusia (Perompak Samudra)",
-    speciesEn: "Human (Ocean Corsairs)",
-    badgeColor: "#ef4444",
-    bgClass: "from-zinc-950/70 to-slate-900/90 border-rose-500/40",
+    species: "Perompak Samudra Bebas",
+    speciesEn: "Rogue Ocean Corsairs",
+    threatLevel: null,
+    threatLabel: "FRAKSI LIAR • PEROMPAK BEBAS",
+    threatLabelEn: "ROGUE FACTION • WILD CORSAIRS",
+    badgeColor: "#f97316",
+    bgClass: "from-zinc-950/70 to-slate-900/90 border-orange-500/40",
     bulletColor: "#f97316",
-    lore: "Kawanan bajak laut pemberontak dan perompak buas yang bersarang di sekitar pulau-pulau karang terpencil tak berpenghuni. Berlayar dengan kapal bercat hitam kelam dan panji tengkorak merah, mereka menyergap pelaut yang melintas sendirian ataupun dalam armada serigala laut.",
-    loreEn: "Renegade buccaneers nesting in secluded uninhabited reef islets, sailing under black pitch hulls and crimson skull pennants.",
+    lore: "Kawanan bajak laut pemberontak dan perompak buas yang bersarang di sekitar pulau-pulau karang terpencil tak berpenghuni. Berlayar dengan kapal bercat hitam kelam dan panji tengkorak merah, mereka menyergap pelaut yang melintas sendirian ataupun dalam armada serigala laut tanpa memedulikan diplomasi faksi.",
+    loreEn: "Renegade buccaneers nesting in secluded uninhabited reef islets, sailing under black pitch hulls and crimson skull pennants, ambushing any passing solitary vessels or convoys regardless of faction diplomacy.",
     tiers: [
       { level: 1, name: "Sekoci Penyamun", nameEn: "Raider Skiff", hp: 75, speed: 2.7, damage: 13, radius: 24, desc: "Sekoci gesit bercat hitam arang dengan layar robek bertengkorak dan haluan belati penusuk.", descEn: "Nimble charcoal-painted skiff with tattered skull sail and dagger ram." },
       { level: 2, name: "Brigantin Bendera Tengkorak", nameEn: "Jolly Roger Brigantine", hp: 175, speed: 2.8, damage: 21, radius: 31, desc: "Kapal layar ganda hitam legam dengan lambang tengkorak putih, meriam besi tempa, dan taji penabrak.", descEn: "Twin-masted black vessel bearing skull emblems, forged iron broadsides, and a heavy ram." },

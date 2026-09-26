@@ -111,41 +111,49 @@ function renderClanCodexUI() {
   for (const [key, clan] of Object.entries(CLAN_LORE)) {
     if (key === 'batavia') continue;
     const card = document.createElement('div');
-    card.className = `p-3.5 rounded-2xl border bg-gradient-to-br ${clan.bgClass} flex flex-col gap-2`;
+    card.className = `p-3.5 rounded-2xl border bg-gradient-to-br ${clan.bgClass} flex flex-col gap-2.5 shadow-lg`;
 
     const clanName = (isEn && clan.nameEn) ? clan.nameEn : clan.name;
     const clanSpecies = (isEn && clan.speciesEn) ? clan.speciesEn : clan.species;
     const clanLore = (isEn && clan.loreEn) ? clan.loreEn : clan.lore;
+    const threatText = (isEn && clan.threatLabelEn) ? clan.threatLabelEn : (clan.threatLabel || '');
 
     let tiersHtml = '';
     clan.tiers.forEach(t => {
       const tName = (isEn && t.nameEn) ? t.nameEn : t.name;
       const tDesc = (isEn && t.descEn) ? t.descEn : t.desc;
       tiersHtml += `
-        <div class="bg-black/40 p-2 rounded-xl border border-white/5 flex flex-col gap-0.5">
+        <div class="bg-black/45 p-2 rounded-xl border border-white/5 flex flex-col gap-0.5">
           <div class="flex justify-between items-center text-xs">
             <span class="font-bold text-white flex items-center gap-1.5">
-              <span class="text-[9px] px-1.5 py-0.5 rounded font-black" style="background-color: ${clan.badgeColor}; color: #000;">Lv.${t.level}</span>
+              <span class="text-[9px] px-1.5 py-0.5 rounded font-black tracking-wide" style="background-color: ${clan.badgeColor}; color: #000;">Lv.${t.level}</span>
               ${tName}
             </span>
             <span class="text-[10px] text-slate-300 font-mono">HP: ${t.hp} • DMG: ${t.damage}</span>
           </div>
-          <p class="text-[10px] text-slate-400 mt-0.5">${tDesc}</p>
+          <p class="text-[10px] text-slate-400 mt-0.5 leading-snug">${tDesc}</p>
         </div>
       `;
     });
 
+    const threatBadge = threatText ? `
+      <span class="text-[9px] px-2 py-0.5 rounded-md font-black tracking-wider uppercase" style="background-color: ${clan.badgeColor}22; color: ${clan.badgeColor}; border: 1px solid ${clan.badgeColor}55;">
+        ${threatText}
+      </span>
+    ` : '';
+
     card.innerHTML = `
-      <div class="flex justify-between items-start">
-        <div>
-          <div class="flex items-center gap-2">
-            <h3 class="font-cinzel text-sm font-black" style="color: ${clan.badgeColor}">${clanName}</h3>
-            <span class="text-[9px] px-2 py-0.5 rounded-full bg-black/60 text-slate-300 border border-white/10 font-bold uppercase">${clanSpecies}</span>
+      <div class="flex flex-col gap-1.5">
+        <div class="flex items-center justify-between gap-2 flex-wrap">
+          <div class="flex items-center gap-2 flex-wrap">
+            <h3 class="font-cinzel text-sm font-black tracking-wide" style="color: ${clan.badgeColor}">${clanName}</h3>
+            <span class="text-[9px] px-2 py-0.5 rounded-full bg-black/60 text-slate-300 border border-white/10 font-bold uppercase tracking-wide">${clanSpecies}</span>
           </div>
-          <p class="text-[10px] text-slate-300 mt-1 leading-relaxed">${clanLore}</p>
+          ${threatBadge}
         </div>
+        <p class="text-[10px] text-slate-300 leading-relaxed">${clanLore}</p>
       </div>
-      <div class="space-y-1.5 mt-1">
+      <div class="space-y-1.5 mt-0.5">
         ${tiersHtml}
       </div>
     `;

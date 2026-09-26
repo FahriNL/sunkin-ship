@@ -282,14 +282,14 @@ function spawnScatteredShipLoot(x, y, ship = {}) {
   const tier = ship.tier || 1;
   const isMonster = Boolean(ship.isMonster);
   const clan = ship.clan || 'pirate';
-  const isTreasury = Boolean(ship.isTreasuryShip || (clan === 'batavia' && tier >= 3));
+  const isTreasury = Boolean(ship.isTreasuryShip || (clan === 'batavia' && tier >= 3) || (clan === 'gold' && tier >= 3));
 
   const itemsToDrop = [];
 
-  // 1. Modest Gold Dropped in Water (Gold is scarce; survival commodities are primary!)
-  if (isTreasury) {
-    itemsToDrop.push({ type: 'chest', value: Math.floor(35 + Math.random() * 25) });
-    itemsToDrop.push({ type: 'gold', value: Math.floor(15 + Math.random() * 15) });
+  // 1. Modest Gold Dropped in Water (Gold faction is wealthy, dropping high coins & chests)
+  if (isTreasury || clan === 'gold' || clan === 'batavia') {
+    itemsToDrop.push({ type: 'chest', value: Math.floor(30 + Math.random() * 25) });
+    itemsToDrop.push({ type: 'gold', value: Math.floor((12 + Math.random() * 10) * tier) });
   } else if (isMonster) {
     if (Math.random() < 0.4) {
       itemsToDrop.push({ type: 'gold', value: Math.floor(5 + Math.random() * 8) });
@@ -3528,8 +3528,12 @@ function updateGame(dt) {
             let bloodGained = 0;
 
             if (e.isMonster) {
-              goldGained = Math.floor((3 * e.tier + Math.random() * 4) * rMult);
-              bloodGained = Math.floor((6 * e.tier + Math.random() * 6) * rMult);
+              goldGained = Math.floor((4 * e.tier + Math.random() * 5) * rMult);
+              bloodGained = Math.floor((8 * e.tier + Math.random() * 8) * rMult);
+            } else if (e.clan === 'gold' || e.clan === 'batavia') {
+              // Sultan Malik Al-Zahab's lavish trade vessels drop abundant gold wealth!
+              goldGained = Math.floor((14 * e.tier + Math.random() * 10) * rMult);
+              bloodGained = 0;
             } else if (e.tier >= 3) {
               goldGained = Math.floor((8 + Math.random() * 8) * rMult);
               bloodGained = Math.floor((12 + Math.random() * 8) * rMult);

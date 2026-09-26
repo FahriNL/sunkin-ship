@@ -689,7 +689,7 @@ function spawnBataviaConvoy(ex, ey, angle) {
     formationRole: 'leader',
     formationIndex: 0,
     isTreasuryShip: true,
-    name: 'Galleon Kas Diraja Batavia',
+    name: 'Galleon Kas Diraja Al-Zahab',
     voyageState: 'voyaging',
     destinationIslandId: destIsl ? destIsl.id : 'haven'
   }));
